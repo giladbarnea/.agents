@@ -1,0 +1,4 @@
+interface:
+  display_name: "qmd Search"
+  short_description: "High-recall semantic codebase search with qmd."
+  default_prompt: "Use $qmd to map all code, docs, and symbols related to this domain:"
