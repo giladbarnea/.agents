@@ -24,6 +24,15 @@ qmd update
 qmd embed
 ```
 
+If there is no relevant collection, create one by running:
+
+```sh
+qmd collection add $PWD [--mask="**/*.{py,md,tsx,ts,css,json,html,yaml}"]
+qmd embed
+```
+
+The `--mask` argument is optional, but unless other extensions are specified, by default `qmd` embeds only Markdown files.
+
 2. Search by meaning, not names.
 
 Run several broad `query` probes from different angles. Ask about user behavior, UI surfaces, state ownership, backend effects, docs, tests, and old plans.
