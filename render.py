@@ -65,7 +65,7 @@ def main() -> None:
             sys.exit(1)
         existing = output_path.read_text().strip()
         if rendered.strip() == existing:
-            print("✓ No changes would have been made.", file=sys.stderr)
+            print(f"✓ No changes would have been made to {output_path}.", file=sys.stderr)
             sys.exit(0)
         else:
             print(f"✗ {output_path} would have been changed.", file=sys.stderr)
