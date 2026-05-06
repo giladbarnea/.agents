@@ -35,6 +35,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Path to the .j2 template file.",
     )
+    parser.add_argument(
+        "-n",
+        "--dry-run",
+        action="store_true",
+        help="Check if output would change without writing.",
+    )
     return parser.parse_args()
 
 
@@ -52,6 +58,19 @@ def main() -> None:
 
     output_path = j2_path.parent / j2_path.name.replace(".j2", "")
     rendered = render_j2(j2_path)
+
+    if args.dry_run:
+        if not output_path.exists():
+            print(f"✗ {output_path} would have been changed.", file=sys.stderr)
+            sys.exit(1)
+        existing = output_path.read_text().strip()
+        if rendered.strip() == existing:
+            print("✓ No changes would have been made.", file=sys.stderr)
+            sys.exit(0)
+        else:
+            print(f"✗ {output_path} would have been changed.", file=sys.stderr)
+            sys.exit(1)
+
     output_path.write_text(rendered)
     print(f"Rendered → {output_path}")
 
