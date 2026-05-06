@@ -4,7 +4,7 @@ description: Specifies how to perform a high quality review.
 argument-hint: work_to_review research_targets
 ---
 
-/skill:catchup { research_targets }. Study documentation and source code thoroughly. Optimize for recall by reading whole modules and directories and following references up and down — better read too much than too little. Alternate between `git show` and `gsd`/`git diff` to see the before and after of my work. Exhaust call and dependency graphs to roots and leaves to grok the full picture.
+/skill:load-project-context { research_targets }. Study documentation and source code thoroughly. Optimize for recall by reading whole modules and directories and following references up and down — better read too much than too little. Alternate between `git show` and `gsd`/`git diff` to see the before and after of my work. Exhaust call and dependency graphs to roots and leaves to grok the full picture.
 
 Finally, review { work_to_review }.
 

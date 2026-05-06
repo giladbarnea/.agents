@@ -54,3 +54,5 @@ installed version.
 - Accessibility-tree snapshots with element refs for reliable interaction
 - Sessions, authentication vault, state persistence, video recording
 - Specialized skills for Electron apps, Slack, exploratory testing, cloud providers
+
+If the user asks you to browse pi.dev, read `references/pi-dev.md`.
