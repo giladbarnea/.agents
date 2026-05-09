@@ -2,14 +2,14 @@
 name: smart-compact
 description: Instructions for tree-shaking a user-provided AI session transcript
 ---
-This Skill’s purpose is to compact an AI session transcript by removing redundant-information messages and keeping the contentful ones intact.
+This Skill’s purpose is to compact an AI session transcription by removing redundant-information messages and keeping the contentful ones intact.
 
 ### 1. Skip Trial-and-Error Bouts (All Tools)
 **Drop the struggle; keep the resolution.**
--   Identify sequences of thrashing—whether it's fighting syntax errors, correcting failed attempts, or guessing paths. Discard the entire iterative loop of failures and keep only the final, successful tool invocation that resolves the bout.
+-   Identify sequences of thrashing—whether it's fighting syntax errors, correcting failed attempts, or guessing paths. Discard the entire iterative loop of failures and keep only the final, successful tool invocation that resolves the bout. Keep that final one as-is.
 -   Drop external technical difficulties like user interrupts, connection retries, etc.
 
-### 2. Skip "murmur" and general noise
+### 2. Remove "murmur" and general noise
 - **Drop "murmur"**: Isolated messages like "Good, that worked.", "File has been created/updated successfully", or "Now I’ll do this or that: ..."
 - **Drop tool messages merely confirming success**: "Action X was successful" or "Tool completed with no output." Also drop Todo updates/writes. These messages don’t hold real content, reading more like the assistant murmuring under its breath.
 - Note that these can show up in user messages as well as assistant messages.
@@ -37,17 +37,43 @@ args: "on thoughts/26-04-07-context-menu-research/, we are going to implement th
 </user-command-input>
 </examples-of-user-commands-with-semantic-importance handle=keep rationale="The user has commanded the assistant to use a tool (a Skill), which triggered context gathering; and context is story.">
 
-### 3. The "Final Observation" Rule (`Read`, `Bash` Exploration)
+### 4. File references only
+**Keep only the opening tag of the tool-  input objects of each operation that CRUD’s a file**.
+Drop tool call payloads and output data.
+This means that (pseudocode examples):
+```
+<Edit path="...">
+Old: ...
+New: ...
+</Edit>
+```
+Should become only:
+```
+<Edit path="..."/>
+```
+
+This applies to Read, Edit, Write, Delete, and Bash commands that perform either of these operations on a file.
+
+### 4. End the compacted result with a list of affected file references
+At the very end, create such an object:
+```
+<affected-files>
+- @path/to/file1.ext
+- @...
+</affected-files>
+```
+The unique set of all CRUD'ed files in the session.
+
+### 5. The "Final Observation" Rule (`Read`, `Bash` Exploration)
 **Keep only the tool call that successfully acquires the target information.**
--  **Reads:** Keep only the last `Read` of a file before it is acted upon. Drop redundant reads of unchanged files.
 - **Scratchpads**: Drop reads, writes and edits of transient/debug/temporary files created by the agent during the session with the purpose of helping itself arrive at some desired state.
--  **Bash:** Group commands by semantic purpose. Keep only the one that effectively returns the answer, dropping empty returns or redundant variations.
+-  **Bash:** Group commands by semantic purpose. Keep only the one — verbatim — that effectively returns the answer, dropping empty returns or redundant variations.
 
-### 4. The "Settled State" Rule (“CRUD”-ing files)
-**Compress piecemeal mutations into their final intended state.** Treat sequences of writing, editing, reading, etc. of the same file (regardless of via `Bash` or dedicated tools like `Read`, `Write`, `Edit`) identically as file state mutations. We are only interested in the final state of the file, not the mutations. Keep only the final call that settles the file's state.
-
-### 5. The "Definitive Validation" Rule (`Bash` Execution)
+### 6. The "Definitive Validation" Rule (`Bash` Execution)
 **Keep the proof, drop the debugging loop.** For commands that validate system state (e.g., running `pytest` or a build script), keep only the final successful execution that proves the task is complete.
 
-### 6. Practical Implementation
-**Materialize the compressed history by editing the transcription file you have been given in place.** 
+---
+
+Edit the transcription file in-place.
+
+Run `[this_skill_dir]/scripts/analyze_transcript_json.py path/to/transcript.json` for starter diagnostics about potential removal low hanging fruit candidates. Use its output as a maybe — worth checking out — but not authoritive. Read the transcription in full regardless. You have a semantic job to do either case.
