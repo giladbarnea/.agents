@@ -128,3 +128,62 @@ jq -r '
        end
    ' transcription.json
 ```
+
+---
+
+## Useful Techniques
+
+### For structural inspection
+
+**Flat message inventory** — scan all messages by type, role, and first content block.
+Orients you to the transcript shape before any analysis.
+```sh
+jq -r '.[] | "\(.original_index) | \(.type) | \(.role) | \(if .content[0] | type == "object" then .content[0].type + " " + (.content[0].name // "") else "text" end) | \(if .content[0] | type == "object" then (.content[0].command[:80] // .content[0].path // "") else (.content[0][:80]) end)"' transcript.json
+```
+
+**Per-message block count** — some formats pack many tool calls into one message.
+A message with 47 content blocks needs block-level handling, not message-level.
+```sh
+jq '[.[] | {idx: .original_index, blocks: (.content | length)}] | sort_by(-.blocks) | .[0:5]' transcript.json
+```
+
+**Mixed-content detection** — finds messages where Read/Write/Edit blocks share
+a container with Bash or other tools. These need block-level removal, not whole-message drop.
+```sh
+jq '[.[] | select(any(.content[]; type == "object" and (.name == "Read" or .name == "Write" or .name == "Edit"))) | {idx: .original_index, has_other: (any(.content[]; type == "object" and (.name | IN("Read","Write","Edit") | not)))}] | map(select(.has_other)) | map(.idx)' transcript.json
+```
+
+### For workflow / verification
+
+**Set-difference gap analysis** — after a transformation pass, compare `original_index`
+sets of the before and after outputs. The delta is the exact set of indices that pass
+added or removed. Useful for isolating where semantic judgment (vs. deterministic rules)
+was applied.
+```python
+before = {m['original_index'] for m in before_data}
+after  = {m['original_index'] for m in after_data}
+added = sorted(after - before)
+removed = sorted(before - after)
+```
+
+**"Still there" audit** — after a removal pass, check that the indices you intended
+to remove are actually gone. Catches omissions in the removal logic.
+```python
+expected_removals = {3, 4, 8, 21, 23, ...}
+actually_still_there = sorted(current_indices & expected_removals)
+assert not actually_still_there, f"Missed: {actually_still_there}"
+```
+
+**Post-transform content counter** — after each pass, count remaining content types
+to verify no residues (e.g., `tool-output:Read` or `todo` blocks) survived.
+```python
+from collections import Counter
+types = Counter()
+for m in data:
+    for b in m.get('content', []):
+        if isinstance(b, str) and b.startswith('<'):
+            types['path-ref'] += 1
+        elif isinstance(b, dict):
+            types[f"{b.get('type','?')}:{b.get('name','?')}"] += 1
+print(types.most_common())
+```
