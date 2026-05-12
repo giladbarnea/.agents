@@ -438,6 +438,13 @@ def build_report(messages: list[Message], top: int) -> dict[str, object]:
             "status_marks": [f"{call.input_index}{'!' if call.failed else ''}" for call in runs],
         }
 
+    tool_outputs_by_tool: dict[str, list[int]] = collections.defaultdict(list)
+    for message in messages:
+        for block in message.tool_outputs:
+            name = block.get("name")
+            if isinstance(name, str):
+                tool_outputs_by_tool[name].append(message.index)
+
     return {
         "overview": {
             "messages": len(messages),
@@ -462,6 +469,10 @@ def build_report(messages: list[Message], top: int) -> dict[str, object]:
                 }
                 for call in failed_calls
             ],
+        },
+        "tool_output_indices": {
+            name: {"count": len(indices), "indices": sorted(indices)}
+            for name, indices in sorted(tool_outputs_by_tool.items())
         },
         "files": {
             "unique_affected_files": len(touches_by_path),

@@ -77,3 +77,23 @@ The unique set of all CRUD'ed files in the session.
 Edit the transcription file in-place.
 
 Run `[this_skill_dir]/scripts/analyze_transcript_json.py path/to/transcript.json` for starter diagnostics about potential removal low hanging fruit candidates. Use its output as a maybe - worth checking out - but not authoritive. Read the transcription in full regardless. You have a semantic job to do either case.
+
+A JSON transcript can be reduced to simplified Markdown with this `jq` argument:
+```sh
+jq -r '
+     .[]
+     | if .content[0] | type == "string" then
+         "## \(if .role == "user" then "User" else "Assistant" end)\n\n" + .content[0] + "\n"
+       else
+         "## Tool\n\n" + (
+           if .content[0].type == "tool-input" then
+             "```bash [input]\n" + (.content[0].command // "") + "\n```"
+           else
+             "```[output]\n" + ([.content[0].content[] | select(.type == "text") | .text] | join("")) + "\n```"
+           end
+         ) + "\n"
+       end
+   ' transcription.json
+```
+
+This loses all message metadata, therefore should be only run once at the beginning to get a feel for the session’s story (A->Z).
