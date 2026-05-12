@@ -467,6 +467,20 @@ def build_report(messages: list[Message], top: int) -> dict[str, object]:
             if isinstance(name, str):
                 tool_outputs_by_tool[name].append(message.index)
 
+    bash_calls_by_command: dict[str, list[int]] = collections.defaultdict(list)
+    for message in messages:
+        for block in message.tool_inputs:
+            if block.get("name") != "Bash":
+                continue
+            command = block.get("command")
+            if isinstance(command, str):
+                bash_calls_by_command[command].append(message.index)
+    duplicate_commands = {
+        excerpt(cmd, 120): {"count": len(indices), "indices": sorted(indices)}
+        for cmd, indices in sorted(bash_calls_by_command.items())
+        if len(indices) > 1
+    }
+
     return {
         "overview": {
             "messages": len(messages),
@@ -497,6 +511,7 @@ def build_report(messages: list[Message], top: int) -> dict[str, object]:
             name: {"count": len(indices), "indices": sorted(indices)}
             for name, indices in sorted(tool_outputs_by_tool.items())
         },
+        "duplicate_commands": duplicate_commands,
         "files": {
             "unique_affected_files": len(touches_by_path),
             "file_touch_events": len(touches),
