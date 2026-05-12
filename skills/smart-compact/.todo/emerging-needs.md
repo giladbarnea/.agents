@@ -429,7 +429,7 @@ Deterministic analyzer output from structured JSON:
 - **Read/Write/Edit output indices** — `role: user` + tool ∈ {Read, Write, Edit}. Drop per rule 4.
 - **Success receipts** — content matches `"created successfully"` / `"updated successfully"`.
 - **Wasted calls** — content contains `"Wasted call"`.
-- **Failed calls** — `is_error: true`.
+- [x] **Failed calls** — `is_error: true`.
 - **Empty/no-output** — content empty or `"completed with no output"`.
 - **Repeated reads** — group by `(tool, file_path)`, flag count > 1.
 - **Tool call pairings** — match input/output by `id`. Gives success/failure/resolution graph.
