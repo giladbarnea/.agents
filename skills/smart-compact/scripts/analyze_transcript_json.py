@@ -231,7 +231,25 @@ def looks_like_murmur(message: Message) -> bool:
     return any(pattern.search(text) for pattern in MURMUR_PATTERNS)
 
 
-def looks_like_success_receipt(message: Message) -> bool:
+MUTATION_TOOL_NAMES = {"Write", "Edit", "Patch"}
+
+
+def looks_like_write_edit_receipt(message: Message) -> bool:
+    """Tool-output from Write/Edit/Patch that looks like a success confirmation."""
+    if not message.tool_outputs:
+        return False
+    for block in message.tool_outputs:
+        name = block.get("name")
+        if not isinstance(name, str) or name not in MUTATION_TOOL_NAMES:
+            continue
+        text = _block_text(block).lower()
+        if "success" in text:
+            return True
+    return False
+
+
+def looks_like_bash_success_receipt(message: Message) -> bool:
+    """Tool-output from Bash that looks like a success confirmation (empty output, etc.)."""
     if not message.tool_outputs:
         return False
     receipts = (
@@ -242,6 +260,9 @@ def looks_like_success_receipt(message: Message) -> bool:
         "tooling installation complete",
     )
     for block in message.tool_outputs:
+        name = block.get("name")
+        if not isinstance(name, str) or name != "Bash":
+            continue
         text = _block_text(block).lower()
         if any(fragment in text for fragment in receipts):
             return True
@@ -397,7 +418,8 @@ def build_report(messages: list[Message], top: int) -> dict[str, object]:
         touches_by_path[touch.path][touch.tool].append(touch.index)
 
     murmur_candidates = collect_indexed_snippets(messages, looks_like_murmur)
-    success_receipts = collect_indexed_snippets(messages, looks_like_success_receipt)
+    write_edit_receipts = collect_indexed_snippets(messages, looks_like_write_edit_receipt)
+    bash_success_receipts = collect_indexed_snippets(messages, looks_like_bash_success_receipt)
     local_caveats = collect_indexed_snippets(messages, is_local_command_caveat)
     failed_calls = [call for call in tool_calls if call.failed]
 
@@ -455,7 +477,8 @@ def build_report(messages: list[Message], top: int) -> dict[str, object]:
         },
         "noise": {
             "murmur_candidates": build_noise_block(murmur_candidates, top),
-            "success_receipts": build_noise_block(success_receipts, top),
+            "write_edit_receipts": build_noise_block(write_edit_receipts, top),
+            "bash_success_receipts": build_noise_block(bash_success_receipts, top),
             "local_command_caveats": build_noise_block(local_caveats, top),
             "scratchpad_paths": build_scratchpad_block(touches_by_path, top),
         },
