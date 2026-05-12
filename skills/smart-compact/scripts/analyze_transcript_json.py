@@ -15,13 +15,6 @@ import sys
 import yaml
 
 
-TOOL_INPUT_PATTERN = re.compile(r'<tool-input name="([^"]+)"(?: id="([^"]+)")?[^>]*>')
-TOOL_OUTPUT_PATTERN = re.compile(r'<tool-output name="([^"]+)"(?: id="([^"]+)")?[^>]*>')
-FILE_PATH_PATTERN = re.compile(r'file_path="([^"]+)"')
-FILE_REF_PATTERNS = [
-    re.compile(r'\b(?:Read|Write|Edit|Delete)\b[^\n]*\b(?:path|file_path)="([^"]+)"'),
-    re.compile(r'\b(?:Read|Write|Edit|Delete)\b[^\n]*\b(?:path|file_path)=([^\s>]+)'),
-]
 MURMUR_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)
     for pattern in [
@@ -52,14 +45,111 @@ SCRATCHPAD_PATTERNS = [
         r"/scratch/",
     ]
 ]
-LOCAL_COMMAND_CAVEAT = "<local-command-caveat>"
+
+
+def _flatten_tool_output(content: str | list[dict[str, str]]) -> str:
+    """Convert structured tool-output content to a single string.
+
+    >>> _flatten_tool_output('hello')
+    'hello'
+    >>> result = _flatten_tool_output([{'type': 'text', 'text': 'a'}, {'type': 'text', 'text': 'b'}])
+    >>> result.count('\\n')
+    1
+    """
+    if isinstance(content, str):
+        return content
+    return "\n".join(item.get("text", "") for item in content)
+
+
+def _block_text(block: str | dict[str, object]) -> str:
+    """Render any content block as readable text for pattern-matching."""
+    if isinstance(block, str):
+        return block
+    block_type = block.get("type")
+    if block_type == "tool-output":
+        return _flatten_tool_output(block.get("content", ""))
+    if block_type == "tool-input":
+        command = block.get("command")
+        if isinstance(command, str):
+            return command
+        path = block.get("path") or block.get("file_path")
+        if isinstance(path, str):
+            return path
+        return ""
+    return ""
+
+
+def normalize_whitespace(text: str) -> str:
+    """Collapse whitespace for cheap content bucketing.
+
+    >>> normalize_whitespace(' a   b ')
+    'a b'
+    """
+    return " ".join(text.split())
+
+
+def excerpt(text: str, limit: int = 88) -> str:
+    """Return a short one-line excerpt.
+
+    >>> excerpt('a b c d', 5)
+    'a b …'
+    """
+    compact = normalize_whitespace(text)
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1] + "…"
+
+
+def shorten_path(path: str) -> str:
+    """Return a readable trailing path.
+
+    >>> shorten_path('/a/b/c/d.txt')
+    'b/c/d.txt'
+    >>> shorten_path('client/src/App.jsx')
+    'client/src/App.jsx'
+    """
+    parts = pathlib.PurePosixPath(path).parts
+    if len(parts) <= 3:
+        return path
+    return str(pathlib.PurePosixPath(*parts[-3:]))
 
 
 @dataclasses.dataclass(slots=True)
 class Message:
     index: int
     role: str
-    content: str
+    message_type: str
+    content: list[str | dict[str, object]]
+
+    @property
+    def text_content(self) -> str:
+        return "\n".join(block for block in self.content if isinstance(block, str))
+
+    @property
+    def all_block_text(self) -> str:
+        parts: list[str] = []
+        for block in self.content:
+            if isinstance(block, str):
+                parts.append(block)
+            else:
+                text = _block_text(block)
+                if text:
+                    parts.append(text)
+        return "\n".join(parts)
+
+    @property
+    def tool_inputs(self) -> list[dict[str, object]]:
+        return [
+            block for block in self.content
+            if isinstance(block, dict) and block.get("type") == "tool-input"
+        ]
+
+    @property
+    def tool_outputs(self) -> list[dict[str, object]]:
+        return [
+            block for block in self.content
+            if isinstance(block, dict) and block.get("type") == "tool-output"
+        ]
 
 
 @dataclasses.dataclass(slots=True)
@@ -90,102 +180,59 @@ class IndexedSnippet:
     text: str
 
 
-def normalize_whitespace(text: str) -> str:
-    """Collapse whitespace for cheap content bucketing.
-
-    >>> normalize_whitespace(' a\n  b ')
-    'a b'
-    """
-    return " ".join(text.split())
-
-
-def excerpt(text: str, limit: int = 88) -> str:
-    """Return a short one-line excerpt.
-
-    >>> excerpt('a\n b\n c', 5)
-    'a b…'
-    """
-    compact = normalize_whitespace(text)
-    if len(compact) <= limit:
-        return compact
-    return compact[: limit - 1] + "…"
-
-
-def shorten_path(path: str) -> str:
-    """Return a readable trailing path.
-
-    >>> shorten_path('/a/b/c/d.txt')
-    'b/c/d.txt'
-    >>> shorten_path('client/src/App.jsx')
-    'client/src/App.jsx'
-    """
-    parts = pathlib.PurePosixPath(path).parts
-    if len(parts) <= 3:
-        return path
-    return str(pathlib.PurePosixPath(*parts[-3:]))
-
-
 def load_messages(path: pathlib.Path) -> list[Message]:
     raw = json.loads(path.read_text())
     if not isinstance(raw, list):
         raise ValueError("expected top-level JSON array")
     messages: list[Message] = []
-    for index, item in enumerate(raw):
+    for item_index, item in enumerate(raw):
         if not isinstance(item, dict):
             continue
         role = item.get("role")
         content = item.get("content")
-        if isinstance(role, str) and isinstance(content, str):
-            messages.append(Message(index=index, role=role, content=content))
+        message_type = item.get("type")
+        original_index = item.get("original_index")
+        if (
+            isinstance(role, str)
+            and isinstance(content, list)
+            and isinstance(message_type, str)
+            and isinstance(original_index, int)
+        ):
+            messages.append(
+                Message(
+                    index=original_index,
+                    role=role,
+                    message_type=message_type,
+                    content=content,
+                )
+            )
     return messages
-
-
-def parse_tool_input(content: str) -> ToolTag | None:
-    match = TOOL_INPUT_PATTERN.search(content)
-    if not match:
-        return None
-    return ToolTag(name=match.group(1), identifier=match.group(2))
-
-
-def parse_tool_output(content: str) -> ToolTag | None:
-    match = TOOL_OUTPUT_PATTERN.search(content)
-    if not match:
-        return None
-    return ToolTag(name=match.group(1), identifier=match.group(2))
 
 
 def detect_file_touches(messages: list[Message]) -> list[FileTouch]:
     touches: list[FileTouch] = []
     for message in messages:
-        input_tag = parse_tool_input(message.content)
-        if input_tag and input_tag.name in {"Read", "Write", "Edit", "Delete"}:
-            match = FILE_PATH_PATTERN.search(message.content)
-            if match:
-                touches.append(FileTouch(tool=input_tag.name, path=match.group(1), index=message.index))
+        for block in message.tool_inputs:
+            tool_name = block.get("name")
+            if not isinstance(tool_name, str):
                 continue
-        if input_tag and input_tag.name == "Bash":
-            for pattern in FILE_REF_PATTERNS:
-                for match in pattern.finditer(message.content):
-                    touches.append(
-                        FileTouch(
-                            tool="Bash",
-                            path=match.group(1).strip('"\''),
-                            index=message.index,
-                        )
-                    )
+            path = block.get("path") or block.get("file_path")
+            if isinstance(path, str):
+                touches.append(FileTouch(tool=tool_name, path=path, index=message.index))
     return touches
 
 
 def looks_like_murmur(message: Message) -> bool:
-    text = normalize_whitespace(message.content)
+    text = normalize_whitespace(message.text_content)
     if len(text) > 220:
+        return False
+    if not text:
         return False
     return any(pattern.search(text) for pattern in MURMUR_PATTERNS)
 
 
 def looks_like_success_receipt(message: Message) -> bool:
-    text = normalize_whitespace(message.content).lower()
-    if "<tool-output" not in message.content:
+    if not message.tool_outputs:
         return False
     receipts = (
         "successfully",
@@ -194,11 +241,18 @@ def looks_like_success_receipt(message: Message) -> bool:
         "is up to date, skipping",
         "tooling installation complete",
     )
-    return any(fragment in text for fragment in receipts)
+    for block in message.tool_outputs:
+        text = _block_text(block).lower()
+        if any(fragment in text for fragment in receipts):
+            return True
+    return False
 
 
 def is_local_command_caveat(message: Message) -> bool:
-    return LOCAL_COMMAND_CAVEAT in message.content
+    for block in message.content:
+        if isinstance(block, str) and "<local-command-caveat>" in block:
+            return True
+    return False
 
 
 def is_scratchpad_path(path: str) -> bool:
@@ -208,25 +262,29 @@ def is_scratchpad_path(path: str) -> bool:
 def extract_validation_family(message: Message) -> str | None:
     if message.role != "assistant":
         return None
-    input_tag = parse_tool_input(message.content)
-    if input_tag is None or input_tag.name != "Bash":
-        return None
-    lowered = message.content.lower()
-    for family, needles in VALIDATION_KEYWORDS.items():
-        if any(needle in lowered for needle in needles):
-            return family
+    for block in message.tool_inputs:
+        if block.get("name") != "Bash":
+            continue
+        command = block.get("command")
+        if not isinstance(command, str):
+            continue
+        lowered = command.lower()
+        for family, needles in VALIDATION_KEYWORDS.items():
+            if any(needle in lowered for needle in needles):
+                return family
     return None
 
 
-def extract_error_flag(content: str) -> bool:
-    lowered = content.lower()
+def extract_error_flag(block: dict[str, object]) -> bool:
+    if block.get("is_error"):
+        return True
+    text = _block_text(block).lower()
     return (
-        'is_error="true"' in lowered
-        or "exit code " in lowered
-        or "traceback" in lowered
-        or "module not found" in lowered
-        or "bad request" in lowered
-        or "error:" in lowered
+        "exit code " in text
+        or "traceback" in text
+        or "module not found" in text
+        or "bad request" in text
+        or "error:" in text
     )
 
 
@@ -234,37 +292,40 @@ def collect_tool_calls(messages: list[Message]) -> list[ToolCall]:
     inputs_by_id: dict[str, tuple[str, int]] = {}
     calls: list[ToolCall] = []
     for message in messages:
-        input_tag = parse_tool_input(message.content)
-        if input_tag is not None:
-            if input_tag.identifier:
-                inputs_by_id[input_tag.identifier] = (input_tag.name, message.index)
+        for block in message.tool_inputs:
+            tool_name = block.get("name")
+            identifier = block.get("id")
+            if not isinstance(tool_name, str):
+                continue
+            if isinstance(identifier, str):
+                inputs_by_id[identifier] = (tool_name, message.index)
             else:
                 calls.append(
                     ToolCall(
-                        tool=input_tag.name,
+                        tool=tool_name,
                         identifier=None,
                         input_index=message.index,
                         output_index=None,
                         failed=False,
                     )
                 )
-            continue
-
-        output_tag = parse_tool_output(message.content)
-        if output_tag is None or not output_tag.identifier:
-            continue
-        if output_tag.identifier not in inputs_by_id:
-            continue
-        tool_name, input_index = inputs_by_id.pop(output_tag.identifier)
-        calls.append(
-            ToolCall(
-                tool=tool_name,
-                identifier=output_tag.identifier,
-                input_index=input_index,
-                output_index=message.index,
-                failed=extract_error_flag(message.content),
+        for block in message.tool_outputs:
+            tool_name = block.get("name")
+            identifier = block.get("id")
+            if not isinstance(tool_name, str) or not isinstance(identifier, str):
+                continue
+            if identifier not in inputs_by_id:
+                continue
+            _, input_index = inputs_by_id.pop(identifier)
+            calls.append(
+                ToolCall(
+                    tool=tool_name,
+                    identifier=identifier,
+                    input_index=input_index,
+                    output_index=message.index,
+                    failed=extract_error_flag(block),
+                )
             )
-        )
 
     for identifier, (tool_name, input_index) in inputs_by_id.items():
         calls.append(
@@ -282,7 +343,7 @@ def collect_tool_calls(messages: list[Message]) -> list[ToolCall]:
 
 def collect_indexed_snippets(messages: list[Message], predicate) -> list[IndexedSnippet]:
     return [
-        IndexedSnippet(index=message.index, text=excerpt(message.content))
+        IndexedSnippet(index=message.index, text=excerpt(message.all_block_text))
         for message in messages
         if predicate(message)
     ]
@@ -363,7 +424,10 @@ def build_report(messages: list[Message], top: int) -> dict[str, object]:
     validation_rows: dict[str, dict[str, object]] = {}
     validation_runs: dict[str, list[ToolCall]] = collections.defaultdict(list)
     for call in tool_calls:
-        family = extract_validation_family(messages[call.input_index])
+        input_message = next((m for m in messages if m.index == call.input_index), None)
+        if input_message is None:
+            continue
+        family = extract_validation_family(input_message)
         if family is not None:
             validation_runs[family].append(call)
     for family, runs in sorted(validation_runs.items()):
@@ -377,7 +441,7 @@ def build_report(messages: list[Message], top: int) -> dict[str, object]:
     return {
         "overview": {
             "messages": len(messages),
-            "indexing": "zero-based JSON array offsets",
+            "indexing": "original_index field from JSON",
             "roles": dict(sorted(role_counts.items())),
             "tool_calls": len(tool_calls),
             "unique_tools": len(tool_counts),
