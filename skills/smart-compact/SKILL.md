@@ -38,9 +38,11 @@ This Skill's purpose is to compact an AI session transcription by removing redun
 </EXAMPLES-OF-USER-COMMANDS-WITH-SEMANTIC-IMPORTANCE handle=keep rationale="The user has commanded the assistant to use a tool (a Skill), which triggered context gathering; and context is story.">
 
 ### 3. File references only
-**Keep only the opening tag of the tool-  input objects of each operation that CRUD's a file**.
-Drop tool call payloads and output data.
-This means that (pseudocode examples):
+**Keep only the tool-input reference of each operation that CRUD's a file.**
+Drop the tool call payload (old/new text, file content) and the tool's output data.
+
+For structured JSON transcripts, this means reducing the tool-input block to a minimal path reference.
+In XML-like pseudocode:
 ```
 <Edit path="...">
 Old: ...
@@ -51,8 +53,17 @@ Should become only:
 ```
 <Edit path="..."/>
 ```
+In JSON:
+```json
+{"type": "tool-input", "name": "Read", "path": "/path/to/file.py", ...}
+```
+→ `"<Read path=\"/path/to/file.py\" id=\"...\"/>"`
 
-This applies to Read, Edit, Write, Delete, and Bash commands that perform either of these operations on a file.
+This applies to Read, Edit, Write, Delete, and Bash commands that read or write specific files.
+
+**Bash boundary**: not every Bash command that touches a file deserves this treatment.
+Use the "role in the story" test: Bash commands that *discover information* a next step depends on, or *validate* that a step completed, earn their place with output intact (Rule 6 overrides).
+Pure mechanical setup/teardown (`mkdir`, `kill`, `sleep`) or simple `ls` inventory calls can be reduced to a path-only invocation.
 
 ### 4. End the compacted result with a list of affected file references
 At the very end, create such an object:
@@ -74,11 +85,33 @@ The unique set of all CRUD'ed files in the session.
 
 ---
 
-Edit the transcription file in-place.
+**Always make a backup before editing the transcript in-place**:
+```bash
+cp transcription.json transcription.backup.json
+```
+File-mutation scripts use index-based logic. Re-running on already-compacted output
+with stale indices will corrupt the result. Work from the backup if you need to restart.
+Always reference messages by their stable `original_index` field, not by positional
+array offset — the offset shifts with every removal.
 
-Run `[this_skill_dir]/scripts/analyze_transcript_json.py path/to/transcript.json` for starter diagnostics about potential removal low hanging fruit candidates. Use its output as a maybe - worth checking out - but not authoritive. Read the transcription in full regardless. You have a semantic job to do either case.
+**Deterministic pre-processing** (no semantics, no heuristics):
+```bash
+uv run python3 scripts/prune_transcript.py transcription.json > pruned.json
+```
+Removes todo messages, Read/Write/Edit/Patch tool-outputs, and transforms their
+tool-inputs to path-only references. Safe to run before semantic compacting to
+clear low-hanging noise.
 
-A JSON transcript can be reduced to simplified Markdown with this `jq` argument:
+**Diagnostics**:
+```bash
+uv run -p python3 --with=pyyaml python3 scripts/analyze_transcript_json.py transcription.json
+```
+Provides structured data about the transcript (tool-output indices, repeated file touches,
+validation runs, duplicate commands) to inform semantic decisions. Use its output as
+a maybe-worth-checking guide, not authoritative. Read the transcription in full regardless.
+
+**Quick story-first orientation** (optional): read the session as simplified Markdown
+without tool calls to understand the narrative arc before diving into details:
 ```sh
 jq -r '
      .[]
@@ -95,5 +128,3 @@ jq -r '
        end
    ' transcription.json
 ```
-
-This loses all message metadata, therefore should be only run once at the beginning to get a feel for the session’s story (A->Z).
