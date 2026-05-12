@@ -37,7 +37,7 @@ This Skill's purpose is to compact an AI session transcription by removing redun
     </user-command-input>
 </EXAMPLES-OF-USER-COMMANDS-WITH-SEMANTIC-IMPORTANCE handle=keep rationale="The user has commanded the assistant to use a tool (a Skill), which triggered context gathering; and context is story.">
 
-### 4. File references only
+### 3. File references only
 **Keep only the opening tag of the tool-  input objects of each operation that CRUD's a file**.
 Drop tool call payloads and output data.
 This means that (pseudocode examples):
