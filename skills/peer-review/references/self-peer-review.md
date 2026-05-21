@@ -10,7 +10,7 @@ First, commit your work to have a commit reference. Then dispatch a large, high-
 ---
 
 The user has given me this task:
-<original-user-task>
+<original-user-task verbatim=true>
 { original user task that resulted in work_to_review }
 </original-user-task>
 

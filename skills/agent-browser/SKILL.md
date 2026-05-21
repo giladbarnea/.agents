@@ -56,3 +56,5 @@ installed version.
 - Specialized skills for Electron apps, Slack, exploratory testing, cloud providers
 
 If the user asks you to browse pi.dev, read `references/pi-dev.md`.
+
+Use `scripts/scrape_changelogs.py` when the user asks about GitHub repo changelogs.

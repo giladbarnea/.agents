@@ -1,6 +1,7 @@
 ---
 name: pseudocode
 description: Use when the user mentions pseudocode to align with their definition of pseudocode.
+disable-model-invocation: true
 ---
 
 # Pseudocode Definition
