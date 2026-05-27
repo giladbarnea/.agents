@@ -33,6 +33,7 @@ CHROME_CMD = [
 ]
 CLAUDE_URL = "https://claude.ai/settings/usage"
 CODEX_URL = "https://chatgpt.com/codex/cloud/settings/analytics"
+SESSION_DURATION = timedelta(hours=5)
 
 
 def _agent(*args: str) -> subprocess.CompletedProcess:
@@ -326,6 +327,35 @@ def _track(
     return text
 
 
+def _session_track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text:
+    """Session-scale track in magenta. Same anatomy as _track, no band overlay.
+
+    Full width represents one session window (SESSION_DURATION).
+    """
+    u = max(0.0, min(100.0, used_pct))
+    e = max(0.0, min(100.0, elapsed_pct))
+    used_pos = round(u / 100 * (width - 1))
+    elapsed_pos = round(e / 100 * (width - 1))
+    over = used_pct > elapsed_pct
+    lo, hi = min(used_pos, elapsed_pos), max(used_pos, elapsed_pos)
+
+    text = Text()
+    for i in range(width):
+        if used_pos == elapsed_pos and i == used_pos:
+            text.append("◆", style="bold yellow")
+        elif i == used_pos:
+            text.append("●", style="bold bright_magenta" if over else "bold magenta")
+        elif i == elapsed_pos:
+            text.append("┊", style="bold white")
+        elif lo < i < hi:
+            text.append("▓" if over else "░", style="bright_magenta" if over else "magenta")
+        elif i < lo:
+            text.append("━", style="white")
+        else:
+            text.append("─", style="grey39")
+    return text
+
+
 def _synth_gap_history(used_pct: float, elapsed_pct: float, samples: int = 50) -> list[float]:
     """Plausible (synthetic) gap-over-time history ending at the current gap."""
     random.seed(int(used_pct * 7919 + elapsed_pct * 6857))
@@ -364,19 +394,23 @@ def _sparkline(values: list[float], width: int) -> Text:
 
 
 def _picasso_row_data(claude: dict, codex: dict, now: datetime) -> list[tuple]:
-    """Return [(name, used_pct, elapsed_pct, session_pct, session_offset_pct, next_reset), ...]."""
+    """Return [(name, used_pct, elapsed_pct, session_pct, session_offset_pct, session_elapsed_pct, next_reset, session_next), ...]."""
     week = timedelta(weeks=1)
 
     claude_last, claude_next = parse_reset_claude(claude["reset_raw"], now)
     claude_elapsed_pct = (now - claude_last) / week * 100
     claude_session_next = parse_reset_claude(claude["session_reset_raw"], now)[1]
-    claude_session_offset_pct = (claude_session_next - now) / week * 100
+    claude_session_offset = claude_session_next - now
+    claude_session_offset_pct = claude_session_offset / week * 100
+    claude_session_elapsed_pct = max(0.0, min(100.0, (1 - claude_session_offset / SESSION_DURATION) * 100))
 
     codex_next = parse_reset_codex(codex["weekly_reset_raw"], now=now)
     codex_last = codex_next - week
     codex_elapsed_pct = (now - codex_last) / week * 100
     codex_hour5_next = parse_reset_codex(codex["hour5_reset_raw"], now=now)
-    codex_hour5_offset_pct = (codex_hour5_next - now) / week * 100
+    codex_hour5_offset = codex_hour5_next - now
+    codex_hour5_offset_pct = codex_hour5_offset / week * 100
+    codex_hour5_elapsed_pct = max(0.0, min(100.0, (1 - codex_hour5_offset / SESSION_DURATION) * 100))
 
     return [
         ("CLAUDE",
@@ -384,22 +418,29 @@ def _picasso_row_data(claude: dict, codex: dict, now: datetime) -> list[tuple]:
          claude_elapsed_pct,
          float(claude["session_pct"]),
          claude_session_offset_pct,
-         claude_next),
+         claude_session_elapsed_pct,
+         claude_next,
+         claude_session_next),
         ("CODEX",
          100 - float(codex["weekly_remaining_pct"]),
          codex_elapsed_pct,
          100 - float(codex["hour5_remaining_pct"]),
          codex_hour5_offset_pct,
-         codex_next),
+         codex_hour5_elapsed_pct,
+         codex_next,
+         codex_hour5_next),
     ]
 
 
 def print_picasso(claude: dict, codex: dict, now: datetime, *, console: Console) -> None:
     rows = _picasso_row_data(claude, codex, now)
     width = 50
-    for name, used, elapsed, session, session_off, next_reset in rows:
+    for idx, (name, used, elapsed, session, session_off, session_elapsed, next_reset, session_next) in enumerate(rows):
+        if idx > 0:
+            console.print()
         reset_str = f"resets {fmt_dh(next_reset - now)}"
-        track = _track(
+        session_reset_str = f"resets {fmt_dh(session_next - now)}"
+        weekly = _track(
             used, elapsed,
             session_pct=session,
             session_offset_pct=session_off,
@@ -407,7 +448,9 @@ def print_picasso(claude: dict, codex: dict, now: datetime, *, console: Console)
             session_used_style="magenta",
             session_remaining_style="magenta dim",
         )
-        console.print(Text(f"  {name:<7}  ", style="bold") + track + Text(f"  {reset_str}", style="dim"))
+        session_view = _session_track(session, session_elapsed, width=width)
+        console.print(Text(f"  {name:<7}  ", style="bold") + weekly + Text(f"  {reset_str}", style="dim"))
+        console.print(Text(f"  {'':<7}  ") + session_view + Text(f"  {session_reset_str}", style="dim"))
 
 
 # ── Main ──────────────────────────────────────────────────────────────
