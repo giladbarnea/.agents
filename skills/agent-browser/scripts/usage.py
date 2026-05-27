@@ -102,10 +102,28 @@ def _first_match(pattern: str, text: str, group: int = 1) -> str:
 
 def parse_claude(text: str) -> dict:
     """Extract Claude usage stats from raw body text."""
-    session_pct = int(_first_match(r"Current session.*?(\d+)%\s*used", text))
-    weekly_pct = int(_first_match(r"Weekly limits.*?(\d+)%\s*used", text))
-    reset_raw = _first_match(r"Weekly limits.*?Resets\s+(.+?)\n", text).strip()
-    return {"session_pct": session_pct, "weekly_pct": weekly_pct, "reset_raw": reset_raw}
+    session_match = re.search(
+        r"Current session\s*Resets\s+(.+?)\s*(\d+)%\s*used", text, re.DOTALL
+    )
+    if not session_match:
+        raise ValueError("Cannot find Claude 'Current session' block")
+    session_reset_raw = session_match.group(1).strip()
+    session_pct = int(session_match.group(2))
+
+    weekly_match = re.search(
+        r"Weekly limits.*?Resets\s+(.+?)\s*(\d+)%\s*used", text, re.DOTALL
+    )
+    if not weekly_match:
+        raise ValueError("Cannot find Claude 'Weekly limits' block")
+    reset_raw = weekly_match.group(1).strip()
+    weekly_pct = int(weekly_match.group(2))
+
+    return {
+        "session_pct": session_pct,
+        "session_reset_raw": session_reset_raw,
+        "weekly_pct": weekly_pct,
+        "reset_raw": reset_raw,
+    }
 
 
 def parse_codex(text: str) -> dict:
@@ -260,14 +278,34 @@ def _print_tool(
 
 # ── Picasso rendering ─────────────────────────────────────────────────
 
-def _track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text:
-    """One horizontal track: ━━━━●░░░░┊──── (slack) or ━━━┊▓▓▓●──── (scarcity)."""
+def _track(
+    used_pct: float,
+    elapsed_pct: float,
+    *,
+    session_pct: float = 0.0,
+    session_offset_pct: float = 0.0,
+    width: int = 50,
+    session_variant: str = "full",
+) -> Text:
+    """One horizontal track with optional magenta session band anchored at ┊.
+
+    Slack:    ━━━━●░░░░░░┊██░░───  (band cells left-of-boundary = bright = used)
+    Scarcity: ━━━┊▓▓▓●██░░───      (gap wins inside ┊→● region)
+
+    session_variant: "full" → █ (used) / ░ (remaining); "dotted" → ░/░ via brightness only.
+    """
     u = max(0.0, min(100.0, used_pct))
     e = max(0.0, min(100.0, elapsed_pct))
     used_pos = round(u / 100 * (width - 1))
     elapsed_pos = round(e / 100 * (width - 1))
     over = used_pct > elapsed_pct
     lo, hi = min(used_pos, elapsed_pos), max(used_pos, elapsed_pos)
+
+    band_start = elapsed_pos + 1
+    proportional = round(session_offset_pct / 100 * width)
+    band_width = max(4, proportional)
+    band_end = min(band_start + band_width, width)
+    sess_used_cells = round(session_pct / 100 * band_width)
 
     text = Text()
     for i in range(width):
@@ -279,6 +317,14 @@ def _track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text:
             text.append("┊", style="bold white")
         elif lo < i < hi:
             text.append("▓" if over else "░", style="red" if over else "cyan")
+        elif band_start <= i < band_end:
+            is_used = (i - band_start) < sess_used_cells
+            if session_variant == "full":
+                ch = "█" if is_used else "░"
+            else:
+                ch = "░"
+            style = "bright_magenta" if is_used else "magenta dim"
+            text.append(ch, style=style)
         elif i < lo:
             text.append("━", style="white")
         else:
@@ -324,34 +370,49 @@ def _sparkline(values: list[float], width: int) -> Text:
 
 
 def _picasso_row_data(claude: dict, codex: dict, now: datetime) -> list[tuple]:
-    """Return [(name, used_pct, elapsed_pct, next_reset), ...]."""
+    """Return [(name, used_pct, elapsed_pct, session_pct, session_offset_pct, next_reset), ...]."""
     week = timedelta(weeks=1)
+
     claude_last, claude_next = parse_reset_claude(claude["reset_raw"], now)
     claude_elapsed_pct = (now - claude_last) / week * 100
+    claude_session_next = parse_reset_claude(claude["session_reset_raw"], now)[1]
+    claude_session_offset_pct = (claude_session_next - now) / week * 100
 
     codex_next = parse_reset_codex(codex["weekly_reset_raw"], now=now)
     codex_last = codex_next - week
     codex_elapsed_pct = (now - codex_last) / week * 100
+    codex_hour5_next = parse_reset_codex(codex["hour5_reset_raw"], now=now)
+    codex_hour5_offset_pct = (codex_hour5_next - now) / week * 100
 
     return [
-        ("CLAUDE", float(claude["weekly_pct"]), claude_elapsed_pct, claude_next),
-        ("CODEX",  100 - float(codex["weekly_remaining_pct"]), codex_elapsed_pct, codex_next),
+        ("CLAUDE",
+         float(claude["weekly_pct"]),
+         claude_elapsed_pct,
+         float(claude["session_pct"]),
+         claude_session_offset_pct,
+         claude_next),
+        ("CODEX",
+         100 - float(codex["weekly_remaining_pct"]),
+         codex_elapsed_pct,
+         100 - float(codex["hour5_remaining_pct"]),
+         codex_hour5_offset_pct,
+         codex_next),
     ]
 
 
-def print_picasso(claude: dict, codex: dict, now: datetime, *, with_sparkline: bool, console: Console) -> None:
+def print_picasso(claude: dict, codex: dict, now: datetime, *, variant: str, console: Console) -> None:
     rows = _picasso_row_data(claude, codex, now)
     width = 50
-    for name, used, elapsed, next_reset in rows:
+    for name, used, elapsed, session, session_off, next_reset in rows:
         reset_str = f"resets {fmt_dh(next_reset - now)}"
-        track = _track(used, elapsed, width)
-        if with_sparkline:
-            spark = _sparkline(_synth_gap_history(used, elapsed, samples=width), width)
-            console.print(Text(f"  {name:<7}  ", style="bold") + spark + Text("  history", style="grey39"))
-            console.print(Text(f"  {'':<7}  ") + track + Text(f"  {reset_str}", style="dim"))
-            console.print()
-        else:
-            console.print(Text(f"  {name:<7}  ", style="bold") + track + Text(f"  {reset_str}", style="dim"))
+        track = _track(
+            used, elapsed,
+            session_pct=session,
+            session_offset_pct=session_off,
+            width=width,
+            session_variant=variant,
+        )
+        console.print(Text(f"  {name:<7}  ", style="bold") + track + Text(f"  {reset_str}", style="dim"))
 
 
 # ── Main ──────────────────────────────────────────────────────────────
@@ -384,14 +445,15 @@ def main() -> None:
     console = Console()
 
     console.print()
-    console.rule("[bold] plate 11 — the bull [/bold]", style="grey50")
+    console.rule("[bold] variant A — full blocks (█ used / ░ remaining, magenta) [/bold]", style="grey50")
     console.print()
-    print_picasso(claude, codex, now, with_sparkline=False, console=console)
+    print_picasso(claude, codex, now, variant="full", console=console)
     console.print()
 
-    console.rule("[bold] plate 10 — with gap-history sparkline (synthetic) [/bold]", style="grey50")
+    console.rule("[bold] variant B — dotted blocks (░, bright = used / dim = remaining) [/bold]", style="grey50")
     console.print()
-    print_picasso(claude, codex, now, with_sparkline=True, console=console)
+    print_picasso(claude, codex, now, variant="dotted", console=console)
+    console.print()
 
     console.rule("[bold] legacy text (for reference) [/bold]", style="grey50")
     console.print()
