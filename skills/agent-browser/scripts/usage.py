@@ -285,14 +285,11 @@ def _track(
     session_pct: float = 0.0,
     session_offset_pct: float = 0.0,
     width: int = 50,
-    session_variant: str = "full",
 ) -> Text:
-    """One horizontal track with optional magenta session band anchored at ┊.
+    """One horizontal track with magenta session band anchored at ┊.
 
-    Slack:    ━━━━●░░░░░░┊██░░───  (band cells left-of-boundary = bright = used)
-    Scarcity: ━━━┊▓▓▓●██░░───      (gap wins inside ┊→● region)
-
-    session_variant: "full" → █ (used) / ░ (remaining); "dotted" → ░/░ via brightness only.
+    Slack:    ━━━━●░░░░░░┊███───  (band cells: dim magenta = used, black = remaining)
+    Scarcity: ━━━┊▓▓▓●███───      (gap wins inside ┊→● region)
     """
     u = max(0.0, min(100.0, used_pct))
     e = max(0.0, min(100.0, elapsed_pct))
@@ -319,12 +316,7 @@ def _track(
             text.append("▓" if over else "░", style="red" if over else "cyan")
         elif band_start <= i < band_end:
             is_used = (i - band_start) < sess_used_cells
-            if session_variant == "full":
-                ch = "█" if is_used else "░"
-            else:
-                ch = "░"
-            style = "bright_magenta" if is_used else "magenta dim"
-            text.append(ch, style=style)
+            text.append("█", style="magenta dim" if is_used else "black")
         elif i < lo:
             text.append("━", style="white")
         else:
@@ -400,7 +392,7 @@ def _picasso_row_data(claude: dict, codex: dict, now: datetime) -> list[tuple]:
     ]
 
 
-def print_picasso(claude: dict, codex: dict, now: datetime, *, variant: str, console: Console) -> None:
+def print_picasso(claude: dict, codex: dict, now: datetime, *, console: Console) -> None:
     rows = _picasso_row_data(claude, codex, now)
     width = 50
     for name, used, elapsed, session, session_off, next_reset in rows:
@@ -410,7 +402,6 @@ def print_picasso(claude: dict, codex: dict, now: datetime, *, variant: str, con
             session_pct=session,
             session_offset_pct=session_off,
             width=width,
-            session_variant=variant,
         )
         console.print(Text(f"  {name:<7}  ", style="bold") + track + Text(f"  {reset_str}", style="dim"))
 
@@ -445,14 +436,7 @@ def main() -> None:
     console = Console()
 
     console.print()
-    console.rule("[bold] variant A — full blocks (█ used / ░ remaining, magenta) [/bold]", style="grey50")
-    console.print()
-    print_picasso(claude, codex, now, variant="full", console=console)
-    console.print()
-
-    console.rule("[bold] variant B — dotted blocks (░, bright = used / dim = remaining) [/bold]", style="grey50")
-    console.print()
-    print_picasso(claude, codex, now, variant="dotted", console=console)
+    print_picasso(claude, codex, now, console=console)
     console.print()
 
     console.rule("[bold] legacy text (for reference) [/bold]", style="grey50")
