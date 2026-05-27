@@ -285,10 +285,12 @@ def _track(
     session_pct: float = 0.0,
     session_offset_pct: float = 0.0,
     width: int = 50,
+    session_used_style: str = "magenta",
+    session_remaining_style: str = "magenta dim",
 ) -> Text:
-    """One horizontal track with magenta session band anchored at ┊.
+    """One horizontal track with magenta session band (full blocks) anchored at ┊.
 
-    Slack:    ━━━━●░░░░░░┊███───  (band cells: dim magenta = used, black = remaining)
+    Slack:    ━━━━●░░░░░░┊███───  (cells styled per session_*_style args)
     Scarcity: ━━━┊▓▓▓●███───      (gap wins inside ┊→● region)
     """
     u = max(0.0, min(100.0, used_pct))
@@ -316,7 +318,7 @@ def _track(
             text.append("▓" if over else "░", style="red" if over else "cyan")
         elif band_start <= i < band_end:
             is_used = (i - band_start) < sess_used_cells
-            text.append("█", style="magenta dim" if is_used else "black")
+            text.append("█", style=session_used_style if is_used else session_remaining_style)
         elif i < lo:
             text.append("━", style="white")
         else:
@@ -392,7 +394,15 @@ def _picasso_row_data(claude: dict, codex: dict, now: datetime) -> list[tuple]:
     ]
 
 
-def print_picasso(claude: dict, codex: dict, now: datetime, *, console: Console) -> None:
+def print_picasso(
+    claude: dict,
+    codex: dict,
+    now: datetime,
+    *,
+    console: Console,
+    session_used_style: str = "magenta",
+    session_remaining_style: str = "magenta dim",
+) -> None:
     rows = _picasso_row_data(claude, codex, now)
     width = 50
     for name, used, elapsed, session, session_off, next_reset in rows:
@@ -402,6 +412,8 @@ def print_picasso(claude: dict, codex: dict, now: datetime, *, console: Console)
             session_pct=session,
             session_offset_pct=session_off,
             width=width,
+            session_used_style=session_used_style,
+            session_remaining_style=session_remaining_style,
         )
         console.print(Text(f"  {name:<7}  ", style="bold") + track + Text(f"  {reset_str}", style="dim"))
 
@@ -435,13 +447,21 @@ def main() -> None:
     now = datetime.now(tz=IDT)
     console = Console()
 
-    console.print()
-    print_picasso(claude, codex, now, console=console)
-    console.print()
-
-    console.rule("[bold] legacy text (for reference) [/bold]", style="grey50")
-    console.print()
-    print_stats(claude, codex, now)
+    variants = [
+        ("var 1 — used: magenta · remaining: bright_magenta dim", "magenta", "bright_magenta dim"),
+        ("var 2 — used: magenta · remaining: magenta dim",        "magenta", "magenta dim"),
+        ("var 3 — used: bright_magenta · remaining: bright_magenta dim", "bright_magenta", "bright_magenta dim"),
+    ]
+    for label, used_style, remaining_style in variants:
+        console.print()
+        console.rule(f"[bold] {label} [/bold]", style="grey50")
+        console.print()
+        print_picasso(
+            claude, codex, now,
+            console=console,
+            session_used_style=used_style,
+            session_remaining_style=remaining_style,
+        )
 
 
 if __name__ == "__main__":
