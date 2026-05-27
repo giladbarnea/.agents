@@ -151,9 +151,9 @@ DAY_MAP = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6,
 
 def parse_reset_claude(reset_raw: str, now: datetime) -> tuple[datetime, datetime]:
     """Given 'Wed 8:00 PM' or 'in 13 hr 2 min', return (last_reset, next_reset)."""
-    rel = re.match(r"in\s+(\d+)\s*hr(?:\s+(\d+)\s*min)?", reset_raw, re.I)
-    if rel:
-        hours = int(rel.group(1))
+    rel = re.match(r"in\s+(?:(\d+)\s*hr)?\s*(?:(\d+)\s*min)?", reset_raw, re.I)
+    if rel and (rel.group(1) or rel.group(2)):
+        hours = int(rel.group(1)) if rel.group(1) else 0
         minutes = int(rel.group(2)) if rel.group(2) else 0
         next_reset = now + timedelta(hours=hours, minutes=minutes)
         last_reset = next_reset - timedelta(weeks=1)
@@ -302,9 +302,9 @@ def _track(
 
     band_start = elapsed_pos + 1
     proportional = round(session_offset_pct / 100 * width)
-    band_width = max(4, proportional)
+    band_width = max(8, proportional)
     band_end = min(band_start + band_width, width)
-    sess_used_cells = round(session_pct / 100 * band_width)
+    sess_used_cells = int(session_pct / 100 * band_width)
 
     text = Text()
     for i in range(width):
@@ -394,15 +394,7 @@ def _picasso_row_data(claude: dict, codex: dict, now: datetime) -> list[tuple]:
     ]
 
 
-def print_picasso(
-    claude: dict,
-    codex: dict,
-    now: datetime,
-    *,
-    console: Console,
-    session_used_style: str = "magenta",
-    session_remaining_style: str = "magenta dim",
-) -> None:
+def print_picasso(claude: dict, codex: dict, now: datetime, *, console: Console) -> None:
     rows = _picasso_row_data(claude, codex, now)
     width = 50
     for name, used, elapsed, session, session_off, next_reset in rows:
@@ -412,8 +404,8 @@ def print_picasso(
             session_pct=session,
             session_offset_pct=session_off,
             width=width,
-            session_used_style=session_used_style,
-            session_remaining_style=session_remaining_style,
+            session_used_style="magenta",
+            session_remaining_style="magenta dim",
         )
         console.print(Text(f"  {name:<7}  ", style="bold") + track + Text(f"  {reset_str}", style="dim"))
 
@@ -447,21 +439,8 @@ def main() -> None:
     now = datetime.now(tz=IDT)
     console = Console()
 
-    variants = [
-        ("var 1 — used: magenta · remaining: bright_magenta dim", "magenta", "bright_magenta dim"),
-        ("var 2 — used: magenta · remaining: magenta dim",        "magenta", "magenta dim"),
-        ("var 3 — used: bright_magenta · remaining: bright_magenta dim", "bright_magenta", "bright_magenta dim"),
-    ]
-    for label, used_style, remaining_style in variants:
-        console.print()
-        console.rule(f"[bold] {label} [/bold]", style="grey50")
-        console.print()
-        print_picasso(
-            claude, codex, now,
-            console=console,
-            session_used_style=used_style,
-            session_remaining_style=remaining_style,
-        )
+    console.print()
+    print_picasso(claude, codex, now, console=console)
 
 
 if __name__ == "__main__":
