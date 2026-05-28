@@ -1,95 +1,190 @@
 #!/usr/bin/env -S uv run
 # /// script
 # requires-python = "==3.12.*"
-# dependencies = ["python-dateutil", "rich"]
+# dependencies = ["python-dateutil", "rich", "websocket-client"]
 # ///
 
 """Scrape and compute AI usage limits for Claude and Codex.
 
 Single idempotent script:
-1. Launches Chrome with remote debugging if not already running
-2. Opens Claude/Codex tabs if not already open, reloads if they are
-3. Scrapes usage data, errors out if not logged in
-4. Computes burn rates and exhaustion estimates
+1. Connects to a remote-debugging Chrome session over CDP
+2. Scrapes Claude/Codex usage pages from already-open authenticated tabs
+3. Computes burn rates and exhaustion estimates
 """
 
+import dataclasses
 import json
 import random
 import re
-import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta
 from dateutil import tz
 from rich.console import Console
 from rich.text import Text
+import websocket
 
 IDT = tz.gettz("Asia/Jerusalem")
 CDP_PORT = 9222
-CHROME_CMD = [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    f"--remote-debugging-port={CDP_PORT}",
-    f"--user-data-dir=/Users/giladbarnea/.agent-browser/custom-debug-profile",
-]
+CDP_BASE_URL = f"http://localhost:{CDP_PORT}"
+PAGE_LOAD_DELAY_SECONDS = 3
 CLAUDE_URL = "https://claude.ai/settings/usage"
 CODEX_URL = "https://chatgpt.com/codex/cloud/settings/analytics"
 SESSION_DURATION = timedelta(hours=5)
+BODY_TEXT_EXPRESSION = "document.body.innerText"
 
 
-def _agent(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(
-        ["agent-browser", "--cdp", str(CDP_PORT), *args],
-        capture_output=True, text=True,
-    )
+@dataclasses.dataclass(frozen=True)
+class BrowserTarget:
+    target_id: str
+    title: str
+    url: str
+    websocket_debugger_url: str
 
 
-def _agent_json(*args: str) -> dict:
-    result = _agent(*args)
-    return json.loads(result.stdout)
-
-
-def _curl(url: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["curl", "-s", url], capture_output=True, text=True)
-
-
-def chrome_is_reachable() -> bool:
-    result = _curl(f"http://localhost:{CDP_PORT}/json/version")
-    if result.returncode != 0:
-        return False
+def read_json(url: str) -> object:
     try:
-        data = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return False
-    return bool(data.get("webSocketDebuggerUrl"))
+        with urllib.request.urlopen(url) as response:
+            return json.load(response)
+    except urllib.error.URLError as error:
+        raise RuntimeError(f"Failed to reach Chrome CDP at {url}: {error}") from error
 
 
-def launch_chrome():
-    print("Launching Chrome with remote debugging...", file=sys.stderr)
-    subprocess.Popen(CHROME_CMD, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def list_page_targets() -> list[BrowserTarget]:
+    payload = read_json(f"{CDP_BASE_URL}/json/list")
+    if not isinstance(payload, list):
+        raise RuntimeError("Unexpected payload from Chrome target list")
+
+    page_targets: list[BrowserTarget] = []
+    for entry in payload:
+        if not isinstance(entry, dict):
+            raise RuntimeError("Unexpected target entry payload")
+        if entry.get("type") != "page":
+            continue
+
+        target_id = entry.get("id")
+        title = entry.get("title")
+        url = entry.get("url")
+        websocket_debugger_url = entry.get("webSocketDebuggerUrl")
+        if not isinstance(target_id, str):
+            raise RuntimeError("Target id is missing")
+        if not isinstance(title, str):
+            raise RuntimeError("Target title is missing")
+        if not isinstance(url, str):
+            raise RuntimeError("Target url is missing")
+        if not isinstance(websocket_debugger_url, str):
+            raise RuntimeError("Target websocket url is missing")
+
+        page_targets.append(
+            BrowserTarget(
+                target_id=target_id,
+                title=title,
+                url=url,
+                websocket_debugger_url=websocket_debugger_url,
+            )
+        )
+    return page_targets
+
+
+def find_target(url: str) -> BrowserTarget | None:
+    for target in list_page_targets():
+        if target.url == url:
+            return target
+    return None
+
+
+def find_target_by_id(target_id: str) -> BrowserTarget | None:
+    for target in list_page_targets():
+        if target.target_id == target_id:
+            return target
+    return None
+
+
+def browser_websocket_debugger_url() -> str:
+    payload = read_json(f"{CDP_BASE_URL}/json/version")
+    if not isinstance(payload, dict):
+        raise RuntimeError("Unexpected payload from Chrome version endpoint")
+    websocket_debugger_url = payload.get("webSocketDebuggerUrl")
+    if not isinstance(websocket_debugger_url, str):
+        raise RuntimeError("Chrome browser websocket url is missing")
+    return websocket_debugger_url
+
+
+def wait_for_target(target_id: str) -> BrowserTarget:
     for _ in range(30):
+        target = find_target_by_id(target_id)
+        if target is not None:
+            return target
         time.sleep(1)
-        if chrome_is_reachable():
-            return
-    print("ERROR: Chrome did not become reachable within 30s", file=sys.stderr)
-    sys.exit(1)
+    raise RuntimeError(f"Timed out waiting for Chrome target {target_id}")
 
 
-def ensure_tab(url: str, url_substring: str) -> None:
-    """Activate existing tab matching url_substring, or create a new one."""
-    result = _agent_json("tab", "--json")
-    tabs = result.get("data", {}).get("tabs", [])
-    for tab in tabs:
-        if url_substring in tab.get("url", ""):
-            _agent("tab", tab["tabId"])
-            _agent("reload")
-            return
-    print(f"Opening new tab: {url}", file=sys.stderr)
-    _agent("tab", "new", url)
+def open_new_background_target(url: str) -> BrowserTarget:
+    result = send_cdp_command(
+        browser_websocket_debugger_url(),
+        "Target.createTarget",
+        {"url": url, "background": True},
+    )
+    target_id = result.get("targetId")
+    if not isinstance(target_id, str):
+        raise RuntimeError(f"Target.createTarget did not return a target id for {url}")
+    time.sleep(PAGE_LOAD_DELAY_SECONDS)
+    return wait_for_target(target_id)
 
 
-def scrape_body() -> str:
-    result = _agent("get", "text", "body")
-    return result.stdout
+def reload_target(target: BrowserTarget) -> BrowserTarget:
+    send_cdp_command(target.websocket_debugger_url, "Page.reload")
+    time.sleep(PAGE_LOAD_DELAY_SECONDS)
+    refreshed_target = find_target_by_id(target.target_id)
+    if refreshed_target is None:
+        raise RuntimeError(f"Reloaded tab disappeared for {target.url}")
+    return refreshed_target
+
+
+def ensure_target(url: str) -> BrowserTarget:
+    existing_target = find_target(url)
+    if existing_target is not None:
+        return reload_target(existing_target)
+    return open_new_background_target(url)
+
+
+def send_cdp_command(
+    websocket_debugger_url: str,
+    method: str,
+    params: dict[str, object] | None = None,
+) -> dict[str, object]:
+    connection = websocket.create_connection(websocket_debugger_url, suppress_origin=True)
+    try:
+        connection.send(json.dumps({"id": 1, "method": method, "params": params or {}}))
+        while True:
+            message = json.loads(connection.recv())
+            if message.get("id") != 1:
+                continue
+            if "error" in message:
+                raise RuntimeError(f"CDP {method} failed: {message['error']}")
+            result = message.get("result", {})
+            if not isinstance(result, dict):
+                raise RuntimeError(f"CDP {method} returned a non-dict result")
+            return result
+    finally:
+        connection.close()
+
+
+def scrape_body(target: BrowserTarget) -> str:
+    result = send_cdp_command(
+        target.websocket_debugger_url,
+        "Runtime.evaluate",
+        {"expression": BODY_TEXT_EXPRESSION, "returnByValue": True},
+    )
+    remote_result = result.get("result")
+    if not isinstance(remote_result, dict):
+        raise RuntimeError(f"CDP Runtime.evaluate returned an unexpected payload for {target.url}")
+    value = remote_result.get("value")
+    if not isinstance(value, str):
+        raise RuntimeError(f"CDP Runtime.evaluate did not return text for {target.url}")
+    return value
 
 
 # ── Parsing ───────────────────────────────────────────────────────────
@@ -104,20 +199,32 @@ def _first_match(pattern: str, text: str, group: int = 1) -> str:
 def parse_claude(text: str) -> dict:
     """Extract Claude usage stats from raw body text."""
     session_match = re.search(
-        r"Current session\s*Resets\s+(.+?)\s*(\d+)%\s*used", text, re.DOTALL
+        r"Current session\s*(?:Resets\s+(.+?)\s*(\d+)%\s*used"
+        r"|Starts when a message is sent\s*(\d+)%\s*used)",
+        text, re.DOTALL,
     )
     if not session_match:
         raise ValueError("Cannot find Claude 'Current session' block")
-    session_reset_raw = session_match.group(1).strip()
-    session_pct = int(session_match.group(2))
+    if session_match.group(1):
+        session_reset_raw = session_match.group(1).strip()
+        session_pct = int(session_match.group(2))
+    else:
+        session_reset_raw = f"in {SESSION_DURATION.total_seconds() // 3600:.0f} hr 0 min"
+        session_pct = int(session_match.group(3))
 
     weekly_match = re.search(
-        r"Weekly limits.*?Resets\s+(.+?)\s*(\d+)%\s*used", text, re.DOTALL
+        r"Weekly limits.*?(?:Resets\s+(.+?)\s*(\d+)%\s*used"
+        r"|Starts when a message is sent\s*(\d+)%\s*used)",
+        text, re.DOTALL,
     )
     if not weekly_match:
         raise ValueError("Cannot find Claude 'Weekly limits' block")
-    reset_raw = weekly_match.group(1).strip()
-    weekly_pct = int(weekly_match.group(2))
+    if weekly_match.group(1):
+        reset_raw = weekly_match.group(1).strip()
+        weekly_pct = int(weekly_match.group(2))
+    else:
+        reset_raw = "in 168 hr 0 min"
+        weekly_pct = int(weekly_match.group(3))
 
     return {
         "session_pct": session_pct,
@@ -456,27 +563,36 @@ def print_picasso(claude: dict, codex: dict, now: datetime, *, console: Console)
 # ── Main ──────────────────────────────────────────────────────────────
 
 def main() -> None:
-    if not chrome_is_reachable():
-        launch_chrome()
-
-    # Claude
-    ensure_tab(CLAUDE_URL, "claude.ai/settings/usage")
-    time.sleep(3)
-    claude_text = scrape_body()
+    try:
+        claude_target = ensure_target(CLAUDE_URL)
+    except RuntimeError as error:
+        print(f"ERROR: Failed to prepare Claude usage tab: {error}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        claude_text = scrape_body(claude_target)
+    except RuntimeError as error:
+        print(f"ERROR: Failed to scrape Claude usage page: {error}", file=sys.stderr)
+        sys.exit(1)
     try:
         claude = parse_claude(claude_text)
-    except ValueError as e:
-        print(f"ERROR: Failed to parse Claude usage — likely not logged in: {e}", file=sys.stderr)
+    except ValueError as error:
+        print(f"ERROR: Failed to parse Claude usage page: {error}", file=sys.stderr)
         sys.exit(1)
 
-    # Codex
-    ensure_tab(CODEX_URL, "chatgpt.com/codex/cloud/settings/analytics")
-    time.sleep(3)
-    codex_text = scrape_body()
+    try:
+        codex_target = ensure_target(CODEX_URL)
+    except RuntimeError as error:
+        print(f"ERROR: Failed to prepare Codex usage tab: {error}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        codex_text = scrape_body(codex_target)
+    except RuntimeError as error:
+        print(f"ERROR: Failed to scrape Codex usage page: {error}", file=sys.stderr)
+        sys.exit(1)
     try:
         codex = parse_codex(codex_text)
-    except ValueError as e:
-        print(f"ERROR: Failed to parse Codex usage — likely not logged in: {e}", file=sys.stderr)
+    except ValueError as error:
+        print(f"ERROR: Failed to parse Codex usage page: {error}", file=sys.stderr)
         sys.exit(1)
 
     now = datetime.now(tz=IDT)
