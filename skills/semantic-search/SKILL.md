@@ -4,9 +4,9 @@ description: Lightweight semantic search to query any arbitrary directory tree. 
 ---
 ## Semantic Search 
 
-Run `./scripts/semantic_search.sh "<query>" [optionaldirpath]`. 
+Run `./scripts/semantic-search.sh "<query>" [optionaldirpath]`. 
 
-The query should be in natural language. It can and should cast a wide and vague net. Don't narrow down its search space; this is this tool's service to you. The examples in this skill's description are good in that sense. The query should never suggest or hint at possible answers to itself. It should never specify candidate paths and should have zero micromanagement language. Style should be short, general, and as if you're asking a human with deep context over the directory. It should have zero instructions; only one question.
+The query should be in natural language. It can and should cast a wide and vague net. Don't narrow down its search space; this is this tool's service to you. The examples in this skill's description are good in that sense. The query should never suggest or hint at possible answers to itself. It should never specify candidate paths and should have zero micromanagement language. Style should be short, general, and as if you're asking a human with deep context over the directory. It should have zero instructions; only one question. Optionally pass a directory path as the second argument to scope the search; otherwise it searches the current working directory.
 
 Good examples:
 - "What files touch the client's IT constraints?"

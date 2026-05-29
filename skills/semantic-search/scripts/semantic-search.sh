@@ -2,17 +2,34 @@
 
 set -euo pipefail
 
-if [ "$#" -lt 1 ]; then
-  printf 'Usage: %s <query>\n' "${0##*/}" >&2
+interactive=false
+query=""
+search_path="$(pwd)"
+
+for arg in "$@"; do
+  if [[ "$arg" == "-i" ]]; then
+    interactive=true
+  elif [[ -z "$query" ]]; then
+    query="$arg"
+  else
+    search_path="$arg"
+  fi
+done
+
+if [[ -z "$query" ]]; then
+  printf 'Usage: %s [-i] <query> [search_path]\n' "${0##*/}" >&2
   exit 1
 fi
 
-query="$*"
-path="$(pwd)"
+full_prompt="$(
+  printf "Search relevant files in '%s'/**/* to the following query, then list them in a 2 column table: file path and relevancy score, as you judged it, from 0 to 10. Read files in full. No ‘head’, no ’tail’. Just read them. Don't explain or describe the files. Optimize for recall. Better include with low relevancy than a false negative. The query is: %s" \
+    "$search_path" \
+    "$query"
+)"
+pi_args=(--model ds4f --no-skills -np --no-extensions --no-session)
 
-printf -v prompt \
-  "Search relevant files in '%s'/**/* to the following query, then list them in a 2 column table: file path and relevancy score, as you judged it, from 0 to 10. don't explain or describe the files. optimize for recall. better include with low relevancy than a false negative. the query is: %s" \
-  "$path" \
-  "$query"
+if [[ $interactive = false ]]; then
+  pi_args+=(--print)
+fi
 
-pi --model ds4f --no-skills -np --no-session --no-extensions --print $(printf '%q' "$prompt")
+pi "${pi_args[@]}" "$full_prompt"

@@ -27,6 +27,7 @@ from rich.text import Text
 import websocket
 
 IDT = tz.gettz("Asia/Jerusalem")
+# Direct CDP lets us scrape the real logged-in Chrome tabs without headless bot checks.
 CDP_PORT = 9222
 CDP_BASE_URL = f"http://localhost:{CDP_PORT}"
 PAGE_LOAD_DELAY_SECONDS = 3
@@ -144,6 +145,7 @@ def reload_target(target: BrowserTarget) -> BrowserTarget:
 
 
 def ensure_target(url: str) -> BrowserTarget:
+    # Reuse+reload when possible, otherwise open in background, so runs stay idempotent and unobtrusive.
     existing_target = find_target(url)
     if existing_target is not None:
         return reload_target(existing_target)
@@ -155,7 +157,10 @@ def send_cdp_command(
     method: str,
     params: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    connection = websocket.create_connection(websocket_debugger_url, suppress_origin=True)
+    connection = websocket.create_connection(
+        websocket_debugger_url,
+        suppress_origin=True,
+    )
     try:
         connection.send(json.dumps({"id": 1, "method": method, "params": params or {}}))
         while True:
