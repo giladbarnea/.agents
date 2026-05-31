@@ -14,7 +14,6 @@ Single idempotent script:
 
 import dataclasses
 import json
-import random
 import re
 import sys
 import time
@@ -240,12 +239,18 @@ def parse_claude(text: str) -> dict:
 
 
 def parse_codex(text: str) -> dict:
-    """Extract Codex usage stats from raw body text."""
+    """Extract Codex usage stats from raw body text.
+
+    The 'Resets ...' line is omitted by Codex when the limit is fresh (no usage),
+    so reset_raw fields can be None.
+    """
     hour5_pct = int(_first_match(r"5\s*hour\s*usage\s*limit.*?(\d+)\s*%\s*remaining", text))
-    hour5_reset = _first_match(r"5\s*hour\s*usage\s*limit.*?Resets\s+(.+?)\n", text).strip()
+    hour5_reset_match = re.search(r"5\s*hour\s*usage\s*limit.*?Resets\s+(.+?)\n", text, re.DOTALL)
+    hour5_reset = hour5_reset_match.group(1).strip() if hour5_reset_match else None
 
     weekly_pct = int(_first_match(r"Weekly\s*usage\s*limit.*?(\d+)\s*%\s*remaining", text))
-    weekly_reset = _first_match(r"Weekly\s*usage\s*limit.*?Resets\s+(.+?)\n", text).strip()
+    weekly_reset_match = re.search(r"Weekly\s*usage\s*limit.*?Resets\s+(.+?)\n", text, re.DOTALL)
+    weekly_reset = weekly_reset_match.group(1).strip() if weekly_reset_match else None
 
     return {
         "hour5_remaining_pct": hour5_pct,
@@ -391,20 +396,11 @@ def _print_tool(
 
 # ── Picasso rendering ─────────────────────────────────────────────────
 
-def _track(
-    used_pct: float,
-    elapsed_pct: float,
-    *,
-    session_pct: float = 0.0,
-    session_offset_pct: float = 0.0,
-    width: int = 50,
-    session_used_style: str = "magenta",
-    session_remaining_style: str = "magenta dim",
-) -> Text:
-    """One horizontal track with magenta session band (full blocks) anchored at ┊.
+def _track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text:
+    """One horizontal week-scale track.
 
-    Slack:    ━━━━●░░░░░░┊███───  (cells styled per session_*_style args)
-    Scarcity: ━━━┊▓▓▓●███───      (gap wins inside ┊→● region)
+    Slack:    ━━━━●░░░░░░┊──────
+    Scarcity: ━━━┊▓▓▓●──────
     """
     u = max(0.0, min(100.0, used_pct))
     e = max(0.0, min(100.0, elapsed_pct))
@@ -412,12 +408,6 @@ def _track(
     elapsed_pos = round(e / 100 * (width - 1))
     over = used_pct > elapsed_pct
     lo, hi = min(used_pos, elapsed_pos), max(used_pos, elapsed_pos)
-
-    band_start = elapsed_pos + 1
-    proportional = round(session_offset_pct / 100 * width)
-    band_width = max(8, proportional)
-    band_end = min(band_start + band_width, width)
-    sess_used_cells = int(session_pct / 100 * band_width)
 
     text = Text()
     for i in range(width):
@@ -429,9 +419,6 @@ def _track(
             text.append("┊", style="bold white")
         elif lo < i < hi:
             text.append("▓" if over else "░", style="red" if over else "cyan")
-        elif band_start <= i < band_end:
-            is_used = (i - band_start) < sess_used_cells
-            text.append("█", style=session_used_style if is_used else session_remaining_style)
         elif i < lo:
             text.append("━", style="white")
         else:
@@ -468,60 +455,28 @@ def _session_track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text
     return text
 
 
-def _synth_gap_history(used_pct: float, elapsed_pct: float, samples: int = 50) -> list[float]:
-    """Plausible (synthetic) gap-over-time history ending at the current gap."""
-    random.seed(int(used_pct * 7919 + elapsed_pct * 6857))
-    target = used_pct - elapsed_pct
-    history = []
-    drift = 0.0
-    for i in range(samples):
-        t = i / max(samples - 1, 1)
-        drift += random.uniform(-2.5, 2.5)
-        drift *= 0.85
-        history.append(target * t + drift * (1 - t))
-    history[-1] = target
-    return history
-
-
-def _sparkline(values: list[float], width: int) -> Text:
-    """Magnitude as block height, sign as color. Red = scarcity, cyan = slack."""
-    if not values:
-        return Text(" " * width)
-    if len(values) != width:
-        step = (len(values) - 1) / max(width - 1, 1)
-        values = [values[round(i * step)] for i in range(width)]
-    max_abs = max((abs(v) for v in values), default=1.0) or 1.0
-    blocks = "▁▂▃▄▅▆▇█"
-    text = Text()
-    for v in values:
-        level = int(abs(v) / max_abs * (len(blocks) - 1))
-        block = blocks[min(level, len(blocks) - 1)]
-        if abs(v) < 1.0:
-            text.append("·", style="grey39")
-        elif v > 0:
-            text.append(block, style="red")
-        else:
-            text.append(block, style="cyan")
-    return text
-
-
 def _picasso_row_data(claude: dict, codex: dict, now: datetime) -> list[tuple]:
-    """Return [(name, used_pct, elapsed_pct, session_pct, session_offset_pct, session_elapsed_pct, next_reset, session_next), ...]."""
+    """Return [(name, used_pct, elapsed_pct, session_pct, session_elapsed_pct, next_reset, session_next), ...]."""
     week = timedelta(weeks=1)
 
     claude_last, claude_next = parse_reset_claude(claude["reset_raw"], now)
     claude_elapsed_pct = (now - claude_last) / week * 100
     claude_session_next = parse_reset_claude(claude["session_reset_raw"], now)[1]
     claude_session_offset = claude_session_next - now
-    claude_session_offset_pct = claude_session_offset / week * 100
     claude_session_elapsed_pct = max(0.0, min(100.0, (1 - claude_session_offset / SESSION_DURATION) * 100))
 
-    codex_next = parse_reset_codex(codex["weekly_reset_raw"], now=now)
+    if codex.get("weekly_reset_raw"):
+        codex_next = parse_reset_codex(codex["weekly_reset_raw"], now=now)
+    else:
+        codex_next = now + week
     codex_last = codex_next - week
     codex_elapsed_pct = (now - codex_last) / week * 100
-    codex_hour5_next = parse_reset_codex(codex["hour5_reset_raw"], now=now)
+
+    if codex.get("hour5_reset_raw"):
+        codex_hour5_next = parse_reset_codex(codex["hour5_reset_raw"], now=now)
+    else:
+        codex_hour5_next = now + SESSION_DURATION
     codex_hour5_offset = codex_hour5_next - now
-    codex_hour5_offset_pct = codex_hour5_offset / week * 100
     codex_hour5_elapsed_pct = max(0.0, min(100.0, (1 - codex_hour5_offset / SESSION_DURATION) * 100))
 
     return [
@@ -529,7 +484,6 @@ def _picasso_row_data(claude: dict, codex: dict, now: datetime) -> list[tuple]:
          float(claude["weekly_pct"]),
          claude_elapsed_pct,
          float(claude["session_pct"]),
-         claude_session_offset_pct,
          claude_session_elapsed_pct,
          claude_next,
          claude_session_next),
@@ -537,7 +491,6 @@ def _picasso_row_data(claude: dict, codex: dict, now: datetime) -> list[tuple]:
          100 - float(codex["weekly_remaining_pct"]),
          codex_elapsed_pct,
          100 - float(codex["hour5_remaining_pct"]),
-         codex_hour5_offset_pct,
          codex_hour5_elapsed_pct,
          codex_next,
          codex_hour5_next),
@@ -547,19 +500,12 @@ def _picasso_row_data(claude: dict, codex: dict, now: datetime) -> list[tuple]:
 def print_picasso(claude: dict, codex: dict, now: datetime, *, console: Console) -> None:
     rows = _picasso_row_data(claude, codex, now)
     width = 50
-    for idx, (name, used, elapsed, session, session_off, session_elapsed, next_reset, session_next) in enumerate(rows):
+    for idx, (name, used, elapsed, session, session_elapsed, next_reset, session_next) in enumerate(rows):
         if idx > 0:
             console.print()
         reset_str = f"resets {fmt_dh(next_reset - now)}"
         session_reset_str = f"resets {fmt_dh(session_next - now)}"
-        weekly = _track(
-            used, elapsed,
-            session_pct=session,
-            session_offset_pct=session_off,
-            width=width,
-            session_used_style="magenta",
-            session_remaining_style="magenta dim",
-        )
+        weekly = _track(used, elapsed, width=width)
         session_view = _session_track(session, session_elapsed, width=width)
         console.print(Text(f"  {name:<7}  ", style="bold") + weekly + Text(f"  {reset_str}", style="dim"))
         console.print(Text(f"  {'':<7}  ") + session_view + Text(f"  {session_reset_str}", style="dim"))
