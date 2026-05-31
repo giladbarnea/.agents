@@ -426,6 +426,34 @@ def _track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text:
     return text
 
 
+def _label(
+    used_pct: float,
+    elapsed_pct: float,
+    *,
+    width: int = 50,
+    used_style_slack: str = "cyan",
+    used_style_over: str = "bright_red",
+) -> Text:
+    """Glyph-tagged atoms (●used% ┊elapsed%) + burn rate, mirroring the track's legend."""
+    used_pos = round(max(0.0, min(100.0, used_pct)) / 100 * (width - 1))
+    elapsed_pos = round(max(0.0, min(100.0, elapsed_pct)) / 100 * (width - 1))
+    over = used_pct > elapsed_pct
+
+    text = Text()
+    if used_pos == elapsed_pos:
+        text.append("◆", style="yellow")
+        text.append(f"{round(used_pct)}%", style="dim")
+    else:
+        text.append("●", style=used_style_over if over else used_style_slack)
+        text.append(f"{round(used_pct)}% ", style="dim")
+        text.append("┊", style="white")
+        text.append(f"{round(elapsed_pct)}%", style="dim")
+    if elapsed_pct >= 1:
+        burn = used_pct / elapsed_pct
+        text.append(f" · {burn:.2f}×", style="dim")
+    return text
+
+
 def _session_track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text:
     """Session-scale track in magenta. Same anatomy as _track, no band overlay.
 
@@ -503,12 +531,23 @@ def print_picasso(claude: dict, codex: dict, now: datetime, *, console: Console)
     for idx, (name, used, elapsed, session, session_elapsed, next_reset, session_next) in enumerate(rows):
         if idx > 0:
             console.print()
-        reset_str = f"resets {fmt_dh(next_reset - now)}"
-        session_reset_str = f"resets {fmt_dh(session_next - now)}"
+        reset_str = f"↻ {fmt_dh(next_reset - now)}"
+        session_reset_str = f"↻ {fmt_dh(session_next - now)}"
         weekly = _track(used, elapsed, width=width)
         session_view = _session_track(session, session_elapsed, width=width)
-        console.print(Text(f"  {name:<7}  ", style="bold") + weekly + Text(f"  {reset_str}", style="dim"))
-        console.print(Text(f"  {'':<7}  ") + session_view + Text(f"  {session_reset_str}", style="dim"))
+        weekly_label = _label(used, elapsed, width=width)
+        session_label = _label(
+            session, session_elapsed, width=width,
+            used_style_slack="magenta", used_style_over="bright_magenta",
+        )
+        console.print(
+            Text(f"  {name:<7}  ", style="bold") + weekly
+            + Text(f"  {reset_str} · ", style="dim") + weekly_label
+        )
+        console.print(
+            Text(f"  {'':<7}  ") + session_view
+            + Text(f"  {session_reset_str} · ", style="dim") + session_label
+        )
 
 
 # ── Main ──────────────────────────────────────────────────────────────
