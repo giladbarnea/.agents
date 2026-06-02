@@ -4,30 +4,33 @@ Use these snippets inside `<main class="col" id="content">`.
 
 Layer guide:
 
-1. Layer 1 (`style.css`) renders the visual shape.
-2. Layer 2 (`interactions.js`) enables toggles, disclosures, step expansion, chip highlights, and bar clicks.
+1. Layer 1 (`style.css`) renders the visual shape, plus native interactive disclosure, step expansion, and segmented tabs (pure CSS, no JS).
+2. Layer 2 (`interactions.js`) enables chip highlights and bar clicks.
 3. Layer 3 (`annotations.css`, `annotations.js`, `annotation-writer.mjs`) enables Shift+click annotations.
 
 ## Segmented toggle + content panels
 
-Requires layers 1+2.
+Requires layer 1. Pure CSS via hidden radios + `:has()` (any 2022+ browser).
+
+Each `.seg label` maps to the panel at the same position inside `.panels`. Mark one radio `checked` for the default. Give every group a unique `name`. Supports up to six panels.
 
 ```html
-<div class="seg" data-segmented="example-toggle">
-  <button data-panel="a" class="on">Option A</button>
-  <button data-panel="b">Option B</button>
-</div>
-
-<div data-segment-panels="example-toggle">
-  <div class="qbox" data-panel="a">
-    <div class="qtext">Panel A text.</div>
-    <span class="verdict ok">Good</span>
-    <p>Explanation for A.</p>
+<div class="tabs">
+  <div class="seg">
+    <label><input type="radio" name="example-toggle" checked /><span>Option A</span></label>
+    <label><input type="radio" name="example-toggle" /><span>Option B</span></label>
   </div>
-  <div class="qbox" data-panel="b">
-    <div class="qtext">Panel B text.</div>
-    <span class="verdict no">Risk</span>
-    <p>Explanation for B.</p>
+  <div class="panels">
+    <div class="qbox">
+      <div class="qtext">Panel A text.</div>
+      <span class="verdict ok">Good</span>
+      <p>Explanation for A.</p>
+    </div>
+    <div class="qbox">
+      <div class="qtext">Panel B text.</div>
+      <span class="verdict no">Risk</span>
+      <p>Explanation for B.</p>
+    </div>
   </div>
 </div>
 ```
@@ -76,42 +79,42 @@ Targets with class `.hl` receive `.lit`; other `[data-chip-target]` elements rec
 
 ## Disclosure
 
-Requires layers 1+2 for collapse/expand. With layer 1 only, the body renders visible.
+Requires layer 1. Native `<details>`/`<summary>` — collapses and expands with no JS.
 
 ```html
-<div class="disclose" data-annotate-whole>
-  <div class="head"><span class="tri">▸</span> Click to expand</div>
+<details class="disclose" data-annotate-whole>
+  <summary class="head"><span class="tri">▸</span> Click to expand</summary>
   <div class="body">
     <p>Hidden body.</p>
   </div>
-</div>
+</details>
 ```
 
 ## Step pipeline
 
-Requires layers 1+2 for click expansion. With layer 1 only, any text already inside `.d` renders visible.
+Requires layer 1. Each step is a native `<details>`; the always-visible label goes in `<summary>`, the detail in `.d`. Add `open` to a step to start it expanded.
 
 ```html
 <div class="pipe">
-  <div
-    class="step"
-    data-d="Long detail shown only after click."
-    data-annotate-whole
-  >
-    <div class="k">STEP 1</div>
-    <div class="t">Parse intent</div>
-    <div class="d"></div>
-  </div>
-  <div class="step hot" data-d="The important step." data-annotate-whole>
-    <div class="badge">key</div>
-    <div class="k">STEP 2</div>
-    <div class="t">Judge candidates</div>
-    <div class="d"></div>
-  </div>
+  <details class="step" data-annotate-whole>
+    <summary>
+      <div class="k">STEP 1</div>
+      <div class="t">Parse intent</div>
+    </summary>
+    <div class="d">Long detail shown only after click.</div>
+  </details>
+  <details class="step hot" data-annotate-whole>
+    <summary>
+      <div class="badge">key</div>
+      <div class="k">STEP 2</div>
+      <div class="t">Judge candidates</div>
+    </summary>
+    <div class="d">The important step.</div>
+  </details>
 </div>
 ```
 
-Bare click toggles `.open`. If `.d` is empty and `data-d` exists, the script fills `.d` automatically.
+Bare click on the summary expands the step. With layer 3, Shift+click annotates the whole step instead.
 
 ## Click-to-compile bar chart
 

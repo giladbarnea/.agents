@@ -526,24 +526,27 @@ def _decrypt_cookie(value: bytes, key: bytes) -> str:
         return plain.decode("utf-8", "replace")
 
 
-def chrome_cookies(host_substring: str) -> dict[str, str]:
-    """Decrypt the logged-in Chrome profile's cookies for hosts matching host_substring."""
+def _authenticated_session(host_substring: str) -> requests.Session:
+    """Build a session carrying the logged-in Chrome cookies for hosts matching host_substring.
+
+    Cookies stay domain-scoped (not flattened by name) so per-subdomain Cloudflare
+    tokens like __cf_bm on .chatgpt.com vs .ws.chatgpt.com don't clobber each other,
+    which otherwise sends the wrong bot token and trips an intermittent 403.
+    """
     key = _safe_storage_key()
     with tempfile.NamedTemporaryFile(suffix=".db") as snapshot:
         shutil.copy(CHROME_COOKIES_DB, snapshot.name)  # copy to dodge Chrome's WAL lock
         connection = sqlite3.connect(snapshot.name)
         rows = connection.execute(
-            "SELECT name, encrypted_value FROM cookies WHERE host_key LIKE ?",
+            "SELECT host_key, name, encrypted_value FROM cookies WHERE host_key LIKE ?",
             (f"%{host_substring}%",),
         ).fetchall()
         connection.close()
-    return {name: _decrypt_cookie(value, key) for name, value in rows}
 
-
-def _authenticated_session(host_substring: str) -> requests.Session:
     session = requests.Session()
     session.headers.update({"User-Agent": BROWSER_UA, "Accept": "application/json"})
-    session.cookies.update(chrome_cookies(host_substring))
+    for host_key, name, value in rows:
+        session.cookies.set(name, _decrypt_cookie(value, key), domain=host_key)
     return session
 
 

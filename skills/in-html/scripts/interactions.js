@@ -1,46 +1,4 @@
 (() => {
-  document.documentElement.classList.add("js");
-
-  function setupSegmentedControls() {
-    document.querySelectorAll("[data-segmented]").forEach((segmented) => {
-      const groupName = segmented.dataset.segmented || segmented.dataset.target;
-      const panels = groupName
-        ? Array.from(
-            document.querySelectorAll(
-              `[data-segment-panels="${CSS.escape(groupName)}"] [data-panel]`,
-            ),
-          )
-        : [];
-      const buttons = Array.from(segmented.querySelectorAll("[data-panel]"));
-      if (!buttons.length) {
-        return;
-      }
-
-      function activate(button) {
-        const key = button.dataset.panel;
-        buttons.forEach((candidate) =>
-          candidate.classList.toggle("on", candidate === button),
-        );
-        panels.forEach((panel) => {
-          panel.hidden = panel.dataset.panel !== key;
-        });
-      }
-
-      buttons.forEach((button) => {
-        button.addEventListener("click", (event) => {
-          if (event.shiftKey) {
-            return;
-          }
-          activate(button);
-        });
-      });
-
-      activate(
-        buttons.find((button) => button.classList.contains("on")) || buttons[0],
-      );
-    });
-  }
-
   function setupChipToggles() {
     document.querySelectorAll("[data-chip-toggle]").forEach((group) => {
       const scope = group.dataset.scope
@@ -87,21 +45,6 @@
           .forEach((target) =>
             target.classList.add(...activeClassesForTarget(target)),
           );
-      });
-    });
-  }
-
-  function setupPipelineSteps() {
-    document.querySelectorAll(".pipe .step").forEach((step) => {
-      const detail = step.querySelector(".d");
-      if (detail && step.dataset.d && !detail.textContent.trim()) {
-        detail.textContent = step.dataset.d;
-      }
-      step.addEventListener("click", (event) => {
-        if (event.shiftKey) {
-          return;
-        }
-        step.classList.toggle("open");
       });
     });
   }
@@ -157,20 +100,6 @@
     });
   }
 
-  function setupDisclosureBlocks() {
-    document.querySelectorAll(".disclose .head").forEach((head) => {
-      head.addEventListener("click", (event) => {
-        if (event.shiftKey) {
-          return;
-        }
-        head.parentElement.classList.toggle("open");
-      });
-    });
-  }
-
-  setupSegmentedControls();
   setupChipToggles();
-  setupPipelineSteps();
   setupBarCompileWidgets();
-  setupDisclosureBlocks();
 })();

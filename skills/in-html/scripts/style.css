@@ -227,15 +227,35 @@ aside.note {
   font-size: 0.9rem;
   margin: 0.4rem 0 1rem;
 }
-.seg button {
-  border: 0;
+.seg label {
+  display: inline-flex;
+  align-items: center;
   background: #fbfaf3;
   padding: 0.45rem 1.1rem;
   color: var(--faint);
+  cursor: pointer;
 }
-.seg button.on {
+.seg input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  margin: 0;
+}
+.seg label:has(input:checked) {
   background: var(--ink);
   color: var(--paper);
+}
+.panels > * {
+  display: none;
+}
+.tabs:has(.seg > label:nth-child(1) input:checked) .panels > :nth-child(1),
+.tabs:has(.seg > label:nth-child(2) input:checked) .panels > :nth-child(2),
+.tabs:has(.seg > label:nth-child(3) input:checked) .panels > :nth-child(3),
+.tabs:has(.seg > label:nth-child(4) input:checked) .panels > :nth-child(4),
+.tabs:has(.seg > label:nth-child(5) input:checked) .panels > :nth-child(5),
+.tabs:has(.seg > label:nth-child(6) input:checked) .panels > :nth-child(6) {
+  display: block;
 }
 .qbox {
   border: 1px solid var(--rule);
@@ -419,6 +439,7 @@ aside.note {
   gap: 0.6rem;
   cursor: pointer;
   user-select: none;
+  list-style: none;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 0.95rem;
   color: var(--blue);
@@ -427,6 +448,9 @@ aside.note {
   border-radius: 6px;
   background: #fbfaf3;
 }
+.disclose > .head::-webkit-details-marker {
+  display: none;
+}
 .disclose > .head:hover {
   background: var(--bluebg);
 }
@@ -434,17 +458,11 @@ aside.note {
   transition: transform 0.18s;
   font-size: 0.8rem;
 }
-.disclose.open > .head .tri {
+.disclose[open] > .head .tri {
   transform: rotate(90deg);
 }
 .disclose > .body {
   padding: 0.4rem 0.2rem 0.2rem;
-}
-html.js .disclose > .body {
-  display: none;
-}
-html.js .disclose.open > .body {
-  display: block;
   animation: fade 0.25s ease;
 }
 @keyframes fade {
@@ -493,17 +511,18 @@ html.js .disclose.open > .body {
   font-size: 0.92rem;
   margin: 0.15rem 0;
 }
+.step > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.step > summary::-webkit-details-marker {
+  display: none;
+}
 .step .d {
   font-size: 0.8rem;
   color: var(--faint);
   margin-top: 0.4rem;
   line-height: 1.4;
-}
-html.js .step .d {
-  display: none;
-}
-html.js .step.open .d {
-  display: block;
 }
 .step .badge {
   position: absolute;

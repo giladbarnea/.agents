@@ -17,7 +17,7 @@ Native HTML can import CSS and JavaScript, but not useful HTML partials. The old
 
 ### Layer 1: style only
 
-Use when the page must render without JavaScript.
+Use when the page must render without JavaScript. Disclosure, step expansion, and segmented tabs are still interactive here — they run on pure CSS (`<details>` and `:has()`). Only chip highlights and bar clicks need layer 2.
 
 ```bash
 workdir=$(mktemp -d)

@@ -28,20 +28,30 @@
         <h2 data-annotation-id="segmented-example">
           <span class="n">Toggle</span>Segmented panels
         </h2>
-        <div class="seg" data-segmented="gallery-toggle">
-          <button data-panel="a" class="on">Option A</button>
-          <button data-panel="b">Option B</button>
-        </div>
-        <div data-segment-panels="gallery-toggle">
-          <div class="qbox" data-panel="a">
-            <div class="qtext">“This is panel A.”</div>
-            <span class="verdict ok">Works</span>
-            <p>Use this for small A/B comparisons.</p>
+        <div class="tabs">
+          <div class="seg">
+            <label
+              ><input type="radio" name="gallery-toggle" checked /><span
+                >Option A</span
+              ></label
+            >
+            <label
+              ><input type="radio" name="gallery-toggle" /><span
+                >Option B</span
+              ></label
+            >
           </div>
-          <div class="qbox" data-panel="b">
-            <div class="qtext">“This is panel B.”</div>
-            <span class="verdict no">Different</span>
-            <p>The script hides inactive panels automatically.</p>
+          <div class="panels">
+            <div class="qbox">
+              <div class="qtext">“This is panel A.”</div>
+              <span class="verdict ok">Works</span>
+              <p>Use this for small A/B comparisons.</p>
+            </div>
+            <div class="qbox">
+              <div class="qtext">“This is panel B.”</div>
+              <span class="verdict no">Different</span>
+              <p>Pure CSS hides inactive panels via <code>:has()</code>.</p>
+            </div>
           </div>
         </div>
 
@@ -86,14 +96,14 @@
         <h2 data-annotation-id="disclosure-example">
           <span class="n">Disclosure</span>Click-to-expand block
         </h2>
-        <div class="disclose" data-annotate-whole>
-          <div class="head">
+        <details class="disclose" data-annotate-whole>
+          <summary class="head">
             <span class="tri">▸</span> Reveal the hidden explanation
-          </div>
+          </summary>
           <div class="body">
             <p>This is the basic progressive-disclosure primitive.</p>
           </div>
-        </div>
+        </details>
 
         <hr />
 
@@ -101,34 +111,28 @@
           <span class="n">Pipeline</span>Click each step
         </h2>
         <div class="pipe">
-          <div
-            class="step"
-            data-d="Agent turns natural language into intent."
-            data-annotate-whole
-          >
-            <div class="k">STEP 1</div>
-            <div class="t">Parse</div>
-            <div class="d"></div>
-          </div>
-          <div
-            class="step hot"
-            data-d="The bounded judgment step."
-            data-annotate-whole
-          >
-            <div class="badge">key</div>
-            <div class="k">STEP 2</div>
-            <div class="t">Judge</div>
-            <div class="d"></div>
-          </div>
-          <div
-            class="step"
-            data-d="Synthesize the final answer."
-            data-annotate-whole
-          >
-            <div class="k">STEP 3</div>
-            <div class="t">Synthesize</div>
-            <div class="d"></div>
-          </div>
+          <details class="step" data-annotate-whole>
+            <summary>
+              <div class="k">STEP 1</div>
+              <div class="t">Parse</div>
+            </summary>
+            <div class="d">Agent turns natural language into intent.</div>
+          </details>
+          <details class="step hot" data-annotate-whole>
+            <summary>
+              <div class="badge">key</div>
+              <div class="k">STEP 2</div>
+              <div class="t">Judge</div>
+            </summary>
+            <div class="d">The bounded judgment step.</div>
+          </details>
+          <details class="step" data-annotate-whole>
+            <summary>
+              <div class="k">STEP 3</div>
+              <div class="t">Synthesize</div>
+            </summary>
+            <div class="d">Synthesize the final answer.</div>
+          </details>
         </div>
 
         <hr />
