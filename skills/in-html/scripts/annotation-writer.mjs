@@ -4,16 +4,30 @@ import http from 'node:http';
 import path from 'node:path';
 
 const port = Number(process.env.PORT ?? 8765);
-const annotationsPath = path.resolve(process.env.ANNOTATIONS_FILE ?? 'm2-abstraction-gap.annotations.json');
+const rootDirectory = path.resolve(process.env.SERVE_DIR ?? '.');
+const annotationsPath = path.resolve(process.env.ANNOTATIONS_FILE ?? 'annotations.json');
 const maxBodyBytes = 1024 * 1024;
+const contentTypes = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.txt': 'text/plain; charset=utf-8'
+};
 
 function isAllowedOrigin(origin) {
   if (!origin || origin === 'null') {
     return true;
   }
 
-  const url = new URL(origin);
-  return ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  try {
+    const url = new URL(origin);
+    return ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 function setCorsHeaders(request, response) {
@@ -23,7 +37,7 @@ function setCorsHeaders(request, response) {
   }
 
   response.setHeader('Access-Control-Allow-Origin', origin ?? '*');
-  response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   response.setHeader('Vary', 'Origin');
   return true;
@@ -84,42 +98,102 @@ function sendJson(response, statusCode, payload) {
   response.end(`${JSON.stringify(payload)}\n`);
 }
 
+function resolveStaticPath(pathname) {
+  const decodedPathname = decodeURIComponent(pathname);
+  const relativePath = decodedPathname === '/' ? 'index.html' : decodedPathname.replace(/^\/+/, '');
+  const filePath = path.resolve(rootDirectory, relativePath);
+  const isInsideRoot = filePath === rootDirectory || filePath.startsWith(`${rootDirectory}${path.sep}`);
+  if (!isInsideRoot) {
+    throw new Error('Static file path escapes the serve directory.');
+  }
+  return filePath;
+}
+
+async function sendStaticFile(request, response, requestUrl) {
+  let filePath = resolveStaticPath(requestUrl.pathname);
+  const fileStat = await fs.stat(filePath).catch(error => {
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  });
+
+  if (!fileStat) {
+    sendJson(response, 404, {ok: false, error: 'File not found.'});
+    return;
+  }
+
+  if (fileStat.isDirectory()) {
+    filePath = path.join(filePath, 'index.html');
+  }
+
+  const content = await fs.readFile(filePath);
+  const contentType = contentTypes[path.extname(filePath)] ?? 'application/octet-stream';
+  response.writeHead(200, {'Content-Type': contentType});
+  if (request.method !== 'HEAD') {
+    response.end(content);
+    return;
+  }
+  response.end();
+}
+
+async function handleAnnotations(request, response) {
+  if (!setCorsHeaders(request, response)) {
+    sendJson(response, 403, {ok: false, error: 'Origin is not allowed.'});
+    return;
+  }
+
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
+
+  if (request.method === 'GET') {
+    sendJson(response, 200, await readAnnotations());
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    sendJson(response, 405, {ok: false, error: 'Use GET or POST /annotations.'});
+    return;
+  }
+
+  const payload = await readRequestJson(request);
+  assertAnnotationPayload(payload);
+
+  const annotations = await readAnnotations();
+  annotations[payload.selector] = {
+    text: payload.text,
+    userInput: payload.userInput
+  };
+  await writeAnnotations(annotations);
+
+  sendJson(response, 200, {ok: true, path: annotationsPath});
+}
+
 const server = http.createServer(async (request, response) => {
   try {
-    if (!setCorsHeaders(request, response)) {
-      sendJson(response, 403, {ok: false, error: 'Origin is not allowed.'});
-      return;
-    }
-
-    if (request.method === 'OPTIONS') {
-      response.writeHead(204);
-      response.end();
-      return;
-    }
-
     const requestUrl = new URL(request.url, `http://${request.headers.host}`);
-    if (request.method !== 'POST' || requestUrl.pathname !== '/annotations') {
-      sendJson(response, 404, {ok: false, error: 'Use POST /annotations.'});
+
+    if (requestUrl.pathname === '/annotations') {
+      await handleAnnotations(request, response);
       return;
     }
 
-    const payload = await readRequestJson(request);
-    assertAnnotationPayload(payload);
+    if (!['GET', 'HEAD'].includes(request.method)) {
+      sendJson(response, 405, {ok: false, error: 'Use GET, HEAD, or /annotations.'});
+      return;
+    }
 
-    const annotations = await readAnnotations();
-    annotations[payload.selector] = {
-      text: payload.text,
-      userInput: payload.userInput
-    };
-    await writeAnnotations(annotations);
-
-    sendJson(response, 200, {ok: true, path: annotationsPath});
+    await sendStaticFile(request, response, requestUrl);
   } catch (error) {
     sendJson(response, 500, {ok: false, error: error.message});
   }
 });
 
 server.listen(port, '127.0.0.1', () => {
-  console.log(`Annotation writer listening on http://127.0.0.1:${port}`);
+  console.log(`in-html server listening on http://127.0.0.1:${port}`);
+  console.log(`Serving ${rootDirectory}`);
   console.log(`Writing ${annotationsPath}`);
 });
