@@ -18,6 +18,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
 from dateutil import tz
@@ -30,10 +31,13 @@ IDT = tz.gettz("Asia/Jerusalem")
 CDP_PORT = 9222
 CDP_BASE_URL = f"http://localhost:{CDP_PORT}"
 PAGE_LOAD_DELAY_SECONDS = 3
-CLAUDE_URL = "https://claude.ai/settings/usage"
+CLAUDE_URL = "https://claude.ai/new#settings/usage"
 CODEX_URL = "https://chatgpt.com/codex/cloud/settings/analytics"
 SESSION_DURATION = timedelta(hours=5)
 BODY_TEXT_EXPRESSION = "document.body.innerText"
+SCRAPE_READY_TIMEOUT_SECONDS = 30
+SCRAPE_POLL_SECONDS = 1
+PICASSO_RESET_DURATION_WIDTH = len("1d 23h")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -88,9 +92,22 @@ def list_page_targets() -> list[BrowserTarget]:
     return page_targets
 
 
+def is_claude_usage_url(url: str) -> bool:
+    parsed_url = urllib.parse.urlparse(url)
+    return parsed_url.netloc == "claude.ai" and (
+        parsed_url.path == "/settings/usage" or parsed_url.fragment == "settings/usage"
+    )
+
+
+def target_matches_url(target: BrowserTarget, url: str) -> bool:
+    if url == CLAUDE_URL:
+        return is_claude_usage_url(target.url)
+    return target.url == url
+
+
 def find_target(url: str) -> BrowserTarget | None:
     for target in list_page_targets():
-        if target.url == url:
+        if target_matches_url(target, url):
             return target
     return None
 
@@ -176,19 +193,24 @@ def send_cdp_command(
         connection.close()
 
 
-def scrape_body(target: BrowserTarget) -> str:
-    result = send_cdp_command(
-        target.websocket_debugger_url,
-        "Runtime.evaluate",
-        {"expression": BODY_TEXT_EXPRESSION, "returnByValue": True},
-    )
-    remote_result = result.get("result")
-    if not isinstance(remote_result, dict):
-        raise RuntimeError(f"CDP Runtime.evaluate returned an unexpected payload for {target.url}")
-    value = remote_result.get("value")
-    if not isinstance(value, str):
-        raise RuntimeError(f"CDP Runtime.evaluate did not return text for {target.url}")
-    return value
+def scrape_body(target: BrowserTarget, ready_text: str) -> str:
+    deadline = time.monotonic() + SCRAPE_READY_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        result = send_cdp_command(
+            target.websocket_debugger_url,
+            "Runtime.evaluate",
+            {"expression": BODY_TEXT_EXPRESSION, "returnByValue": True},
+        )
+        remote_result = result.get("result")
+        if not isinstance(remote_result, dict):
+            raise RuntimeError(f"CDP Runtime.evaluate returned an unexpected payload for {target.url}")
+        value = remote_result.get("value")
+        if not isinstance(value, str):
+            raise RuntimeError(f"CDP Runtime.evaluate did not return text for {target.url}")
+        if ready_text in value:
+            return value
+        time.sleep(SCRAPE_POLL_SECONDS)
+    raise RuntimeError(f"Timed out waiting for {ready_text!r} on {target.url}")
 
 
 # ── Parsing ───────────────────────────────────────────────────────────
@@ -531,8 +553,8 @@ def print_picasso(claude: dict, codex: dict, now: datetime, *, console: Console)
     for idx, (name, used, elapsed, session, session_elapsed, next_reset, session_next) in enumerate(rows):
         if idx > 0:
             console.print()
-        reset_str = f"↻ {fmt_dh(next_reset - now)}"
-        session_reset_str = f"↻ {fmt_dh(session_next - now)}"
+        reset_str = f"↻ {fmt_dh(next_reset - now):>{PICASSO_RESET_DURATION_WIDTH}}"
+        session_reset_str = f"↻ {fmt_dh(session_next - now):>{PICASSO_RESET_DURATION_WIDTH}}"
         weekly = _track(used, elapsed, width=width)
         session_view = _session_track(session, session_elapsed, width=width)
         weekly_label = _label(used, elapsed, width=width)
@@ -559,7 +581,7 @@ def main() -> None:
         print(f"ERROR: Failed to prepare Claude usage tab: {error}", file=sys.stderr)
         sys.exit(1)
     try:
-        claude_text = scrape_body(claude_target)
+        claude_text = scrape_body(claude_target, "Current session")
     except RuntimeError as error:
         print(f"ERROR: Failed to scrape Claude usage page: {error}", file=sys.stderr)
         sys.exit(1)
@@ -575,7 +597,7 @@ def main() -> None:
         print(f"ERROR: Failed to prepare Codex usage tab: {error}", file=sys.stderr)
         sys.exit(1)
     try:
-        codex_text = scrape_body(codex_target)
+        codex_text = scrape_body(codex_target, "Codex Analytics")
     except RuntimeError as error:
         print(f"ERROR: Failed to scrape Codex usage page: {error}", file=sys.stderr)
         sys.exit(1)

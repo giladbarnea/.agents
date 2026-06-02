@@ -1,0 +1,6 @@
+{
+  "#qbox > p": {
+    "text": "A rich document handed in; “related” means near-in-concept — same client, same area, same property type all fall out of whole-document similarity for free. The “last 5 years” part is a metadata filter, not semantics. This is the easy lane.",
+    "userInput": "well i'm not sure whether this is arguable - think with me here - naively, a passage about elephants is semantically related to a passage about mammoths;  but are these two real estate properties naively semantically similar?:"
+  }
+}
