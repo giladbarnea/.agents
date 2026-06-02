@@ -1,46 +1,70 @@
 ---
 name: in-html
-description: Build a reusable local interactive HTML page, usually for a CLI-agent review loop, with Tufte-ish styling and optional Shift+click annotations persisted to JSON.
+description: Build a reusable local HTML page for a CLI-agent review loop, with selectable boilerplate layers: styling, browser interactions, and optional Shift+click annotations persisted to JSON.
 ---
 
 # in-html
 
-Use this skill when the user wants an answer or artifact as an interactive local HTML page. Prefer the reusable template; do not start from a content-specific demo unless the user explicitly asks for that demo.
+Use this skill when the user wants an answer or artifact as a local HTML page. Choose only the layers the current environment can support.
 
-## Fast path
+Native HTML can import CSS and JavaScript, but not useful HTML partials. The old HTML Imports feature is dead; iframes import whole pages; `fetch()`-based partials require JavaScript. So this skill keeps small HTML shells and modularizes the CSS/JS around them. If the delivery channel truly supports only one physical HTML file, inline the chosen CSS/JS into `<style>` / `<script>` tags instead of linking external files.
+
+## Layer choice
+
+- If JavaScript is unsupported, read `template-style.html` and `style.css`; create self-contained HTML.
+- If local writes / Node are unsupported, read `template-interactive.html`, `style.css`, and `interactions.js`; create self-contained HTML.
+- If local Node is available, read `template.html`, `style.css`, `interactions.js`, `annotations.css`, `annotations.js`, and `annotation-writer.mjs`.
+
+### Layer 1: style only
+
+Use when the page must render without JavaScript.
+
+```bash
+workdir=$(mktemp -d)
+cp /Users/giladbarnea/.agents/skills/in-html/scripts/template-style.html "$workdir/index.html"
+cp /Users/giladbarnea/.agents/skills/in-html/scripts/style.css "$workdir/"
+cd "$workdir"
+```
+
+### Layers 1+2: style plus interactions
+
+Use when JavaScript works, but filesystem writes / Node server are unavailable.
+
+```bash
+workdir=$(mktemp -d)
+cp /Users/giladbarnea/.agents/skills/in-html/scripts/template-interactive.html "$workdir/index.html"
+cp /Users/giladbarnea/.agents/skills/in-html/scripts/style.css "$workdir/"
+cp /Users/giladbarnea/.agents/skills/in-html/scripts/interactions.js "$workdir/"
+cd "$workdir"
+```
+
+### Layers 1+2+3: full annotated review page
+
+Use when a local Node process can run.
 
 ```bash
 workdir=$(mktemp -d)
 cp /Users/giladbarnea/.agents/skills/in-html/scripts/template.html "$workdir/index.html"
+cp /Users/giladbarnea/.agents/skills/in-html/scripts/style.css "$workdir/"
+cp /Users/giladbarnea/.agents/skills/in-html/scripts/interactions.js "$workdir/"
+cp /Users/giladbarnea/.agents/skills/in-html/scripts/annotations.css "$workdir/"
+cp /Users/giladbarnea/.agents/skills/in-html/scripts/annotations.js "$workdir/"
 cp /Users/giladbarnea/.agents/skills/in-html/scripts/annotation-writer.mjs "$workdir/"
 cd "$workdir"
-```
-
-Edit `index.html` by replacing only the `CONTENT START` block with the page body. Keep the style and script boilerplate intact. If you need ready-made visual/interaction components, read `/Users/giladbarnea/.agents/skills/in-html/scripts/components.md` and copy the relevant snippet. For a rendered reference, copy/open `/Users/giladbarnea/.agents/skills/in-html/scripts/component-gallery.html`.
-
-Then run either one local server:
-
-```bash
 node annotation-writer.mjs
 ```
 
-and open `http://127.0.0.1:8765/index.html`; or, if the user specifically wants `serve`, run the writer and static server separately:
-
-```bash
-node annotation-writer.mjs &
-npx -y serve .
-```
-
-The template posts annotation writes to `http://127.0.0.1:8765/annotations` and the writer merges them into `annotations.json` by default. Override with `PORT=...`, `SERVE_DIR=...`, or `ANNOTATIONS_FILE=...`; if `PORT` changes, update the template’s `<meta name="annotation-endpoint">` too.
+Then open `http://127.0.0.1:8765/index.html`. If using a separate static server, run `node annotation-writer.mjs` too; annotation writes still post to `http://127.0.0.1:8765/annotations`.
 
 ## Authoring rules
 
-1. Put arbitrary content inside `<main class="col" id="content">`. The content can be completely unrelated to any previous page.
-2. Use normal HTML first: `h1`, `.sub`, `.lead`, `h2`, `p`, `aside.note`, `.card`, `.callout`, `.grid`, `.pane`, `.row`, `.chip`, `.btn`, `.kbd`.
-3. Add `data-annotation-id="stable-name"` to important elements so JSON keys survive later edits. Without it, the script generates a CSS selector.
-4. Add `data-annotate-whole` to a component when Shift+click should annotate the whole box rather than a leaf text node.
-5. Bare clicks remain available for page interactions. Annotations open with Shift+click. Bare Enter submits; modified Enter inserts a line break. Escape closes the input.
-6. Agents can opt into ready-made components from `scripts/components.md`: segmented toggles, chip toggles/highlights, disclosure blocks, step pipelines, bar charts, gap visuals, before/after panes, and schema/chip boxes.
+Edit `index.html` by replacing only the `CONTENT START` block with arbitrary page content. Keep the imports intact for the chosen layer set.
+
+Use normal HTML first: `h1`, `.sub`, `.lead`, `h2`, `p`, `aside.note`, `.card`, `.callout`, `.grid`, `.pane`, `.row`, `.chip`, `.btn`, `.kbd`.
+
+For ready-made components, read `/Users/giladbarnea/.agents/skills/in-html/scripts/components.md`. For a rendered reference, open `/Users/giladbarnea/.agents/skills/in-html/scripts/component-gallery.html` with the full layer set.
+
+When annotations are enabled, add `data-annotation-id="stable-name"` to important elements so JSON keys survive later edits. Add `data-annotate-whole` when Shift+click should annotate the whole box rather than a leaf text node. Bare clicks remain available for page interactions; annotations open with Shift+click. Bare Enter submits; modified Enter inserts a line break. Escape closes the input.
 
 Annotation JSON shape:
 
