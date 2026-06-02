@@ -688,20 +688,112 @@
 	<body>
 		<div class="wrap">
 			<main class="col" id="content">
-				<!-- CONTENT START
-Replace this comment block with the page body.
-Recommended shape:
+				
+<h1 data-annotation-id="gallery-title">in-html Component Gallery</h1>
+<p class="sub">Opt-in components available from the reusable template.</p>
+<p class="lead">This page is not the default template. It is a reference showing components an agent can copy into arbitrary generated content.</p>
 
-<h1>Title</h1>
-<p class="sub">Subtitle or framing sentence.</p>
-<p class="lead">Lead paragraph.</p>
+<h2 data-annotation-id="segmented-example"><span class="n">Toggle</span>Segmented panels</h2>
+<div class="seg" data-segmented="gallery-toggle">
+  <button data-panel="a" class="on">Option A</button>
+  <button data-panel="b">Option B</button>
+</div>
+<div data-segment-panels="gallery-toggle">
+  <div class="qbox" data-panel="a">
+    <div class="qtext">“This is panel A.”</div>
+    <span class="verdict ok">Works</span>
+    <p>Use this for small A/B comparisons.</p>
+  </div>
+  <div class="qbox" data-panel="b">
+    <div class="qtext">“This is panel B.”</div>
+    <span class="verdict no">Different</span>
+    <p>The script hides inactive panels automatically.</p>
+  </div>
+</div>
 
-<h2 data-annotation-id="stable-section-id"><span class="n">§1 · Claim label</span>Section claim</h2>
-<p>Body text...</p>
+<hr>
 
-Use data-annotation-id on important elements when you want stable JSON keys.
-Use data-annotate-whole on a component when Shift+click should annotate the whole component rather than its leaf text.
-CONTENT END -->
+<h2 data-annotation-id="chip-example"><span class="n">Toggle</span>Chip-controlled highlights</h2>
+<div class="row" data-chip-toggle data-scope="#gallery-chip-scope">
+  <span class="chip q" data-key="city">“city center”</span>
+  <span class="chip q" data-key="energy">“energy sector”</span>
+</div>
+<div id="gallery-chip-scope" class="ba">
+  <div class="pane">
+    <h4><span>Raw text</span><span>literal</span></h4>
+    <p>Rothschild 22, Tel Aviv. Tenant: Sonol.</p>
+    <div class="nomatch" data-chip-target="city">✗ “city center” is implicit, not explicit.</div>
+    <div class="nomatch" data-chip-target="energy">✗ “energy sector” is implicit, not explicit.</div>
+  </div>
+  <div class="pane">
+    <h4><span>Generated profile</span><span>conceptual</span></h4>
+    <p><span class="hl" data-chip-target="city">central Tel Aviv, a city-center location</span>. <span class="hl" data-chip-target="energy">Sonol, an energy-sector company</span>.</p>
+    <div class="matchnote" data-chip-target="city energy">✓ The profile says the concept out loud.</div>
+  </div>
+</div>
+
+<hr>
+
+<h2 data-annotation-id="disclosure-example"><span class="n">Disclosure</span>Click-to-expand block</h2>
+<div class="disclose" data-annotate-whole>
+  <div class="head"><span class="tri">▸</span> Reveal the hidden explanation</div>
+  <div class="body"><p>This is the basic progressive-disclosure primitive.</p></div>
+</div>
+
+<hr>
+
+<h2 data-annotation-id="pipe-example"><span class="n">Pipeline</span>Click each step</h2>
+<div class="pipe">
+  <div class="step" data-d="Agent turns natural language into intent." data-annotate-whole>
+    <div class="k">STEP 1</div><div class="t">Parse</div><div class="d"></div>
+  </div>
+  <div class="step hot" data-d="The bounded judgment step." data-annotate-whole>
+    <div class="badge">key</div><div class="k">STEP 2</div><div class="t">Judge</div><div class="d"></div>
+  </div>
+  <div class="step" data-d="Synthesize the final answer." data-annotate-whole>
+    <div class="k">STEP 3</div><div class="t">Synthesize</div><div class="d"></div>
+  </div>
+</div>
+
+<hr>
+
+<h2 data-annotation-id="bar-example"><span class="n">Graph</span>Click-to-compile bars</h2>
+<div class="dist" data-bar-compile data-compiled-prefix="Compiled hot paths: ">
+  <div class="bars">
+    <div class="bar" data-axis="date" style="height:140px"></div>
+    <div class="bar" data-axis="client" style="height:118px"></div>
+    <div class="bar" data-axis="sector" style="height:96px"></div>
+    <div class="bar" data-axis="city" style="height:70px"></div>
+    <div class="bar" data-axis="type" style="height:52px"></div>
+    <div class="bar" style="height:40px; opacity:.55"></div>
+    <div class="bar" style="height:33px; opacity:.55"></div>
+    <div class="bar" style="height:28px; opacity:.55"></div>
+    <div class="bar" style="height:24px; opacity:.55"></div>
+  </div>
+  <div class="axislabels"><span>← recurring head</span><span>long tail →</span></div>
+  <div class="band">The interpreter covers the full curve; clicked bars become compiled hot paths.</div>
+  <div class="compiledList" data-compiled-list></div>
+</div>
+
+<hr>
+
+<h2 data-annotation-id="gap-example"><span class="n">Visual</span>Gap / bridge diagram</h2>
+<div class="gap">
+  <div class="side"><h4>Input</h4><span class="v">raw text</span></div>
+  <div class="mid"><span class="arrow">→</span><span class="lbl">night,<br>cheap model</span></div>
+  <div class="side"><h4>Output</h4><span class="v">profile</span><span class="v">embedding</span></div>
+</div>
+
+<hr>
+
+<h2 data-annotation-id="schema-example"><span class="n">Visual</span>Schema/chip box</h2>
+<div class="schemaBox">
+  <span class="chip field">client_sector</span>
+  <span class="chip field">location_character</span>
+  <span class="chip field">reasoning_style</span>
+</div>
+<p class="qline"><span class="counter">#1</span> A question ⇒ <span class="imp">needs field_name</span></p>
+
 			</main>
 		</div>
 

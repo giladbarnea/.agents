@@ -16,7 +16,7 @@ cp /Users/giladbarnea/.agents/skills/in-html/scripts/annotation-writer.mjs "$wor
 cd "$workdir"
 ```
 
-Edit `index.html` by replacing only the `CONTENT START` block with the page body. Keep the style and script boilerplate intact.
+Edit `index.html` by replacing only the `CONTENT START` block with the page body. Keep the style and script boilerplate intact. If you need ready-made visual/interaction components, read `/Users/giladbarnea/.agents/skills/in-html/scripts/components.md` and copy the relevant snippet. For a rendered reference, copy/open `/Users/giladbarnea/.agents/skills/in-html/scripts/component-gallery.html`.
 
 Then run either one local server:
 
@@ -40,7 +40,7 @@ The template posts annotation writes to `http://127.0.0.1:8765/annotations` and 
 3. Add `data-annotation-id="stable-name"` to important elements so JSON keys survive later edits. Without it, the script generates a CSS selector.
 4. Add `data-annotate-whole` to a component when Shift+click should annotate the whole box rather than a leaf text node.
 5. Bare clicks remain available for page interactions. Annotations open with Shift+click. Bare Enter submits; modified Enter inserts a line break. Escape closes the input.
-6. Richer progressive-disclosure mechanics are intentionally minimal for now. The template includes only a small `.disclose` expand/collapse handler.
+6. Agents can opt into ready-made components from `scripts/components.md`: segmented toggles, chip toggles/highlights, disclosure blocks, step pipelines, bar charts, gap visuals, before/after panes, and schema/chip boxes.
 
 Annotation JSON shape:
 
