@@ -1,27 +1,37 @@
 #!/usr/bin/env -S uv run
 # /// script
 # requires-python = "==3.12.*"
-# dependencies = ["python-dateutil", "rich", "websocket-client"]
+# dependencies = ["pycryptodome", "python-dateutil", "requests", "rich", "websocket-client"]
 # ///
 
-"""Scrape and compute AI usage limits for Claude and Codex.
+"""Read and render AI usage limits for Claude and Codex.
 
-Single idempotent script:
-1. Connects to a remote-debugging Chrome session over CDP
-2. Scrapes Claude/Codex usage pages from already-open authenticated tabs
-3. Computes burn rates and exhaustion estimates
+Two strategies, tried in order:
+1. Hit the JSON usage endpoints directly, authenticated with cookies decrypted
+   from the logged-in Chrome profile on disk (no browser process required).
+2. Fall back to driving the already-open Chrome tabs over CDP and scraping the
+   rendered usage text.
 """
 
 import dataclasses
 import json
+import os
 import re
+import shutil
+import sqlite3
+import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
 from dateutil import tz
+from Crypto.Cipher import AES
+from Crypto.Hash import SHA1
+from Crypto.Protocol.KDF import PBKDF2
+import requests
 from rich.console import Console
 from rich.text import Text
 import websocket
@@ -38,6 +48,11 @@ BODY_TEXT_EXPRESSION = "document.body.innerText"
 SCRAPE_READY_TIMEOUT_SECONDS = 30
 SCRAPE_POLL_SECONDS = 1
 PICASSO_RESET_DURATION_WIDTH = len("1d 23h")
+CHROME_COOKIES_DB = os.path.expanduser("~/.agent-browser/custom-debug-profile/Default/Cookies")
+BROWSER_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -46,6 +61,20 @@ class BrowserTarget:
     title: str
     url: str
     websocket_debugger_url: str
+
+
+@dataclasses.dataclass(frozen=True)
+class Limit:
+    """A single usage window: how much is spent and when it next resets."""
+    used_pct: float
+    next_reset: datetime
+
+
+@dataclasses.dataclass(frozen=True)
+class Usage:
+    name: str
+    session: Limit  # 5-hour / current-session window
+    weekly: Limit
 
 
 def read_json(url: str) -> object:
@@ -341,81 +370,6 @@ def fmt_dh(td: timedelta) -> str:
     return f"{hours}h"
 
 
-def fmt_dt(dt: datetime) -> str:
-    return dt.strftime("%a %b %d, %I:%M %p")
-
-
-def print_stats(claude: dict, codex: dict, now: datetime) -> None:
-    # ── Parse ──
-    # Claude
-    claude_last, claude_next = parse_reset_claude(claude["reset_raw"], now)
-
-    # Codex
-    codex_short_reset = parse_reset_codex(codex["hour5_reset_raw"], now=now)
-    codex_weekly_reset = parse_reset_codex(codex["weekly_reset_raw"], now=now)
-
-    # ── Print ──
-    _print_tool(
-        name="CLAUDE (Pro)",
-        short_label="Session",
-        short_pct=claude["session_pct"],
-        short_reset=None,
-        weekly_pct=claude["weekly_pct"],
-        weekly_last=claude_last,
-        weekly_next=claude_next,
-        now=now,
-    )
-    print()
-    _print_tool(
-        name="CODEX",
-        short_label="5h limit",
-        short_pct=100 - codex["hour5_remaining_pct"],
-        short_reset=codex_short_reset,
-        weekly_pct=100 - codex["weekly_remaining_pct"],
-        weekly_last=codex_weekly_reset - timedelta(weeks=1),
-        weekly_next=codex_weekly_reset,
-        now=now,
-    )
-
-
-def _print_tool(
-    *,
-    name: str,
-    short_label: str,
-    short_pct: int,
-    short_reset: datetime | None,
-    weekly_pct: int,
-    weekly_last: datetime,
-    weekly_next: datetime,
-    now: datetime,
-) -> None:
-    week_total = timedelta(weeks=1)
-    elapsed = now - weekly_last
-    pct_time = elapsed / week_total * 100
-    burn = weekly_pct / pct_time if pct_time > 0 else 0
-    direction = "OVER" if burn > 1 else "under"
-
-    def _reset_suffix(dt: datetime) -> str:
-        return f"  (resets {fmt_dt(dt)}, in {fmt_dh(dt - now)})"
-
-    print(f"=== {name} ===")
-
-    if short_reset:
-        print(f"  {short_label:<11} {short_pct}% used{_reset_suffix(short_reset)}")
-    else:
-        print(f"  {short_label:<11} {short_pct}% used")
-
-    print(f"  {'Weekly':<11} {weekly_pct}% used{_reset_suffix(weekly_next)}")
-    print(f"  {'Elapsed':<11} {fmt_dh(elapsed)} / {fmt_dh(week_total)} ({pct_time:.1f}%)")
-    print(f"  {'Burn':<11} {burn:.2f}× ({direction} pace)")
-
-    if burn > 1 and weekly_pct < 100:
-        remaining_pct = 100 - weekly_pct
-        hours_left = remaining_pct / weekly_pct * elapsed.total_seconds() / 3600
-        exhaust = now + timedelta(hours=hours_left)
-        print(f"  {'Exhaustion':<11} {fmt_dt(exhaust)} (~{hours_left:.0f}h)")
-
-
 # ── Picasso rendering ─────────────────────────────────────────────────
 
 def _track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text:
@@ -505,50 +459,28 @@ def _session_track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text
     return text
 
 
-def _picasso_row_data(claude: dict, codex: dict, now: datetime) -> list[tuple]:
+def _picasso_row_data(usages: list[Usage], now: datetime) -> list[tuple]:
     """Return [(name, used_pct, elapsed_pct, session_pct, session_elapsed_pct, next_reset, session_next), ...]."""
     week = timedelta(weeks=1)
-
-    claude_last, claude_next = parse_reset_claude(claude["reset_raw"], now)
-    claude_elapsed_pct = (now - claude_last) / week * 100
-    claude_session_next = parse_reset_claude(claude["session_reset_raw"], now)[1]
-    claude_session_offset = claude_session_next - now
-    claude_session_elapsed_pct = max(0.0, min(100.0, (1 - claude_session_offset / SESSION_DURATION) * 100))
-
-    if codex.get("weekly_reset_raw"):
-        codex_next = parse_reset_codex(codex["weekly_reset_raw"], now=now)
-    else:
-        codex_next = now + week
-    codex_last = codex_next - week
-    codex_elapsed_pct = (now - codex_last) / week * 100
-
-    if codex.get("hour5_reset_raw"):
-        codex_hour5_next = parse_reset_codex(codex["hour5_reset_raw"], now=now)
-    else:
-        codex_hour5_next = now + SESSION_DURATION
-    codex_hour5_offset = codex_hour5_next - now
-    codex_hour5_elapsed_pct = max(0.0, min(100.0, (1 - codex_hour5_offset / SESSION_DURATION) * 100))
-
-    return [
-        ("CLAUDE",
-         float(claude["weekly_pct"]),
-         claude_elapsed_pct,
-         float(claude["session_pct"]),
-         claude_session_elapsed_pct,
-         claude_next,
-         claude_session_next),
-        ("CODEX",
-         100 - float(codex["weekly_remaining_pct"]),
-         codex_elapsed_pct,
-         100 - float(codex["hour5_remaining_pct"]),
-         codex_hour5_elapsed_pct,
-         codex_next,
-         codex_hour5_next),
-    ]
+    rows: list[tuple] = []
+    for usage in usages:
+        weekly_elapsed_pct = max(0.0, min(100.0, (now - (usage.weekly.next_reset - week)) / week * 100))
+        session_offset = usage.session.next_reset - now
+        session_elapsed_pct = max(0.0, min(100.0, (1 - session_offset / SESSION_DURATION) * 100))
+        rows.append((
+            usage.name,
+            usage.weekly.used_pct,
+            weekly_elapsed_pct,
+            usage.session.used_pct,
+            session_elapsed_pct,
+            usage.weekly.next_reset,
+            usage.session.next_reset,
+        ))
+    return rows
 
 
-def print_picasso(claude: dict, codex: dict, now: datetime, *, console: Console) -> None:
-    rows = _picasso_row_data(claude, codex, now)
+def print_picasso(usages: list[Usage], now: datetime, *, console: Console) -> None:
+    rows = _picasso_row_data(usages, now)
     width = 50
     for idx, (name, used, elapsed, session, session_elapsed, next_reset, session_next) in enumerate(rows):
         if idx > 0:
@@ -572,46 +504,142 @@ def print_picasso(claude: dict, codex: dict, now: datetime, *, console: Console)
         )
 
 
+# ── Option 1: direct API via decrypted Chrome cookies ─────────────────
+
+def _safe_storage_key() -> bytes:
+    """Derive Chrome's macOS cookie-encryption key from the Keychain secret."""
+    password = subprocess.check_output(
+        ["security", "find-generic-password", "-w", "-s", "Chrome Safe Storage"]
+    ).strip()
+    return PBKDF2(password, b"saltysalt", dkLen=16, count=1003, hmac_hash_module=SHA1)
+
+
+def _decrypt_cookie(value: bytes, key: bytes) -> str:
+    if value[:3] != b"v10":
+        return value.decode("utf-8", "replace")
+    plain = AES.new(key, AES.MODE_CBC, b" " * 16).decrypt(value[3:])
+    plain = plain[: -plain[-1]]  # strip PKCS7 padding
+    # Chrome 130+ on macOS prepends a 32-byte SHA256(host) integrity prefix.
+    try:
+        return plain[32:].decode("utf-8")
+    except UnicodeDecodeError:
+        return plain.decode("utf-8", "replace")
+
+
+def chrome_cookies(host_substring: str) -> dict[str, str]:
+    """Decrypt the logged-in Chrome profile's cookies for hosts matching host_substring."""
+    key = _safe_storage_key()
+    with tempfile.NamedTemporaryFile(suffix=".db") as snapshot:
+        shutil.copy(CHROME_COOKIES_DB, snapshot.name)  # copy to dodge Chrome's WAL lock
+        connection = sqlite3.connect(snapshot.name)
+        rows = connection.execute(
+            "SELECT name, encrypted_value FROM cookies WHERE host_key LIKE ?",
+            (f"%{host_substring}%",),
+        ).fetchall()
+        connection.close()
+    return {name: _decrypt_cookie(value, key) for name, value in rows}
+
+
+def _authenticated_session(host_substring: str) -> requests.Session:
+    session = requests.Session()
+    session.headers.update({"User-Agent": BROWSER_UA, "Accept": "application/json"})
+    session.cookies.update(chrome_cookies(host_substring))
+    return session
+
+
+def _claude_usage_json() -> dict:
+    session = _authenticated_session("claude.ai")
+    organizations = session.get("https://claude.ai/api/organizations", timeout=20)
+    organizations.raise_for_status()
+    org_list = organizations.json()
+    organization = next((org for org in org_list if not org.get("archived_at")), org_list[0])
+    response = session.get(f"https://claude.ai/api/organizations/{organization['uuid']}/usage", timeout=20)
+    response.raise_for_status()
+    return response.json()
+
+
+def _codex_rate_limit_json() -> dict:
+    session = _authenticated_session("chatgpt.com")
+    auth = session.get("https://chatgpt.com/api/auth/session", timeout=20)
+    auth.raise_for_status()
+    access_token = auth.json()["accessToken"]
+    response = session.get(
+        "https://chatgpt.com/backend-api/wham/usage",
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=20,
+    )
+    response.raise_for_status()
+    return response.json()["rate_limit"]
+
+
+def fetch_via_cookies() -> list[Usage]:
+    """First-line: read usage straight from the JSON endpoints, no browser process needed."""
+    claude = _claude_usage_json()
+    codex = _codex_rate_limit_json()
+    return [
+        Usage(
+            name="CLAUDE",
+            session=Limit(float(claude["five_hour"]["utilization"]),
+                          datetime.fromisoformat(claude["five_hour"]["resets_at"]).astimezone(IDT)),
+            weekly=Limit(float(claude["seven_day"]["utilization"]),
+                         datetime.fromisoformat(claude["seven_day"]["resets_at"]).astimezone(IDT)),
+        ),
+        Usage(
+            name="CODEX",
+            session=Limit(float(codex["primary_window"]["used_percent"]),
+                          datetime.fromtimestamp(codex["primary_window"]["reset_at"], tz=IDT)),
+            weekly=Limit(float(codex["secondary_window"]["used_percent"]),
+                         datetime.fromtimestamp(codex["secondary_window"]["reset_at"], tz=IDT)),
+        ),
+    ]
+
+
+# ── Option 2 (fallback): drive logged-in Chrome tabs over CDP and scrape ──
+
+def scrape_via_browser(now: datetime) -> list[Usage]:
+    claude = parse_claude(scrape_body(ensure_target(CLAUDE_URL), "Current session"))
+    codex = parse_codex(scrape_body(ensure_target(CODEX_URL), "Codex Analytics"))
+
+    codex_session_next = (
+        parse_reset_codex(codex["hour5_reset_raw"], now=now)
+        if codex["hour5_reset_raw"] else now + SESSION_DURATION
+    )
+    codex_weekly_next = (
+        parse_reset_codex(codex["weekly_reset_raw"], now=now)
+        if codex["weekly_reset_raw"] else now + timedelta(weeks=1)
+    )
+    return [
+        Usage(
+            name="CLAUDE",
+            session=Limit(float(claude["session_pct"]), parse_reset_claude(claude["session_reset_raw"], now)[1]),
+            weekly=Limit(float(claude["weekly_pct"]), parse_reset_claude(claude["reset_raw"], now)[1]),
+        ),
+        Usage(
+            name="CODEX",
+            session=Limit(100 - float(codex["hour5_remaining_pct"]), codex_session_next),
+            weekly=Limit(100 - float(codex["weekly_remaining_pct"]), codex_weekly_next),
+        ),
+    ]
+
+
 # ── Main ──────────────────────────────────────────────────────────────
 
 def main() -> None:
-    try:
-        claude_target = ensure_target(CLAUDE_URL)
-    except RuntimeError as error:
-        print(f"ERROR: Failed to prepare Claude usage tab: {error}", file=sys.stderr)
-        sys.exit(1)
-    try:
-        claude_text = scrape_body(claude_target, "Current session")
-    except RuntimeError as error:
-        print(f"ERROR: Failed to scrape Claude usage page: {error}", file=sys.stderr)
-        sys.exit(1)
-    try:
-        claude = parse_claude(claude_text)
-    except ValueError as error:
-        print(f"ERROR: Failed to parse Claude usage page: {error}", file=sys.stderr)
-        sys.exit(1)
-
-    try:
-        codex_target = ensure_target(CODEX_URL)
-    except RuntimeError as error:
-        print(f"ERROR: Failed to prepare Codex usage tab: {error}", file=sys.stderr)
-        sys.exit(1)
-    try:
-        codex_text = scrape_body(codex_target, "Codex Analytics")
-    except RuntimeError as error:
-        print(f"ERROR: Failed to scrape Codex usage page: {error}", file=sys.stderr)
-        sys.exit(1)
-    try:
-        codex = parse_codex(codex_text)
-    except ValueError as error:
-        print(f"ERROR: Failed to parse Codex usage page: {error}", file=sys.stderr)
-        sys.exit(1)
-
     now = datetime.now(tz=IDT)
     console = Console()
 
+    try:
+        usages = fetch_via_cookies()
+    except Exception as error:
+        print(
+            f"WARNING: Direct cookie-based fetch failed ({type(error).__name__}: {error}); "
+            "falling back to browser scraping.",
+            file=sys.stderr,
+        )
+        usages = scrape_via_browser(now)
+
     console.print()
-    print_picasso(claude, codex, now, console=console)
+    print_picasso(usages, now, console=console)
 
 
 if __name__ == "__main__":
