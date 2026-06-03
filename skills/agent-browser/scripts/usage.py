@@ -362,12 +362,15 @@ def parse_reset_codex(reset_raw: str, *, now: datetime) -> datetime:
 # ── Formatting ────────────────────────────────────────────────────────
 
 def fmt_dh(td: timedelta) -> str:
-    total_h = td.total_seconds() / 3600
-    days = int(total_h // 24)
-    hours = int(total_h % 24)
+    total_seconds = td.total_seconds()
+    days = int(total_seconds // 86400)
+    hours = int(total_seconds % 86400 // 3600)
     if days:
         return f"{days}d {hours}h"
-    return f"{hours}h"
+    if hours:
+        return f"{hours}h"
+    minutes = int(total_seconds % 3600 // 60)
+    return f"{minutes}m"
 
 
 # ── Picasso rendering ─────────────────────────────────────────────────
