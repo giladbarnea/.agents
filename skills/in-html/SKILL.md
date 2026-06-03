@@ -1,6 +1,6 @@
 ---
 name: in-html
-description: Build a reusable local HTML page for a CLI-agent review loop, with selectable boilerplate layers: styling, browser interactions, and optional Shift+click annotations persisted to JSON.
+description: Build a reusable local HTML page for a CLI-agent review loop, with selectable boilerplate layers — styling, browser interactions, and optional Shift+click annotations persisted to JSON.
 ---
 
 # in-html

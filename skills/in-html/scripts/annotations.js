@@ -18,6 +18,7 @@
   const annotationInternalClasses = new Set([
     "annotation-hover",
     "annotation-has-note",
+    "annotation-linked-hover",
   ]);
   const annotationsByElement = new Map();
   const annotationPreviewsByElement = new Map();
@@ -240,7 +241,6 @@
     marker.className = "annotation-marker";
     marker.dataset.annotationUi = "marker";
     marker.type = "button";
-    marker.textContent = "※";
     marker.setAttribute("aria-label", "Show annotations");
     marker.setAttribute("aria-pressed", "false");
     annotationMarkerHost(element).append(marker);
@@ -322,6 +322,7 @@
       return;
     }
     preview.remove();
+    element.classList.remove("annotation-linked-hover");
     annotationPreviewsByElement.delete(element);
     setAnnotationMarkerPressed(element, false);
     positionAnnotationPreviews();
@@ -330,6 +331,7 @@
   function closeAllAnnotationPreviews() {
     annotationPreviewsByElement.forEach((preview, element) => {
       preview.remove();
+      element.classList.remove("annotation-linked-hover");
       setAnnotationMarkerPressed(element, false);
     });
     annotationPreviewsByElement.clear();
@@ -356,6 +358,8 @@
     closeButton.setAttribute("aria-label", "Close annotation preview");
     closeButton.textContent = "×";
     closeButton.addEventListener("click", () => closeAnnotationPreview(element));
+    preview.addEventListener("mouseenter", () => setLinkedAnnotationElement(element));
+    preview.addEventListener("mouseleave", () => setLinkedAnnotationElement(null));
 
     header.append(title, closeButton);
     preview.append(header);
@@ -482,6 +486,15 @@
     });
   }
 
+  function setLinkedAnnotationElement(element) {
+    annotationsByElement.forEach((_entry, annotatedElement) => {
+      annotatedElement.classList.toggle(
+        "annotation-linked-hover",
+        annotatedElement === element,
+      );
+    });
+  }
+
   async function writeAnnotation(element, userInput, specificallySelected) {
     const response = await fetch(annotationEndpoint, {
       method: "POST",
@@ -603,7 +616,10 @@
     );
   });
 
-  document.addEventListener("mouseleave", () => setLinkedAnnotationPreview(null));
+  document.addEventListener("mouseleave", () => {
+    setLinkedAnnotationPreview(null);
+    setLinkedAnnotationElement(null);
+  });
 
   document.addEventListener(
     "mousedown",
