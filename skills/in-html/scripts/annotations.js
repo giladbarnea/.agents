@@ -7,6 +7,7 @@
   const annotationIgnoredSelector = [
     ".annotation-editor",
     ".annotation-preview",
+    "[data-annotation-ui]",
     "input",
     "textarea",
     "select",
@@ -41,7 +42,11 @@
   }
 
   function normalizedElementText(element) {
-    return element.textContent.trim().replace(/\s+/g, " ");
+    const clone = element.cloneNode(true);
+    clone
+      .querySelectorAll("[data-annotation-ui]")
+      .forEach((node) => node.remove());
+    return clone.textContent.trim().replace(/\s+/g, " ");
   }
 
   function selectedRangeWithin(element) {
@@ -198,9 +203,54 @@
       : userInput;
   }
 
+  function annotationMarkerHost(element) {
+    return element.matches("details")
+      ? element.querySelector(":scope > summary") || element
+      : element;
+  }
+
+  function annotationMarkerForElement(element) {
+    return annotationMarkerHost(element).querySelector(
+      ":scope > .annotation-marker",
+    );
+  }
+
+  function annotationMarkerFromEvent(event) {
+    return event.target.closest?.(".annotation-marker") || null;
+  }
+
+  function annotatedElementFromMarker(marker) {
+    return marker.closest(".annotation-has-note");
+  }
+
+  function setAnnotationMarkerPressed(element, pressed) {
+    annotationMarkerForElement(element)?.setAttribute(
+      "aria-pressed",
+      pressed ? "true" : "false",
+    );
+  }
+
+  function ensureAnnotationMarker(element) {
+    const existingMarker = annotationMarkerForElement(element);
+    if (existingMarker) {
+      return existingMarker;
+    }
+
+    const marker = document.createElement("button");
+    marker.className = "annotation-marker";
+    marker.dataset.annotationUi = "marker";
+    marker.type = "button";
+    marker.textContent = "※";
+    marker.setAttribute("aria-label", "Show annotations");
+    marker.setAttribute("aria-pressed", "false");
+    annotationMarkerHost(element).append(marker);
+    return marker;
+  }
+
   function registerAnnotatedElement(element, selector, annotation) {
     annotationsByElement.set(element, { selector, annotation });
     element.classList.add("annotation-has-note");
+    ensureAnnotationMarker(element);
   }
 
   function recordWrittenAnnotation(element, userInput, specificallySelected) {
@@ -273,11 +323,15 @@
     }
     preview.remove();
     annotationPreviewsByElement.delete(element);
+    setAnnotationMarkerPressed(element, false);
     positionAnnotationPreviews();
   }
 
   function closeAllAnnotationPreviews() {
-    annotationPreviewsByElement.forEach((preview) => preview.remove());
+    annotationPreviewsByElement.forEach((preview, element) => {
+      preview.remove();
+      setAnnotationMarkerPressed(element, false);
+    });
     annotationPreviewsByElement.clear();
   }
 
@@ -406,6 +460,7 @@
     preview.style.visibility = "hidden";
     document.body.appendChild(preview);
     annotationPreviewsByElement.set(element, preview);
+    setAnnotationMarkerPressed(element, true);
     positionAnnotationPreviews();
     preview.style.visibility = "visible";
   }
@@ -416,6 +471,15 @@
       return;
     }
     openAnnotationPreview(element);
+  }
+
+  function setLinkedAnnotationPreview(element) {
+    annotationPreviewsByElement.forEach((preview, previewElement) => {
+      preview.classList.toggle(
+        "annotation-preview-linked-hover",
+        previewElement === element,
+      );
+    });
   }
 
   async function writeAnnotation(element, userInput, specificallySelected) {
@@ -525,6 +589,12 @@
   }
 
   document.addEventListener("mousemove", (event) => {
+    const marker = annotationMarkerFromEvent(event);
+    const linkedElement = marker
+      ? annotatedElementFromMarker(marker)
+      : annotatedElementFromPoint(event.clientX, event.clientY);
+    setLinkedAnnotationPreview(linkedElement);
+
     if (activeAnnotationEditor) {
       return;
     }
@@ -532,6 +602,8 @@
       annotationCandidateFromPoint(event.clientX, event.clientY),
     );
   });
+
+  document.addEventListener("mouseleave", () => setLinkedAnnotationPreview(null));
 
   document.addEventListener(
     "mousedown",
@@ -560,6 +632,13 @@
   document.addEventListener(
     "mousedown",
     (event) => {
+      const marker = annotationMarkerFromEvent(event);
+      if (marker) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
       if (!event.metaKey || event.shiftKey || activeAnnotationEditor) {
         return;
       }
@@ -579,6 +658,17 @@
   document.addEventListener(
     "click",
     (event) => {
+      const marker = annotationMarkerFromEvent(event);
+      if (marker) {
+        const element = annotatedElementFromMarker(marker);
+        if (element) {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleAnnotationPreview(element);
+        }
+        return;
+      }
+
       if (event.metaKey && !event.shiftKey && !activeAnnotationEditor) {
         const element = annotatedElementFromPoint(event.clientX, event.clientY);
         if (element) {
