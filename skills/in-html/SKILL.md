@@ -21,7 +21,7 @@ Use when the page must render without JavaScript. Disclosure, step expansion, an
 
 ```bash
 workdir=$(mktemp -d)
-cp /Users/giladbarnea/.agents/skills/in-html/scripts/template-style.html "$workdir/index.html"
+cp /Users/giladbarnea/.agents/skills/in-html/templates/template-style.html "$workdir/index.html"
 cp /Users/giladbarnea/.agents/skills/in-html/scripts/style.css "$workdir/"
 cd "$workdir"
 ```
@@ -34,7 +34,7 @@ Use when JavaScript works, but filesystem writes / Node server are unavailable.
 
 ```bash
 workdir=$(mktemp -d)
-cp /Users/giladbarnea/.agents/skills/in-html/scripts/template-interactive.html "$workdir/index.html"
+cp /Users/giladbarnea/.agents/skills/in-html/templates/template-interactive.html "$workdir/index.html"
 cp /Users/giladbarnea/.agents/skills/in-html/scripts/style.css "$workdir/"
 cp /Users/giladbarnea/.agents/skills/in-html/scripts/interactions.js "$workdir/"
 cd "$workdir"
@@ -46,7 +46,7 @@ Use when a local Node process can run.
 
 ```bash
 workdir=$(mktemp -d)
-cp /Users/giladbarnea/.agents/skills/in-html/scripts/template.html "$workdir/index.html"
+cp /Users/giladbarnea/.agents/skills/in-html/templates/template.html "$workdir/index.html"
 cp /Users/giladbarnea/.agents/skills/in-html/scripts/style.css "$workdir/"
 cp /Users/giladbarnea/.agents/skills/in-html/scripts/interactions.js "$workdir/"
 cp /Users/giladbarnea/.agents/skills/in-html/scripts/annotations.css "$workdir/"
