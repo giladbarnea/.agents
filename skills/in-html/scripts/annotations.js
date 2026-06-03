@@ -19,13 +19,12 @@
     "annotation-has-note",
   ]);
   const annotationsByElement = new Map();
+  const annotationPreviewsByElement = new Map();
   let highlightedAnnotationElement = null;
   let activeAnnotationEditor = null;
   let activeAnnotationElement = null;
   let activeAnnotationSelection = "";
   let activeAnnotationSelectionRange = null;
-  let activeAnnotationPreview = null;
-  let activeAnnotationPreviewElement = null;
 
   // A persistent custom highlight survives focus changes and styles the
   // captured phrase distinctly from a native browser selection.
@@ -267,15 +266,22 @@
     statusElement.textContent = text;
   }
 
-  function closeAnnotationPreview() {
-    if (activeAnnotationPreview) {
-      activeAnnotationPreview.remove();
+  function closeAnnotationPreview(element) {
+    const preview = annotationPreviewsByElement.get(element);
+    if (!preview) {
+      return;
     }
-    activeAnnotationPreview = null;
-    activeAnnotationPreviewElement = null;
+    preview.remove();
+    annotationPreviewsByElement.delete(element);
+    positionAnnotationPreviews();
   }
 
-  function createAnnotationPreview(annotation) {
+  function closeAllAnnotationPreviews() {
+    annotationPreviewsByElement.forEach((preview) => preview.remove());
+    annotationPreviewsByElement.clear();
+  }
+
+  function createAnnotationPreview(element, annotation) {
     const preview = document.createElement("aside");
     const userInputs = annotationUserInputs(annotation);
     preview.className = "annotation-preview";
@@ -295,7 +301,7 @@
     closeButton.type = "button";
     closeButton.setAttribute("aria-label", "Close annotation preview");
     closeButton.textContent = "×";
-    closeButton.addEventListener("click", closeAnnotationPreview);
+    closeButton.addEventListener("click", () => closeAnnotationPreview(element));
 
     header.append(title, closeButton);
     preview.append(header);
@@ -338,23 +344,21 @@
     const elementRect = element.getBoundingClientRect();
     const columnRect = (element.closest(".col") || element).getBoundingClientRect();
     const wrap = element.closest(".wrap");
-    const wrapRect = wrap?.getBoundingClientRect();
     const gap = wrap ? cssPixels(getComputedStyle(wrap).paddingRight, 24) : 24;
-    const intendedLeft = columnRect.right + gap;
-    const rightEdge = wrapRect ? wrapRect.right - gap : window.innerWidth - gap;
-    const width = clamp(rightEdge - intendedLeft, 224, 360);
+    const corridorLeft = columnRect.right;
+    const corridorRight = window.innerWidth - gap;
+    const corridorWidth = corridorRight - corridorLeft;
+    const width = clamp(corridorWidth, 224, 360);
 
     preview.style.width = `${width}px`;
     const previewRect = preview.getBoundingClientRect();
+    const centeredLeft = corridorLeft + (corridorWidth - previewRect.width) / 2;
     const fallbackLeft = clamp(
       elementRect.left,
       gap,
       window.innerWidth - previewRect.width - gap,
     );
-    const left =
-      intendedLeft + previewRect.width <= window.innerWidth - gap
-        ? intendedLeft
-        : fallbackLeft;
+    const left = corridorWidth >= previewRect.width ? centeredLeft : fallbackLeft;
     const top = clamp(
       elementRect.top,
       gap,
@@ -365,20 +369,53 @@
     preview.style.top = `${top}px`;
   }
 
+  function positionAnnotationPreviews() {
+    const gap = 12;
+    const entries = Array.from(annotationPreviewsByElement.entries())
+      .map(([element, preview]) => ({
+        element,
+        preview,
+        top: element.getBoundingClientRect().top,
+      }))
+      .sort((first, second) => first.top - second.top);
+
+    entries.forEach(({ preview, element }) => {
+      positionAnnotationPreview(preview, element);
+    });
+
+    let previousBottom = -Infinity;
+    entries.forEach(({ preview }) => {
+      const rect = preview.getBoundingClientRect();
+      const top = clamp(
+        Math.max(rect.top, previousBottom + gap),
+        gap,
+        window.innerHeight - rect.height - gap,
+      );
+      preview.style.top = `${top}px`;
+      previousBottom = top + rect.height;
+    });
+  }
+
   function openAnnotationPreview(element) {
     const entry = annotationsByElement.get(element);
     if (!entry) {
       return;
     }
 
-    closeAnnotationPreview();
-    const preview = createAnnotationPreview(entry.annotation);
+    const preview = createAnnotationPreview(element, entry.annotation);
     preview.style.visibility = "hidden";
     document.body.appendChild(preview);
-    activeAnnotationPreview = preview;
-    activeAnnotationPreviewElement = element;
-    positionAnnotationPreview(preview, element);
+    annotationPreviewsByElement.set(element, preview);
+    positionAnnotationPreviews();
     preview.style.visibility = "visible";
+  }
+
+  function toggleAnnotationPreview(element) {
+    if (annotationPreviewsByElement.has(element)) {
+      closeAnnotationPreview(element);
+      return;
+    }
+    openAnnotationPreview(element);
   }
 
   async function writeAnnotation(element, userInput, specificallySelected) {
@@ -424,7 +461,7 @@
   }
 
   function openAnnotationEditor(element) {
-    closeAnnotationPreview();
+    closeAllAnnotationPreviews();
     if (activeAnnotationEditor) {
       closeAnnotationEditor();
     }
@@ -523,39 +560,18 @@
   document.addEventListener(
     "mousedown",
     (event) => {
-      if (event.ctrlKey && !event.shiftKey && !activeAnnotationEditor) {
-        const element = annotatedElementFromPoint(event.clientX, event.clientY);
-        if (!element) {
-          return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-        openAnnotationPreview(element);
-        return;
-      }
-
-      if (
-        activeAnnotationPreview &&
-        !activeAnnotationPreview.contains(event.target)
-      ) {
-        closeAnnotationPreview();
-      }
-    },
-    true,
-  );
-
-  document.addEventListener(
-    "contextmenu",
-    (event) => {
-      if (!event.ctrlKey || activeAnnotationEditor) {
+      if (!event.metaKey || event.shiftKey || activeAnnotationEditor) {
         return;
       }
 
       const element = annotatedElementFromPoint(event.clientX, event.clientY);
-      if (element) {
-        event.preventDefault();
+      if (!element) {
+        return;
       }
+
+      event.preventDefault();
+      event.stopPropagation();
+      toggleAnnotationPreview(element);
     },
     true,
   );
@@ -563,6 +579,15 @@
   document.addEventListener(
     "click",
     (event) => {
+      if (event.metaKey && !event.shiftKey && !activeAnnotationEditor) {
+        const element = annotatedElementFromPoint(event.clientX, event.clientY);
+        if (element) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
+
       if (activeAnnotationEditor || !event.shiftKey) {
         return;
       }
@@ -596,7 +621,7 @@
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeAnnotationEditor();
-      closeAnnotationPreview();
+      closeAllAnnotationPreviews();
     }
   });
 
@@ -604,26 +629,10 @@
     if (activeAnnotationEditor && activeAnnotationElement) {
       positionAnnotationEditor(activeAnnotationEditor, activeAnnotationElement);
     }
-    if (activeAnnotationPreview && activeAnnotationPreviewElement) {
-      positionAnnotationPreview(
-        activeAnnotationPreview,
-        activeAnnotationPreviewElement,
-      );
-    }
+    positionAnnotationPreviews();
   });
 
-  window.addEventListener(
-    "scroll",
-    () => {
-      if (activeAnnotationPreview && activeAnnotationPreviewElement) {
-        positionAnnotationPreview(
-          activeAnnotationPreview,
-          activeAnnotationPreviewElement,
-        );
-      }
-    },
-    { passive: true },
-  );
+  window.addEventListener("scroll", positionAnnotationPreviews, { passive: true });
 
   loadAnnotations().catch((error) => console.warn(error));
 })();
