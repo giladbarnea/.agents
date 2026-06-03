@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 can_prompt_for_render() {
-  [[ -t 0 && -t 1 && -r /dev/tty ]]
+  [[ -t 1 ]]
 }
 
 render_all_agents_md() {
@@ -37,8 +37,8 @@ render_agents_md() {
       printf 'Render all .md.j2 files now? Y/N ' > /dev/tty
       read -r reply < /dev/tty || return 1
       [[ "$reply" == "Y" || "$reply" == "y" ]] || return 1
-      render_all_agents_md
-      return $?
+      render_all_agents_md || return 1
+      exec "$0"
     fi
   done
 }
