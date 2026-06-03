@@ -15,11 +15,6 @@
     "[data-annotation-ignore]",
   ].join(",");
   const annotationWholeSelector = "[data-annotate-whole], .step, .bar";
-  const annotationInternalClasses = new Set([
-    "annotation-hover",
-    "annotation-has-note",
-    "annotation-linked-hover",
-  ]);
   const annotationsByElement = new Map();
   const annotationPreviewsByElement = new Map();
   let highlightedAnnotationElement = null;
@@ -147,10 +142,6 @@
   function annotationPathSegment(element) {
     const tag = element.tagName.toLowerCase();
     const idSuffix = element.id ? `#${CSS.escape(element.id)}` : "";
-    const classSuffix = Array.from(element.classList)
-      .filter((name) => !annotationInternalClasses.has(name))
-      .map((name) => `.${CSS.escape(name)}`)
-      .join("");
     const siblings = Array.from(element.parentElement.children).filter(
       (child) => child.tagName === element.tagName,
     );
@@ -158,10 +149,10 @@
       !idSuffix && siblings.length > 1
         ? `:nth-of-type(${siblings.indexOf(element) + 1})`
         : "";
-    return `${tag}${idSuffix}${classSuffix}${nth}`;
+    return `${tag}${idSuffix}${nth}`;
   }
 
-  // Builds a unique, descriptive path from the nearest stable anchor
+  // Builds a structural path from the nearest stable anchor
   // (a data-annotation-id ancestor) or <body> down to the element.
   function selectorForAnnotationElement(element) {
     if (element.dataset.annotationId) {
@@ -202,6 +193,34 @@
     return specificallySelected
       ? { userInput, specificallySelected }
       : userInput;
+  }
+
+  function selectorWithoutClassIdentity(selector) {
+    return selector
+      .split(" > ")
+      .map((segment) =>
+        segment.startsWith("[data-annotation-id=")
+          ? segment
+          : segment.replace(/\.[_a-zA-Z][\w-]*/g, ""),
+      )
+      .join(" > ");
+  }
+
+  function elementForAnnotationSelector(selector) {
+    return (
+      document.querySelector(selector) ||
+      document.querySelector(selectorWithoutClassIdentity(selector))
+    );
+  }
+
+  function mergeAnnotations(existingAnnotation, annotation) {
+    return {
+      text: annotation.text || existingAnnotation.text,
+      userInputs: [
+        ...annotationUserInputs(existingAnnotation),
+        ...annotationUserInputs(annotation),
+      ],
+    };
   }
 
   function annotationMarkerHost(element) {
@@ -248,7 +267,12 @@
   }
 
   function registerAnnotatedElement(element, selector, annotation) {
-    annotationsByElement.set(element, { selector, annotation });
+    const existing = annotationsByElement.get(element);
+    const registeredAnnotation =
+      existing && existing.annotation !== annotation
+        ? mergeAnnotations(existing.annotation, annotation)
+        : annotation;
+    annotationsByElement.set(element, { selector, annotation: registeredAnnotation });
     element.classList.add("annotation-has-note");
     ensureAnnotationMarker(element);
   }
@@ -262,11 +286,7 @@
     annotation.text = normalizedElementText(element);
     annotation.userInputs = annotationUserInputs(annotation);
     annotation.userInputs.push(annotationItem(userInput, specificallySelected));
-    registerAnnotatedElement(
-      element,
-      existing?.selector || selectorForAnnotationElement(element),
-      annotation,
-    );
+    registerAnnotatedElement(element, selectorForAnnotationElement(element), annotation);
   }
 
   function annotatedElementFromPoint(clientX, clientY) {
@@ -294,7 +314,7 @@
 
     const annotations = await response.json();
     Object.entries(annotations).forEach(([selector, annotation]) => {
-      const element = document.querySelector(selector);
+      const element = elementForAnnotationSelector(selector);
       if (element) {
         registerAnnotatedElement(element, selector, annotation);
       }
