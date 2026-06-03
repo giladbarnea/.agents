@@ -66,15 +66,20 @@ Use normal HTML first: `h1`, `.sub`, `.lead`, `h2`, `p`, `aside.note`, `.card`, 
 
 For ready-made components, read `/Users/giladbarnea/.agents/skills/in-html/scripts/components.md`. For a rendered reference, open `/Users/giladbarnea/.agents/skills/in-html/scripts/component-gallery.html` with the full layer set.
 
-When annotations are enabled, add `data-annotation-id="stable-name"` to important elements so JSON keys survive later edits. Add `data-annotate-whole` when Shift+click should annotate the whole box rather than a leaf text node. Bare clicks remain available for page interactions; annotations open with Shift+click. Bare Enter submits; modified Enter inserts a line break. Escape closes the input.
+When annotations are enabled, add `data-annotation-id="stable-name"` to important elements so JSON keys survive later edits. Without one, the key is a unique, descriptive CSS path (tag + id + classes + `:nth-of-type`) from the nearest `data-annotation-id` ancestor or `<body>` down to the element, so you can tell where it lives in the page. Add `data-annotate-whole` when Shift+click should annotate the whole box rather than a leaf text node. Bare clicks remain available for page interactions; annotations open with Shift+click. Bare Enter submits; modified Enter inserts a line break. Escape closes the input.
 
-Annotation JSON shape:
+While the editor is open, drag-selecting text inside the annotated element captures that span alongside the note, so a note can point at a specific phrase rather than the whole element. The selection is only recorded when it lies within the annotated element.
+
+Annotation JSON shape — each key maps to the element text plus the accumulated reviewer notes (re-annotating the same element appends rather than overwrites). A note is a plain string, or an object when the reviewer had text selected:
 
 ```json
 {
-  "[data-annotation-id=\"some-element\"]": {
+  "body > main.wrap > section#summary > div.card > p:nth-of-type(2)": {
     "text": "The element text",
-    "userInput": "The reviewer note"
+    "userInputs": [
+      "A note on the whole element",
+      {"userInput": "A note on a specific phrase", "specificallySelected": "the highlighted phrase"}
+    ]
   }
 }
 ```

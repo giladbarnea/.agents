@@ -16,6 +16,7 @@
   let highlightedAnnotationElement = null;
   let activeAnnotationEditor = null;
   let activeAnnotationElement = null;
+  let activeAnnotationSelection = "";
 
   function elementHasOwnText(element) {
     return Array.from(element.childNodes).some(
@@ -25,6 +26,23 @@
 
   function normalizedElementText(element) {
     return element.textContent.trim().replace(/\s+/g, " ");
+  }
+
+  // The text the reviewer dragged over, but only when it lies inside the
+  // annotated element; otherwise an empty string.
+  function selectionTextWithin(element) {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+      return "";
+    }
+    const range = selection.getRangeAt(0);
+    if (
+      !element.contains(range.startContainer) ||
+      !element.contains(range.endContainer)
+    ) {
+      return "";
+    }
+    return selection.toString().trim().replace(/\s+/g, " ");
   }
 
   function annotationCandidateFromPoint(clientX, clientY) {
@@ -69,46 +87,43 @@
     }
   }
 
+  function annotationPathSegment(element) {
+    const tag = element.tagName.toLowerCase();
+    const idSuffix = element.id ? `#${CSS.escape(element.id)}` : "";
+    const classSuffix = Array.from(element.classList)
+      .filter((name) => name !== "annotation-hover")
+      .map((name) => `.${CSS.escape(name)}`)
+      .join("");
+    const siblings = Array.from(element.parentElement.children).filter(
+      (child) => child.tagName === element.tagName,
+    );
+    const nth =
+      !idSuffix && siblings.length > 1
+        ? `:nth-of-type(${siblings.indexOf(element) + 1})`
+        : "";
+    return `${tag}${idSuffix}${classSuffix}${nth}`;
+  }
+
+  // Builds a unique, descriptive path from the nearest stable anchor
+  // (a data-annotation-id ancestor) or <body> down to the element.
   function selectorForAnnotationElement(element) {
     if (element.dataset.annotationId) {
       return `[data-annotation-id="${CSS.escape(element.dataset.annotationId)}"]`;
-    }
-    if (element.id) {
-      return `#${CSS.escape(element.id)}`;
     }
 
     const parts = [];
     let current = element;
     while (current && current !== document.body) {
-      if (current.dataset.annotationId) {
+      if (current !== element && current.dataset.annotationId) {
         parts.unshift(
           `[data-annotation-id="${CSS.escape(current.dataset.annotationId)}"]`,
         );
-        break;
+        return parts.join(" > ");
       }
-      if (current.id) {
-        parts.unshift(`#${CSS.escape(current.id)}`);
-        break;
-      }
-
-      const tag = current.tagName.toLowerCase();
-      const siblings = Array.from(current.parentElement.children).filter(
-        (child) => child.tagName === current.tagName,
-      );
-      const nth =
-        siblings.length > 1
-          ? `:nth-of-type(${siblings.indexOf(current) + 1})`
-          : "";
-      parts.unshift(`${tag}${nth}`);
+      parts.unshift(annotationPathSegment(current));
       current = current.parentElement;
     }
-
-    if (
-      !parts[0]?.startsWith("#") &&
-      !parts[0]?.startsWith("[data-annotation-id=")
-    ) {
-      parts.unshift("body");
-    }
+    parts.unshift("body");
     return parts.join(" > ");
   }
 
@@ -118,6 +133,7 @@
     }
     activeAnnotationEditor = null;
     activeAnnotationElement = null;
+    activeAnnotationSelection = "";
     setHighlightedAnnotationElement(null);
   }
 
@@ -126,7 +142,7 @@
     statusElement.textContent = text;
   }
 
-  async function writeAnnotation(element, userInput) {
+  async function writeAnnotation(element, userInput, specificallySelected) {
     const response = await fetch(annotationEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -134,6 +150,7 @@
         selector: selectorForAnnotationElement(element),
         text: normalizedElementText(element),
         userInput,
+        specificallySelected,
       }),
     });
 
@@ -205,7 +222,11 @@
       }
 
       try {
-        await writeAnnotation(activeAnnotationElement, userInput);
+        await writeAnnotation(
+          activeAnnotationElement,
+          userInput,
+          activeAnnotationSelection,
+        );
         editor.classList.add("inactive");
         textarea.disabled = true;
         showAnnotationStatus(status, "ok", "✓");
@@ -248,6 +269,18 @@
     },
     true,
   );
+
+  // While the editor is open, a drag-selection inside the annotated element
+  // records the specific phrase the note refers to.
+  document.addEventListener("mouseup", () => {
+    if (!activeAnnotationEditor || !activeAnnotationElement) {
+      return;
+    }
+    const selectionText = selectionTextWithin(activeAnnotationElement);
+    if (selectionText) {
+      activeAnnotationSelection = selectionText;
+    }
+  });
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {

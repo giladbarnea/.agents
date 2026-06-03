@@ -64,6 +64,10 @@ function assertAnnotationPayload(payload) {
       throw new Error(`Annotation payload field "${key}" must be a string.`);
     }
   }
+
+  if (payload.specificallySelected !== undefined && typeof payload.specificallySelected !== 'string') {
+    throw new Error('Annotation payload field "specificallySelected" must be a string.');
+  }
 }
 
 async function readAnnotations() {
@@ -163,9 +167,16 @@ async function handleAnnotations(request, response) {
   assertAnnotationPayload(payload);
 
   const annotations = await readAnnotations();
+  const existing = annotations[payload.selector];
+  const userInputs = Array.isArray(existing?.userInputs) ? existing.userInputs : [];
+  userInputs.push(
+    payload.specificallySelected
+      ? {userInput: payload.userInput, specificallySelected: payload.specificallySelected}
+      : payload.userInput
+  );
   annotations[payload.selector] = {
     text: payload.text,
-    userInput: payload.userInput
+    userInputs
   };
   await writeAnnotations(annotations);
 
