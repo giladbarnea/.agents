@@ -26,6 +26,8 @@ cp /Users/giladbarnea/.agents/skills/in-html/scripts/style.css "$workdir/"
 cd "$workdir"
 ```
 
+Ship a single self-contained file by inlining the CSS: `./scripts/inline-css.py index.html style.css -o page.html`. Usually the user will want the output page synced into iCloud, at `~/Library/Mobile Documents/com~apple~CloudDocs/<domainful-name>.html`.
+
 ### Layers 1+2: style plus interactions
 
 Use when JavaScript works, but filesystem writes / Node server are unavailable.
