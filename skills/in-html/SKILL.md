@@ -68,7 +68,7 @@ For ready-made components, read `/Users/giladbarnea/.agents/skills/in-html/scrip
 
 When annotations are enabled, add `data-annotation-id="stable-name"` to important elements so JSON keys survive later edits. Without one, the key is a unique, descriptive CSS path (tag + id + classes + `:nth-of-type`) from the nearest `data-annotation-id` ancestor or `<body>` down to the element, so you can tell where it lives in the page. Add `data-annotate-whole` when Shift+click should annotate the whole box rather than a leaf text node. Bare clicks remain available for page interactions; annotations open with Shift+click. Bare Enter submits; modified Enter inserts a line break. Escape closes the input.
 
-While the editor is open, drag-selecting text inside the annotated element captures that span alongside the note, so a note can point at a specific phrase rather than the whole element. The selection is only recorded when it lies within the annotated element.
+Selecting text inside the annotated element before Shift+click, or drag-selecting it while the editor is open, captures that span alongside the note. The captured phrase is subtly highlighted in the page and shown in the editor as `↳ “selected text”`; only selections fully inside the annotated element are recorded.
 
 Annotation JSON shape — each key maps to the element text plus the accumulated reviewer notes (re-annotating the same element appends rather than overwrites). A note is a plain string, or an object when the reviewer had text selected:
 

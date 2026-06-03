@@ -17,6 +17,15 @@
   let activeAnnotationEditor = null;
   let activeAnnotationElement = null;
   let activeAnnotationSelection = "";
+  let activeAnnotationSelectionRange = null;
+
+  // A persistent custom highlight survives focus changes and styles the
+  // captured phrase distinctly from a native browser selection.
+  const annotationSelectionHighlight =
+    typeof Highlight === "function" && CSS.highlights ? new Highlight() : null;
+  if (annotationSelectionHighlight) {
+    CSS.highlights.set("annotation-selection", annotationSelectionHighlight);
+  }
 
   function elementHasOwnText(element) {
     return Array.from(element.childNodes).some(
@@ -28,21 +37,56 @@
     return element.textContent.trim().replace(/\s+/g, " ");
   }
 
-  // The text the reviewer dragged over, but only when it lies inside the
-  // annotated element; otherwise an empty string.
-  function selectionTextWithin(element) {
+  function selectedRangeWithin(element) {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-      return "";
+      return null;
     }
+
     const range = selection.getRangeAt(0);
     if (
       !element.contains(range.startContainer) ||
       !element.contains(range.endContainer)
     ) {
-      return "";
+      return null;
     }
-    return selection.toString().trim().replace(/\s+/g, " ");
+
+    const text = selection.toString().trim().replace(/\s+/g, " ");
+    if (!text) {
+      return null;
+    }
+
+    return { text, range: range.cloneRange() };
+  }
+
+  function updateAnnotationSelectionHighlight() {
+    if (!annotationSelectionHighlight) {
+      return;
+    }
+    annotationSelectionHighlight.clear();
+    if (activeAnnotationSelectionRange) {
+      annotationSelectionHighlight.add(activeAnnotationSelectionRange);
+    }
+  }
+
+  function updateAnnotationSelectionPreview() {
+    const preview = activeAnnotationEditor?.querySelector(
+      ".annotation-selection-preview",
+    );
+    if (!preview) {
+      return;
+    }
+
+    preview.hidden = !activeAnnotationSelection;
+    preview.querySelector(".annotation-selection-text").textContent =
+      activeAnnotationSelection;
+  }
+
+  function setActiveAnnotationSelection(selection) {
+    activeAnnotationSelection = selection?.text || "";
+    activeAnnotationSelectionRange = selection?.range || null;
+    updateAnnotationSelectionHighlight();
+    updateAnnotationSelectionPreview();
   }
 
   function annotationCandidateFromPoint(clientX, clientY) {
@@ -133,7 +177,7 @@
     }
     activeAnnotationEditor = null;
     activeAnnotationElement = null;
-    activeAnnotationSelection = "";
+    setActiveAnnotationSelection(null);
     setHighlightedAnnotationElement(null);
   }
 
@@ -185,7 +229,9 @@
   }
 
   function openAnnotationEditor(element) {
-    closeAnnotationEditor();
+    if (activeAnnotationEditor) {
+      closeAnnotationEditor();
+    }
 
     activeAnnotationElement = element;
     setHighlightedAnnotationElement(element);
@@ -194,7 +240,7 @@
     editor.className = "annotation-editor";
     editor.style.visibility = "hidden";
     editor.innerHTML =
-      '<textarea aria-label="Annotation text" autofocus></textarea><div class="annotation-status"></div>';
+      '<div class="annotation-selection-preview" hidden><span class="annotation-selection-arrow" aria-hidden="true">↳</span><q class="annotation-selection-text"></q></div><textarea aria-label="Annotation text" autofocus></textarea><div class="annotation-status"></div>';
     document.body.appendChild(editor);
     positionAnnotationEditor(editor, element);
     editor.style.visibility = "visible";
@@ -202,6 +248,7 @@
     const textarea = editor.querySelector("textarea");
     const status = editor.querySelector(".annotation-status");
     activeAnnotationEditor = editor;
+    updateAnnotationSelectionPreview();
     textarea.focus();
 
     textarea.addEventListener("keydown", async (event) => {
@@ -249,6 +296,30 @@
   });
 
   document.addEventListener(
+    "mousedown",
+    (event) => {
+      if (activeAnnotationEditor || !event.shiftKey) {
+        return;
+      }
+
+      const element = annotationCandidateFromPoint(
+        event.clientX,
+        event.clientY,
+      );
+      if (!element) {
+        return;
+      }
+
+      const selection = selectedRangeWithin(element);
+      setActiveAnnotationSelection(selection);
+      if (selection) {
+        event.preventDefault();
+      }
+    },
+    true,
+  );
+
+  document.addEventListener(
     "click",
     (event) => {
       if (activeAnnotationEditor || !event.shiftKey) {
@@ -270,15 +341,14 @@
     true,
   );
 
-  // While the editor is open, a drag-selection inside the annotated element
-  // records the specific phrase the note refers to.
   document.addEventListener("mouseup", () => {
     if (!activeAnnotationEditor || !activeAnnotationElement) {
       return;
     }
-    const selectionText = selectionTextWithin(activeAnnotationElement);
-    if (selectionText) {
-      activeAnnotationSelection = selectionText;
+
+    const selection = selectedRangeWithin(activeAnnotationElement);
+    if (selection) {
+      setActiveAnnotationSelection(selection);
     }
   });
 
