@@ -70,15 +70,15 @@ When annotations are enabled, add `data-annotation-id="stable-name"` to importan
 
 Selecting text inside the annotated element before Shift+click, or drag-selecting it while the editor is open, captures that span alongside the note. The captured phrase is subtly highlighted in the page and shown in the editor as `↳ “selected text”`; only selections fully inside the annotated element are recorded.
 
-Annotation JSON shape — each key maps to the element text plus the accumulated reviewer notes (re-annotating the same element appends rather than overwrites). A note is a plain string, or an object when the reviewer had text selected:
+Annotation JSON shape — each key maps to the element text plus the accumulated reviewer notes (re-annotating the same element appends rather than overwrites). Every note is an object carrying `userInput` and a local ISO 8601 `timestamp` with timezone offset (e.g. `+03:00` for IST); `specificallySelected` is present only when the reviewer had text selected:
 
 ```json
 {
   "body > main > section#summary > div > p:nth-of-type(2)": {
     "text": "The element text",
     "userInputs": [
-      "A note on the whole element",
-      {"userInput": "A note on a specific phrase", "specificallySelected": "the highlighted phrase"}
+      {"userInput": "A note on the whole element", "timestamp": "2026-06-03T14:32:07+03:00"},
+      {"userInput": "A note on a specific phrase", "specificallySelected": "the highlighted phrase", "timestamp": "2026-06-03T14:33:11+03:00"}
     ]
   }
 }

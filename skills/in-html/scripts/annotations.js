@@ -189,10 +189,26 @@
       : userInput.specificallySelected || "";
   }
 
-  function annotationItem(userInput, specificallySelected) {
-    return specificallySelected
-      ? { userInput, specificallySelected }
-      : userInput;
+  // Local ISO 8601 timestamp carrying the reviewer's timezone offset,
+  // e.g. "2026-06-03T14:32:07+03:00" for IST.
+  function localIsoTimestamp(date = new Date()) {
+    const pad = (value) => String(Math.floor(Math.abs(value))).padStart(2, "0");
+    const offsetMinutes = -date.getTimezoneOffset();
+    const sign = offsetMinutes >= 0 ? "+" : "-";
+    return (
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+      `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
+      `${sign}${pad(offsetMinutes / 60)}:${pad(offsetMinutes % 60)}`
+    );
+  }
+
+  function annotationItem(userInput, specificallySelected, timestamp) {
+    const item = { userInput };
+    if (specificallySelected) {
+      item.specificallySelected = specificallySelected;
+    }
+    item.timestamp = timestamp;
+    return item;
   }
 
   function selectorWithoutClassIdentity(selector) {
@@ -277,7 +293,7 @@
     ensureAnnotationMarker(element);
   }
 
-  function recordWrittenAnnotation(element, userInput, specificallySelected) {
+  function recordWrittenAnnotation(element, userInput, specificallySelected, timestamp) {
     const existing = annotationsByElement.get(element);
     const annotation = existing?.annotation || {
       text: normalizedElementText(element),
@@ -285,7 +301,9 @@
     };
     annotation.text = normalizedElementText(element);
     annotation.userInputs = annotationUserInputs(annotation);
-    annotation.userInputs.push(annotationItem(userInput, specificallySelected));
+    annotation.userInputs.push(
+      annotationItem(userInput, specificallySelected, timestamp),
+    );
     registerAnnotatedElement(element, selectorForAnnotationElement(element), annotation);
   }
 
@@ -515,7 +533,7 @@
     });
   }
 
-  async function writeAnnotation(element, userInput, specificallySelected) {
+  async function writeAnnotation(element, userInput, specificallySelected, timestamp) {
     const response = await fetch(annotationEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -524,6 +542,7 @@
         text: normalizedElementText(element),
         userInput,
         specificallySelected,
+        timestamp,
       }),
     });
 
@@ -598,16 +617,19 @@
         return;
       }
 
+      const timestamp = localIsoTimestamp();
       try {
         await writeAnnotation(
           activeAnnotationElement,
           userInput,
           activeAnnotationSelection,
+          timestamp,
         );
         recordWrittenAnnotation(
           activeAnnotationElement,
           userInput,
           activeAnnotationSelection,
+          timestamp,
         );
         editor.classList.add("inactive");
         textarea.disabled = true;

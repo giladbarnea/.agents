@@ -59,7 +59,7 @@ function assertAnnotationPayload(payload) {
     throw new Error('Annotation payload must be an object.');
   }
 
-  for (const key of ['selector', 'text', 'userInput']) {
+  for (const key of ['selector', 'text', 'userInput', 'timestamp']) {
     if (typeof payload[key] !== 'string') {
       throw new Error(`Annotation payload field "${key}" must be a string.`);
     }
@@ -169,11 +169,12 @@ async function handleAnnotations(request, response) {
   const annotations = await readAnnotations();
   const existing = annotations[payload.selector];
   const userInputs = Array.isArray(existing?.userInputs) ? existing.userInputs : [];
-  userInputs.push(
-    payload.specificallySelected
-      ? {userInput: payload.userInput, specificallySelected: payload.specificallySelected}
-      : payload.userInput
-  );
+  const item = {userInput: payload.userInput};
+  if (payload.specificallySelected) {
+    item.specificallySelected = payload.specificallySelected;
+  }
+  item.timestamp = payload.timestamp;
+  userInputs.push(item);
   annotations[payload.selector] = {
     text: payload.text,
     userInputs
