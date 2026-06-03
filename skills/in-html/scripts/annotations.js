@@ -6,6 +6,7 @@
     endpointMeta?.content || "http://127.0.0.1:8765/annotations";
   const annotationIgnoredSelector = [
     ".annotation-editor",
+    ".annotation-preview",
     "input",
     "textarea",
     "select",
@@ -13,11 +14,18 @@
     "[data-annotation-ignore]",
   ].join(",");
   const annotationWholeSelector = "[data-annotate-whole], .step, .bar";
+  const annotationInternalClasses = new Set([
+    "annotation-hover",
+    "annotation-has-note",
+  ]);
+  const annotationsByElement = new Map();
   let highlightedAnnotationElement = null;
   let activeAnnotationEditor = null;
   let activeAnnotationElement = null;
   let activeAnnotationSelection = "";
   let activeAnnotationSelectionRange = null;
+  let activeAnnotationPreview = null;
+  let activeAnnotationPreviewElement = null;
 
   // A persistent custom highlight survives focus changes and styles the
   // captured phrase distinctly from a native browser selection.
@@ -135,7 +143,7 @@
     const tag = element.tagName.toLowerCase();
     const idSuffix = element.id ? `#${CSS.escape(element.id)}` : "";
     const classSuffix = Array.from(element.classList)
-      .filter((name) => name !== "annotation-hover")
+      .filter((name) => !annotationInternalClasses.has(name))
       .map((name) => `.${CSS.escape(name)}`)
       .join("");
     const siblings = Array.from(element.parentElement.children).filter(
@@ -171,6 +179,79 @@
     return parts.join(" > ");
   }
 
+  function annotationUserInputs(annotation) {
+    return Array.isArray(annotation.userInputs) ? annotation.userInputs : [];
+  }
+
+  function annotationInputText(userInput) {
+    return typeof userInput === "string" ? userInput : userInput.userInput;
+  }
+
+  function annotationSelectionText(userInput) {
+    return typeof userInput === "string"
+      ? ""
+      : userInput.specificallySelected || "";
+  }
+
+  function annotationItem(userInput, specificallySelected) {
+    return specificallySelected
+      ? { userInput, specificallySelected }
+      : userInput;
+  }
+
+  function registerAnnotatedElement(element, selector, annotation) {
+    annotationsByElement.set(element, { selector, annotation });
+    element.classList.add("annotation-has-note");
+  }
+
+  function recordWrittenAnnotation(element, userInput, specificallySelected) {
+    const existing = annotationsByElement.get(element);
+    const annotation = existing?.annotation || {
+      text: normalizedElementText(element),
+      userInputs: [],
+    };
+    annotation.text = normalizedElementText(element);
+    annotation.userInputs = annotationUserInputs(annotation);
+    annotation.userInputs.push(annotationItem(userInput, specificallySelected));
+    registerAnnotatedElement(
+      element,
+      existing?.selector || selectorForAnnotationElement(element),
+      annotation,
+    );
+  }
+
+  function annotatedElementFromPoint(clientX, clientY) {
+    const element = document.elementFromPoint(clientX, clientY);
+    if (!element || element.closest(annotationIgnoredSelector)) {
+      return null;
+    }
+
+    let current = element;
+    while (current && current !== document.documentElement) {
+      if (annotationsByElement.has(current)) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }
+
+  async function loadAnnotations() {
+    const response = await fetch(annotationEndpoint);
+    if (!response.ok) {
+      const details = await response.text();
+      throw new Error(`Annotation load failed (${response.status}): ${details}`);
+    }
+
+    const annotations = await response.json();
+    Object.entries(annotations).forEach(([selector, annotation]) => {
+      const element = document.querySelector(selector);
+      if (element) {
+        registerAnnotatedElement(element, selector, annotation);
+      }
+    });
+  }
+
   function closeAnnotationEditor() {
     if (activeAnnotationEditor) {
       activeAnnotationEditor.remove();
@@ -184,6 +265,120 @@
   function showAnnotationStatus(statusElement, className, text) {
     statusElement.className = `annotation-status show ${className}`;
     statusElement.textContent = text;
+  }
+
+  function closeAnnotationPreview() {
+    if (activeAnnotationPreview) {
+      activeAnnotationPreview.remove();
+    }
+    activeAnnotationPreview = null;
+    activeAnnotationPreviewElement = null;
+  }
+
+  function createAnnotationPreview(annotation) {
+    const preview = document.createElement("aside");
+    const userInputs = annotationUserInputs(annotation);
+    preview.className = "annotation-preview";
+    preview.setAttribute("role", "dialog");
+    preview.setAttribute("aria-label", "Annotation preview");
+
+    const header = document.createElement("div");
+    header.className = "annotation-preview-header";
+
+    const title = document.createElement("div");
+    title.className = "annotation-preview-title";
+    title.textContent =
+      userInputs.length === 1 ? "1 annotation" : `${userInputs.length} annotations`;
+
+    const closeButton = document.createElement("button");
+    closeButton.className = "annotation-preview-close";
+    closeButton.type = "button";
+    closeButton.setAttribute("aria-label", "Close annotation preview");
+    closeButton.textContent = "×";
+    closeButton.addEventListener("click", closeAnnotationPreview);
+
+    header.append(title, closeButton);
+    preview.append(header);
+
+    const targetText = document.createElement("div");
+    targetText.className = "annotation-preview-target";
+    targetText.textContent = annotation.text;
+    preview.append(targetText);
+
+    const list = document.createElement("div");
+    list.className = "annotation-preview-list";
+    userInputs.forEach((userInput) => {
+      const note = document.createElement("article");
+      note.className = "annotation-preview-note";
+
+      const selectedText = annotationSelectionText(userInput);
+      if (selectedText) {
+        const selected = document.createElement("div");
+        selected.className = "annotation-preview-selected";
+        selected.textContent = `↳ “${selectedText}”`;
+        note.append(selected);
+      }
+
+      const body = document.createElement("p");
+      body.textContent = annotationInputText(userInput);
+      note.append(body);
+      list.append(note);
+    });
+    preview.append(list);
+
+    return preview;
+  }
+
+  function cssPixels(value, fallback) {
+    const pixels = Number.parseFloat(value);
+    return Number.isFinite(pixels) ? pixels : fallback;
+  }
+
+  function positionAnnotationPreview(preview, element) {
+    const elementRect = element.getBoundingClientRect();
+    const columnRect = (element.closest(".col") || element).getBoundingClientRect();
+    const wrap = element.closest(".wrap");
+    const wrapRect = wrap?.getBoundingClientRect();
+    const gap = wrap ? cssPixels(getComputedStyle(wrap).paddingRight, 24) : 24;
+    const intendedLeft = columnRect.right + gap;
+    const rightEdge = wrapRect ? wrapRect.right - gap : window.innerWidth - gap;
+    const width = clamp(rightEdge - intendedLeft, 224, 360);
+
+    preview.style.width = `${width}px`;
+    const previewRect = preview.getBoundingClientRect();
+    const fallbackLeft = clamp(
+      elementRect.left,
+      gap,
+      window.innerWidth - previewRect.width - gap,
+    );
+    const left =
+      intendedLeft + previewRect.width <= window.innerWidth - gap
+        ? intendedLeft
+        : fallbackLeft;
+    const top = clamp(
+      elementRect.top,
+      gap,
+      window.innerHeight - previewRect.height - gap,
+    );
+
+    preview.style.left = `${left}px`;
+    preview.style.top = `${top}px`;
+  }
+
+  function openAnnotationPreview(element) {
+    const entry = annotationsByElement.get(element);
+    if (!entry) {
+      return;
+    }
+
+    closeAnnotationPreview();
+    const preview = createAnnotationPreview(entry.annotation);
+    preview.style.visibility = "hidden";
+    document.body.appendChild(preview);
+    activeAnnotationPreview = preview;
+    activeAnnotationPreviewElement = element;
+    positionAnnotationPreview(preview, element);
+    preview.style.visibility = "visible";
   }
 
   async function writeAnnotation(element, userInput, specificallySelected) {
@@ -229,6 +424,7 @@
   }
 
   function openAnnotationEditor(element) {
+    closeAnnotationPreview();
     if (activeAnnotationEditor) {
       closeAnnotationEditor();
     }
@@ -270,6 +466,11 @@
 
       try {
         await writeAnnotation(
+          activeAnnotationElement,
+          userInput,
+          activeAnnotationSelection,
+        );
+        recordWrittenAnnotation(
           activeAnnotationElement,
           userInput,
           activeAnnotationSelection,
@@ -320,6 +521,46 @@
   );
 
   document.addEventListener(
+    "mousedown",
+    (event) => {
+      if (event.ctrlKey && !event.shiftKey && !activeAnnotationEditor) {
+        const element = annotatedElementFromPoint(event.clientX, event.clientY);
+        if (!element) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        openAnnotationPreview(element);
+        return;
+      }
+
+      if (
+        activeAnnotationPreview &&
+        !activeAnnotationPreview.contains(event.target)
+      ) {
+        closeAnnotationPreview();
+      }
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "contextmenu",
+    (event) => {
+      if (!event.ctrlKey || activeAnnotationEditor) {
+        return;
+      }
+
+      const element = annotatedElementFromPoint(event.clientX, event.clientY);
+      if (element) {
+        event.preventDefault();
+      }
+    },
+    true,
+  );
+
+  document.addEventListener(
     "click",
     (event) => {
       if (activeAnnotationEditor || !event.shiftKey) {
@@ -355,6 +596,7 @@
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeAnnotationEditor();
+      closeAnnotationPreview();
     }
   });
 
@@ -362,5 +604,26 @@
     if (activeAnnotationEditor && activeAnnotationElement) {
       positionAnnotationEditor(activeAnnotationEditor, activeAnnotationElement);
     }
+    if (activeAnnotationPreview && activeAnnotationPreviewElement) {
+      positionAnnotationPreview(
+        activeAnnotationPreview,
+        activeAnnotationPreviewElement,
+      );
+    }
   });
+
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (activeAnnotationPreview && activeAnnotationPreviewElement) {
+        positionAnnotationPreview(
+          activeAnnotationPreview,
+          activeAnnotationPreviewElement,
+        );
+      }
+    },
+    { passive: true },
+  );
+
+  loadAnnotations().catch((error) => console.warn(error));
 })();
