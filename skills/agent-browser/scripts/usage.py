@@ -12,9 +12,22 @@ Claude and Codex use two strategies, tried in order:
 2. Fall back to driving the already-open Chrome tabs over CDP and scraping the
    rendered usage text.
 
-OpenRouter has no rate windows, only a draining balance, so it uses its REST API
-(a management key) to map the live balance onto a rolling budget window anchored
-at the last top-up — inferred from daily activity, see _infer_topup_date.
+OpenRouter has no rate windows — just a balance that drains — so it gets a cumulative
+budget model instead, chosen deliberately:
+
+- Metric: lifetime spend since a fixed anchor, measured against an allowance that accrues
+  at $20 per 30 days. Burn rate = spent / accrued-allowance. A past overspend keeps
+  weighing on the rate until enough time passes to absorb it — it never forgets. (A rolling
+  30-day window was rejected for the opposite reason: a binge silently vanishes once it
+  scrolls out of the trailing window.)
+- Source: spent = total_usage_now - OPENROUTER_ANCHOR_TOTAL_USAGE, both from /api/v1/credits,
+  which reports cumulative all-time usage. Top-ups are intentionally invisible — refilling
+  credits doesn't change what you've already spent, only usage does. Using total_usage also
+  sidesteps /api/v1/activity's ~30-day history cap, which can't reach a months-old anchor.
+- Constants (not derivable, must be hardcoded): OPENROUTER_ANCHOR_DATE is the user's chosen
+  "start of discipline"; OPENROUTER_ANCHOR_TOTAL_USAGE is total_usage as it stood that day,
+  back-computed once from activity while still in range; OPENROUTER_BUDGET is the $20/month
+  self-imposed cap. No reset concept — the window only opens, so OpenRouter shows no ↻.
 """
 
 import dataclasses
@@ -76,10 +89,29 @@ class BrowserTarget:
 
 @dataclasses.dataclass(frozen=True)
 class Limit:
-    """A single usage window: how much is spent and when it next resets."""
+    """A usage window: percent spent, when the window opened, and how long it runs.
+
+    resets=True windows (Claude/Codex rate limits) show a ↻ countdown to the next reset.
+    resets=False windows (OpenRouter's cumulative budget) only accrue, so elapsed_pct can
+    exceed 100 — the bar clamps, but the burn-rate label keeps the true ratio.
+    """
     used_pct: float
-    next_reset: datetime
+    window_start: datetime
     window_duration: timedelta = timedelta(weeks=1)
+    resets: bool = True
+
+    @classmethod
+    def until(cls, used_pct: float, next_reset: datetime,
+              window_duration: timedelta = timedelta(weeks=1)) -> "Limit":
+        """Construct a resetting rate window from the moment it next resets."""
+        return cls(used_pct, next_reset - window_duration, window_duration)
+
+    @property
+    def next_reset(self) -> datetime:
+        return self.window_start + self.window_duration
+
+    def elapsed_pct(self, now: datetime) -> float:
+        return (now - self.window_start) / self.window_duration * 100
 
 
 @dataclasses.dataclass(frozen=True)
@@ -474,54 +506,27 @@ def _session_track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text
     return text
 
 
-def _picasso_row_data(usages: list[Usage], now: datetime) -> list[tuple]:
-    """Return [(name, used_pct, elapsed_pct, session_pct, session_elapsed_pct, next_reset, session_next), ...]."""
-    rows: list[tuple] = []
-    for usage in usages:
-        wd = usage.weekly.window_duration
-        weekly_elapsed_pct = max(0.0, min(100.0, (now - (usage.weekly.next_reset - wd)) / wd * 100))
-        if usage.session is not None:
-            sd = usage.session.window_duration
-            session_elapsed_pct = max(0.0, min(100.0, (now - (usage.session.next_reset - sd)) / sd * 100))
-        else:
-            session_elapsed_pct = None
-        rows.append((
-            usage.name,
-            usage.weekly.used_pct,
-            weekly_elapsed_pct,
-            usage.session.used_pct if usage.session else None,
-            session_elapsed_pct,
-            usage.weekly.next_reset,
-            usage.session.next_reset if usage.session else None,
-        ))
-    return rows
+PICASSO_WIDTH = 50
+
+
+def _picasso_line(label: str, limit: Limit, now: datetime, *, track, slack: str, over: str) -> Text:
+    """One track line: name, bar, optional ↻ countdown (omitted when the window never resets), legend."""
+    elapsed = limit.elapsed_pct(now)
+    bar = track(limit.used_pct, elapsed, width=PICASSO_WIDTH)
+    legend = _label(limit.used_pct, elapsed, width=PICASSO_WIDTH, used_style_slack=slack, used_style_over=over)
+    reset = f"↻ {fmt_dh(limit.next_reset - now):>{PICASSO_RESET_DURATION_WIDTH}} · " if limit.resets else ""
+    return Text(f"  {label:<7}  ", style="bold") + bar + Text(f"  {reset}", style="dim") + legend
 
 
 def print_picasso(usages: list[Usage], now: datetime, *, console: Console) -> None:
-    rows = _picasso_row_data(usages, now)
-    width = 50
-    for idx, (name, used, elapsed, session, session_elapsed, next_reset, session_next) in enumerate(rows):
+    for idx, usage in enumerate(usages):
         if idx > 0:
             console.print()
-        reset_str = f"↻ {fmt_dh(next_reset - now):>{PICASSO_RESET_DURATION_WIDTH}}"
-        weekly = _track(used, elapsed, width=width)
-        weekly_label = _label(used, elapsed, width=width)
-        console.print(
-            Text(f"  {name:<7}  ", style="bold") + weekly
-            + Text(f"  {reset_str} · ", style="dim") + weekly_label
-        )
-        if session is None:
-            continue
-        session_reset_str = f"↻ {fmt_dh(session_next - now):>{PICASSO_RESET_DURATION_WIDTH}}"
-        session_view = _session_track(session, session_elapsed, width=width)
-        session_label = _label(
-            session, session_elapsed, width=width,
-            used_style_slack="magenta", used_style_over="bright_magenta",
-        )
-        console.print(
-            Text(f"  {'':<7}  ") + session_view
-            + Text(f"  {session_reset_str} · ", style="dim") + session_label
-        )
+        console.print(_picasso_line(usage.name, usage.weekly, now,
+                                    track=_track, slack="cyan", over="bright_red"))
+        if usage.session is not None:
+            console.print(_picasso_line("", usage.session, now,
+                                        track=_session_track, slack="magenta", over="bright_magenta"))
 
 
 # ── Option 1: direct API via decrypted Chrome cookies ─────────────────
@@ -602,19 +607,19 @@ def fetch_via_cookies() -> list[Usage]:
     return [
         Usage(
             name="CLAUDE",
-            session=Limit(float(claude["five_hour"]["utilization"]),
-                          datetime.fromisoformat(claude["five_hour"]["resets_at"]).astimezone(IDT),
-                          window_duration=SESSION_DURATION),
-            weekly=Limit(float(claude["seven_day"]["utilization"]),
-                         datetime.fromisoformat(claude["seven_day"]["resets_at"]).astimezone(IDT)),
+            session=Limit.until(float(claude["five_hour"]["utilization"]),
+                                datetime.fromisoformat(claude["five_hour"]["resets_at"]).astimezone(IDT),
+                                SESSION_DURATION),
+            weekly=Limit.until(float(claude["seven_day"]["utilization"]),
+                               datetime.fromisoformat(claude["seven_day"]["resets_at"]).astimezone(IDT)),
         ),
         Usage(
             name="CODEX",
-            session=Limit(float(codex["primary_window"]["used_percent"]),
-                          datetime.fromtimestamp(codex["primary_window"]["reset_at"], tz=IDT),
-                          window_duration=SESSION_DURATION),
-            weekly=Limit(float(codex["secondary_window"]["used_percent"]),
-                         datetime.fromtimestamp(codex["secondary_window"]["reset_at"], tz=IDT)),
+            session=Limit.until(float(codex["primary_window"]["used_percent"]),
+                                datetime.fromtimestamp(codex["primary_window"]["reset_at"], tz=IDT),
+                                SESSION_DURATION),
+            weekly=Limit.until(float(codex["secondary_window"]["used_percent"]),
+                               datetime.fromtimestamp(codex["secondary_window"]["reset_at"], tz=IDT)),
         ),
     ]
 
@@ -636,29 +641,23 @@ def scrape_via_browser(now: datetime) -> list[Usage]:
     return [
         Usage(
             name="CLAUDE",
-            session=Limit(float(claude["session_pct"]), parse_reset_claude(claude["session_reset_raw"], now)[1],
-                          window_duration=SESSION_DURATION),
-            weekly=Limit(float(claude["weekly_pct"]), parse_reset_claude(claude["reset_raw"], now)[1]),
+            session=Limit.until(float(claude["session_pct"]), parse_reset_claude(claude["session_reset_raw"], now)[1],
+                                SESSION_DURATION),
+            weekly=Limit.until(float(claude["weekly_pct"]), parse_reset_claude(claude["reset_raw"], now)[1]),
         ),
         Usage(
             name="CODEX",
-            session=Limit(100 - float(codex["hour5_remaining_pct"]), codex_session_next,
-                          window_duration=SESSION_DURATION),
-            weekly=Limit(100 - float(codex["weekly_remaining_pct"]), codex_weekly_next),
+            session=Limit.until(100 - float(codex["hour5_remaining_pct"]), codex_session_next,
+                                SESSION_DURATION),
+            weekly=Limit.until(100 - float(codex["weekly_remaining_pct"]), codex_weekly_next),
         ),
     ]
 
 
-# ── OpenRouter: rolling budget window anchored at the last top-up ──────
+# ── OpenRouter: cumulative budget anchored at a fixed start date ──────
 
 def _openrouter_usage(now: datetime) -> Usage:
-    """Map OpenRouter spend onto a cumulative $20/30d budget anchored at OPENROUTER_ANCHOR_DATE.
-
-    Spend is all-time-since-anchor (total_usage_now - anchor), so it never forgets past
-    overspend and ignores top-ups. used_pct is plotted against the elapsed share of the
-    first 30-day window; both run cumulative, so burn = used/elapsed stays a true lifetime
-    rate even past day 30 (the bar clamps, the burn label does not).
-    """
+    """Cumulative spend since the anchor vs an accruing $20/30d budget (rationale in module docstring)."""
     management_key = open(OPENROUTER_MANAGEMENT_KEY_PATH).read().strip()
     response = requests.get(
         "https://openrouter.ai/api/v1/credits",
@@ -671,8 +670,7 @@ def _openrouter_usage(now: datetime) -> Usage:
     return Usage(
         name="OPENR",
         session=None,
-        weekly=Limit(used_pct, OPENROUTER_ANCHOR_DATE + OPENROUTER_WINDOW,
-                     window_duration=OPENROUTER_WINDOW),
+        weekly=Limit(used_pct, OPENROUTER_ANCHOR_DATE, OPENROUTER_WINDOW, resets=False),
     )
 
 
