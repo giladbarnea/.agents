@@ -54,8 +54,12 @@ SCRAPE_POLL_SECONDS = 1
 PICASSO_RESET_DURATION_WIDTH = len("28d 23h")
 CHROME_COOKIES_DB = os.path.expanduser("~/.agent-browser/custom-debug-profile/Default/Cookies")
 OPENROUTER_MANAGEMENT_KEY_PATH = os.path.expanduser("~/.openrouter-management-key")
-OPENROUTER_BUDGET = 20.0  # dollars per top-up; the budget window's ceiling
-OPENROUTER_WINDOW = timedelta(days=30)  # rolling window starting at each top-up
+OPENROUTER_BUDGET = 20.0  # dollars of allowance accrued per 30 days
+OPENROUTER_WINDOW = timedelta(days=30)
+# Cumulative budget anchor: spending discipline starts here and never forgets.
+# total_usage as it stood on the anchor date; spent-since = total_usage_now - this.
+OPENROUTER_ANCHOR_DATE = datetime(2026, 5, 23, tzinfo=IDT)
+OPENROUTER_ANCHOR_TOTAL_USAGE = 139.897
 BROWSER_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
@@ -647,48 +651,28 @@ def scrape_via_browser(now: datetime) -> list[Usage]:
 
 # ── OpenRouter: rolling budget window anchored at the last top-up ──────
 
-def _openrouter_get(path: str, management_key: str) -> dict:
+def _openrouter_usage(now: datetime) -> Usage:
+    """Map OpenRouter spend onto a cumulative $20/30d budget anchored at OPENROUTER_ANCHOR_DATE.
+
+    Spend is all-time-since-anchor (total_usage_now - anchor), so it never forgets past
+    overspend and ignores top-ups. used_pct is plotted against the elapsed share of the
+    first 30-day window; both run cumulative, so burn = used/elapsed stays a true lifetime
+    rate even past day 30 (the bar clamps, the burn label does not).
+    """
+    management_key = open(OPENROUTER_MANAGEMENT_KEY_PATH).read().strip()
     response = requests.get(
-        f"https://openrouter.ai/api/v1/{path}",
+        "https://openrouter.ai/api/v1/credits",
         headers={"Authorization": f"Bearer {management_key}"},
         timeout=20,
     )
     response.raise_for_status()
-    return response.json()["data"]
-
-
-def _infer_topup_date(activity: list[dict], spent: float, now: datetime) -> datetime:
-    """Locate the last top-up: walk daily usage backward until it accounts for `spent`.
-
-    Activity rows only carry usage (never the top-up itself), but the day on which the
-    trailing cumulative usage reaches `spent = budget - balance` is when the window began.
-    """
-    daily: dict[datetime, float] = {}
-    for row in activity:
-        day = datetime.strptime(row["date"][:10], "%Y-%m-%d").replace(tzinfo=IDT)
-        daily[day] = daily.get(day, 0.0) + float(row["usage"])
-    cumulative = 0.0
-    for day in sorted(daily, reverse=True):
-        cumulative += daily[day]
-        if cumulative >= spent:
-            return day
-    return min(daily) if daily else now  # top-up predates the available activity history
-
-
-def _openrouter_usage(now: datetime) -> Usage:
-    """Map OpenRouter's live balance to a rolling budget window starting at the last top-up."""
-    management_key = open(OPENROUTER_MANAGEMENT_KEY_PATH).read().strip()
-    credits = _openrouter_get("credits", management_key)
-    balance = float(credits["total_credits"]) - float(credits["total_usage"])
-    spent = OPENROUTER_BUDGET - balance
-    used_pct = max(0.0, spent) / OPENROUTER_BUDGET * 100
-
-    activity = _openrouter_get("activity", management_key)
-    topup_date = _infer_topup_date(activity, spent, now)
+    spent = float(response.json()["data"]["total_usage"]) - OPENROUTER_ANCHOR_TOTAL_USAGE
+    used_pct = spent / OPENROUTER_BUDGET * 100
     return Usage(
         name="OPENR",
         session=None,
-        weekly=Limit(used_pct, topup_date + OPENROUTER_WINDOW, window_duration=OPENROUTER_WINDOW),
+        weekly=Limit(used_pct, OPENROUTER_ANCHOR_DATE + OPENROUTER_WINDOW,
+                     window_duration=OPENROUTER_WINDOW),
     )
 
 
