@@ -462,18 +462,22 @@ def _label(
     elapsed_pos = round(max(0.0, min(100.0, elapsed_pct)) / 100 * (width - 1))
     over = used_pct > elapsed_pct
 
+    used_label = f"{round(used_pct)}%"
+    elapsed_label = f"{round(elapsed_pct)}%"
+
     text = Text()
     if used_pos == elapsed_pos:
         text.append("◆", style="yellow")
-        text.append(f"{round(used_pct)}%", style="dim")
+        text.append(f"{used_label:>3}", style="dim")
     else:
         text.append("●", style=used_style_over if over else used_style_slack)
-        text.append(f"{round(used_pct)}% ", style="dim")
+        text.append(f"{used_label:>3} ", style="dim")
         text.append("┊", style="white")
-        text.append(f"{round(elapsed_pct)}%", style="dim")
+        text.append(f"{elapsed_label:>3}", style="dim")
     if elapsed_pct >= 1:
         burn = used_pct / elapsed_pct
-        text.append(f" · {burn:.2f}×", style="dim")
+        text.append(" · ", style="black")
+        text.append(f"{burn:.2f}×", style="dim")
     return text
 
 
@@ -514,8 +518,12 @@ def _picasso_line(label: str, limit: Limit, now: datetime, *, track, slack: str,
     elapsed = limit.elapsed_pct(now)
     bar = track(limit.used_pct, elapsed, width=PICASSO_WIDTH)
     legend = _label(limit.used_pct, elapsed, width=PICASSO_WIDTH, used_style_slack=slack, used_style_over=over)
-    reset = f"↻ {fmt_dh(limit.next_reset - now):>{PICASSO_RESET_DURATION_WIDTH}} · " if limit.resets else ""
-    return Text(f"  {label:<7}  ", style="bold") + bar + Text(f"  {reset}", style="dim") + legend
+
+    text = Text(f"  {label:<7}  ", style="bold") + bar + Text("  ")
+    if limit.resets:
+        text += Text(f"↻ {fmt_dh(limit.next_reset - now):>{PICASSO_RESET_DURATION_WIDTH}}", style="dim")
+        text += Text(" · ", style="black")
+    return text + legend
 
 
 def print_picasso(usages: list[Usage], now: datetime, *, console: Console) -> None:
