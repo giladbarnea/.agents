@@ -510,7 +510,26 @@ def _session_track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text
     return text
 
 
-PICASSO_WIDTH = 50
+DEFAULT_PICASSO_WIDTH = 36
+
+
+def _parse_picasso_width(raw_width: str | None) -> int:
+    """Parse the configured meter width, defaulting when the value is absent or malformed.
+
+    >>> _parse_picasso_width(None)
+    36
+    >>> _parse_picasso_width("42")
+    42
+    >>> _parse_picasso_width("oops")
+    36
+    """
+    try:
+        return int(raw_width or DEFAULT_PICASSO_WIDTH)
+    except ValueError:
+        return DEFAULT_PICASSO_WIDTH
+
+
+PICASSO_WIDTH = _parse_picasso_width(os.environ.get("PICASSO_WIDTH"))
 
 
 def _picasso_line(label: str, limit: Limit, now: datetime, *, track, slack: str, over: str) -> Text:
