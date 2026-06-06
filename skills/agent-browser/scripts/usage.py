@@ -519,7 +519,7 @@ def _picasso_line(label: str, limit: Limit, now: datetime, *, track, slack: str,
     bar = track(limit.used_pct, elapsed, width=PICASSO_WIDTH)
     legend = _label(limit.used_pct, elapsed, width=PICASSO_WIDTH, used_style_slack=slack, used_style_over=over)
 
-    text = Text(f"  {label:<7}  ", style="bold") + bar + Text("  ")
+    text = Text(f" {label:<7}  ", style="bold") + bar + Text("  ")
     if limit.resets:
         text += Text(f"↻ {fmt_dh(limit.next_reset - now):>{PICASSO_RESET_DURATION_WIDTH}}", style="dim")
         text += Text(" · ", style="black")

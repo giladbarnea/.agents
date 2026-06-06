@@ -17,7 +17,7 @@ Native HTML can import CSS and JavaScript, but not useful HTML partials. The old
 
 ### Layer 1: style only
 
-Use when the page must render without JavaScript. Disclosure, step expansion, and segmented tabs are still interactive here — they run on pure CSS (`<details>` and `:has()`). Only chip highlights and bar clicks need layer 2.
+Use when the page must render without JavaScript. Disclosure, step expansion, and segmented tabs are still interactive here — they run on pure CSS (`<details>` and `:has()`). Only chip highlights and bar clicks need layer 2. layer 1 result has to be a single self-contained HTML file. Usually when the user requests layer 1, they want to view it on their iPhone. Ask whether to do it and if yes, cp the HTML into '/Users/giladbarnea/Library/Mobile Documents/com~apple~CloudDocs/'
 
 ```bash
 workdir=$(mktemp -d)
