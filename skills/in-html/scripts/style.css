@@ -23,7 +23,8 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: Palatino, "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  font-family: Palatino, "Palatino Linotype", "Book Antiqua", Georgia,
+    "Frank Ruhl Libre", FrankRuehl, serif;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -106,8 +107,9 @@ button {
 aside.note {
   font-size: 0.9rem;
   color: var(--faint);
-  border-left: 2px solid var(--rule);
-  padding: 0.1rem 0 0.1rem 1rem;
+  border-inline-start: 2px solid var(--rule);
+  padding: 0.1rem 0;
+  padding-inline-start: 1rem;
   margin: 1.2rem 0;
   max-width: 640px;
   font-style: italic;
@@ -120,10 +122,11 @@ aside.note {
   margin: 1.2rem 0;
 }
 .callout {
-  border-left: 3px solid var(--accent);
+  border-inline-start: 3px solid var(--accent);
   background: var(--accentbg);
   padding: 0.8rem 1rem;
-  border-radius: 0 6px 6px 0;
+  border-start-end-radius: 6px;
+  border-end-end-radius: 6px;
   margin: 1.2rem 0;
   font-size: 0.96rem;
 }
@@ -527,7 +530,7 @@ aside.note {
 .step .badge {
   position: absolute;
   top: -9px;
-  right: 8px;
+  inset-inline-end: 8px;
   font-size: 0.62rem;
   background: var(--accent);
   color: #fff;
@@ -608,6 +611,14 @@ aside.note {
 .compiledList {
   margin-top: 0.8rem;
   min-height: 1.6rem;
+}
+
+:dir(rtl) {
+  letter-spacing: normal;
+}
+:dir(rtl) :is(.sub, em, aside.note, .qbox .qtext, .schemaBox .empty, .qline) {
+  font-style: normal;
+  font-weight: 500;
 }
 
 @media (max-width: 680px) {
