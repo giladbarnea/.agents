@@ -1,6 +1,6 @@
 ---
-name: prompt-subagent
-description: Instructions for _how_ to prompt a subagent to perform any task. Load this skill before dispatching a subagent.
+name: write-prompt
+description: Instructions for how to write AI prompts — both when prompting an agent directly and when writing content whose target audience is AI agents. Load this skill before doing either.
 ---
 
 1. Orient the agent to the project: tell it to read key context files (`README.md`, `AGENTS.md`, `ARCHITECTURE.md`, etc.) and any relevant domain context directories—enough for it to understand *the project’s purpose* before starting the task. If the user referenced any context-gathering skills at the beginning of the main session, point the agent to them as well.
