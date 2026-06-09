@@ -41,6 +41,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Check if output would change without writing.",
     )
+    parser.add_argument(
+        "--stdout",
+        action="store_true",
+        help="Print the rendered output to stdout without writing.",
+    )
     return parser.parse_args()
 
 
@@ -59,6 +64,10 @@ def main() -> None:
     output_path = j2_path.parent / j2_path.name.replace(".j2", "")
     rendered = render_j2(j2_path)
 
+    if args.stdout:
+        sys.stdout.write(rendered)
+        sys.exit(0)
+
     if args.dry_run:
         if not output_path.exists():
             print(f"✗ {output_path} would have been changed.", file=sys.stderr)
@@ -72,7 +81,7 @@ def main() -> None:
             sys.exit(1)
 
     output_path.write_text(rendered)
-    print(f"Rendered → {output_path}")
+    print(f"✓ Rendered → {output_path}")
 
 
 if __name__ == "__main__":
