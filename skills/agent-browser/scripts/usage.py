@@ -511,25 +511,47 @@ def _session_track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text
 
 
 DEFAULT_PICASSO_WIDTH = 36
+PICASSO_RESERVED_COLUMNS = 42
 
 
-def _parse_picasso_width(raw_width: str | None) -> int:
-    """Parse the configured meter width, defaulting when the value is absent or malformed.
+def _parse_positive_int(raw_value: str | None) -> int | None:
+    """Parse a positive integer environment variable value."""
+    try:
+        value = int(raw_value or "")
+    except ValueError:
+        return None
+    return value if value > 0 else None
 
-    >>> _parse_picasso_width(None)
+
+def _parse_picasso_width(raw_width: str | None, raw_columns: str | None) -> int:
+    """Parse the meter width, shrinking to fit the terminal when COLUMNS is usable.
+
+    The resolved width is capped by the configured/default width and by the
+    available terminal space after reserving 42 columns for non-meter content.
+
+    >>> _parse_picasso_width(None, None)
     36
-    >>> _parse_picasso_width("42")
+    >>> _parse_picasso_width("42", None)
     42
-    >>> _parse_picasso_width("oops")
+    >>> _parse_picasso_width("oops", None)
+    36
+    >>> _parse_picasso_width(None, "56")
+    14
+    >>> _parse_picasso_width(None, "80")
+    36
+    >>> _parse_picasso_width("50", "56")
+    14
+    >>> _parse_picasso_width(None, "0")
     36
     """
-    try:
-        return int(raw_width or DEFAULT_PICASSO_WIDTH)
-    except ValueError:
-        return DEFAULT_PICASSO_WIDTH
+    configured_width = _parse_positive_int(raw_width) or DEFAULT_PICASSO_WIDTH
+    columns = _parse_positive_int(raw_columns)
+    if columns is None:
+        return configured_width
+    return max(1, min(configured_width, columns - PICASSO_RESERVED_COLUMNS))
 
 
-PICASSO_WIDTH = _parse_picasso_width(os.environ.get("PICASSO_WIDTH"))
+PICASSO_WIDTH = _parse_picasso_width(os.environ.get("PICASSO_WIDTH"), os.environ.get("COLUMNS"))
 
 
 def _picasso_line(label: str, limit: Limit, now: datetime, *, track, slack: str, over: str) -> Text:
