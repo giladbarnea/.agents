@@ -116,6 +116,34 @@
         console.warn(`Broken cross-reference: #${targetId}`);
       }
     });
+
+    // Following a reference is a context switch; the return pill is the way
+    // back. Each jump pushes the departure scroll position, so chained
+    // references unwind in order. Returning clears the hash so re-clicking
+    // the same reference jumps (and :target-flashes) again.
+    const returnStack = [];
+    const returnButton = document.createElement("button");
+    returnButton.type = "button";
+    returnButton.className = "crossref-return";
+    returnButton.textContent = "↩ Back to where you were";
+    returnButton.addEventListener("click", () => {
+      const departureScrollY = returnStack.pop();
+      history.replaceState(null, "", location.pathname + location.search);
+      window.scrollTo({ top: departureScrollY, behavior: "smooth" });
+      if (returnStack.length === 0) {
+        returnButton.classList.remove("show");
+      }
+    });
+    document.body.append(returnButton);
+
+    document.addEventListener("click", (event) => {
+      const anchor = event.target.closest('a[href^="#"]');
+      if (!anchor || anchor.classList.contains("refbroken")) {
+        return;
+      }
+      returnStack.push(window.scrollY);
+      returnButton.classList.add("show");
+    });
   }
 
   setupChipToggles();

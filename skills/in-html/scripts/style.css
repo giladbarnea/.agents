@@ -51,6 +51,49 @@ a[href^="#"].refbroken {
     box-shadow: 0 0 0 3px transparent;
   }
 }
+/* Following a cross-reference is a context switch, so the jump leaves a way
+   back: a return pill (the e-reader footnote pattern) that restores the
+   reader's previous scroll position. Jumps stack, so chained references
+   unwind in order. Shown/hidden by interactions.js. */
+.crossref-return {
+  position: fixed;
+  left: 50%;
+  bottom: 1.1rem;
+  transform: translateX(-50%) translateY(0.5rem);
+  z-index: 9996;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.45em 1em;
+  border: 1px solid rgba(154, 107, 0, 0.45);
+  border-radius: 999px;
+  background: var(--accentbg);
+  color: var(--accent);
+  cursor: pointer;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.18s cubic-bezier(0.32, 0.72, 0, 1),
+    transform 0.18s cubic-bezier(0.32, 0.72, 0, 1),
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+.crossref-return.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%);
+}
+.crossref-return:hover,
+.crossref-return:focus-visible {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accentbg);
+}
 body {
   margin: 0;
   background: var(--paper);
