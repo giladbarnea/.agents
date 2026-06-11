@@ -100,6 +100,25 @@
     });
   }
 
+  // Every data-annotation-id doubles as a link target, so in-page references
+  // (<a href="#stable-name">§7</a>) need no separate id bookkeeping. A link
+  // whose target doesn't exist renders loud-red instead of failing silently.
+  function setupCrossReferences() {
+    document.querySelectorAll("[data-annotation-id]").forEach((element) => {
+      if (!element.id) {
+        element.id = element.dataset.annotationId;
+      }
+    });
+    document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+      const targetId = decodeURIComponent(anchor.getAttribute("href").slice(1));
+      if (targetId && !document.getElementById(targetId)) {
+        anchor.classList.add("refbroken");
+        console.warn(`Broken cross-reference: #${targetId}`);
+      }
+    });
+  }
+
   setupChipToggles();
   setupBarCompileWidgets();
+  setupCrossReferences();
 })();

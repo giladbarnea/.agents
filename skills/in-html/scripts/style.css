@@ -18,6 +18,38 @@
 }
 html {
   font-size: 17px;
+  scroll-behavior: smooth;
+}
+[id] {
+  scroll-margin-top: 1.5rem;
+}
+a[href^="#"] {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+a[href^="#"]:hover {
+  border-bottom-color: var(--accent);
+}
+a[href^="#"].refbroken {
+  color: var(--bad);
+  border-bottom: 1px dashed var(--bad);
+}
+/* Arriving at a cross-reference target flashes its outline, so the jump ends
+   with "this is the thing it meant" instead of an unexplained scroll position.
+   The delay holds the flash through the smooth scroll. */
+:target {
+  animation: target-flash 1.6s ease-out 0.35s backwards;
+}
+@keyframes target-flash {
+  from {
+    box-shadow:
+      0 0 0 3px var(--accent),
+      0 0 18px rgba(154, 107, 0, 0.3);
+  }
+  to {
+    box-shadow: 0 0 0 3px transparent;
+  }
 }
 body {
   margin: 0;
