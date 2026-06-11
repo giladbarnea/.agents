@@ -1,17 +1,91 @@
+/* Warm editorial palette. Every color is a variable so the page can recolor
+   wholesale; the dark theme below is just a second set of these same names.
+   Surface/border tokens that used to be hardcoded live here too, so a single
+   override flips the whole document. */
 :root {
+  color-scheme: light;
   --paper: #fffff8;
   --ink: #111;
   --faint: #6b6b6b;
   --rule: #d8d8cf;
+  --rule-dash: var(--rule-dash);
   --accentbg: #fcf3d9;
   --accent: #9a6b00;
+  --on-accent: #fff;
   --good: #1f6b3b;
   --goodbg: #e6f3ea;
   --bad: #9b2226;
   --badbg: #f7e7e6;
   --blue: #2a4d69;
   --bluebg: #e7eef4;
+  --blue-border: var(--blue-border);
   --chip: #efe9d6;
+  --chip-border: #e0d8bf;
+  --surface: #fffefb;
+  --surface2: #fbfaf3;
+  --input-bg: #fff;
+  --dim-bg: #efefe8;
+  --sel-bg: #f5e3a0;
+  --sel-ink: #3f3420;
+}
+/* Dark theme: a warm espresso-and-gold counterpart to the cream paper, not a
+   cold OLED black, so the editorial character survives the flip. The two blocks
+   below carry identical values and must stay in sync — one is driven by JS
+   (time of day, see the inline script in the templates), the other is the
+   no-JS fallback that follows the OS setting when the script never runs. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #14120d;
+  --ink: #e8e2d4;
+  --faint: #968f80;
+  --rule: #312d26;
+  --rule-dash: #463f33;
+  --accentbg: #2b2113;
+  --accent: #d8ab51;
+  --on-accent: #1a1408;
+  --good: #74c490;
+  --goodbg: #18271d;
+  --bad: #e2807c;
+  --badbg: #2d1817;
+  --blue: #93b6d2;
+  --bluebg: #18242e;
+  --blue-border: #2d3b46;
+  --chip: #272016;
+  --chip-border: #3c3528;
+  --surface: #1b1812;
+  --surface2: #201c15;
+  --input-bg: #211d16;
+  --dim-bg: #25221b;
+  --sel-bg: #5c4b1f;
+  --sel-ink: #f1e7d0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --paper: #14120d;
+    --ink: #e8e2d4;
+    --faint: #968f80;
+    --rule: #312d26;
+    --rule-dash: #463f33;
+    --accentbg: #2b2113;
+    --accent: #d8ab51;
+    --on-accent: #1a1408;
+    --good: #74c490;
+    --goodbg: #18271d;
+    --bad: #e2807c;
+    --badbg: #2d1817;
+    --blue: #93b6d2;
+    --bluebg: #18242e;
+    --blue-border: #2d3b46;
+    --chip: #272016;
+    --chip-border: #3c3528;
+    --surface: #1b1812;
+    --surface2: #201c15;
+    --input-bg: #211d16;
+    --dim-bg: #25221b;
+    --sel-bg: #5c4b1f;
+    --sel-ink: #f1e7d0;
+  }
 }
 * {
   box-sizing: border-box;
@@ -193,7 +267,7 @@ aside.note {
 .card {
   border: 1px solid var(--rule);
   border-radius: 6px;
-  background: #fffefb;
+  background: var(--surface);
   padding: 1.1rem 1.2rem;
   margin: 1.2rem 0;
 }
@@ -240,7 +314,7 @@ aside.note {
   border: 1px solid var(--rule);
   border-radius: 8px;
   padding: 0.9rem 1rem;
-  background: #fffefb;
+  background: var(--surface);
 }
 .pane h4 {
   margin: 0 0 0.5rem;
@@ -257,7 +331,7 @@ aside.note {
   padding: 0.45rem 0.9rem;
   border: 1px solid var(--rule);
   border-radius: 6px;
-  background: #fbfaf3;
+  background: var(--surface2);
   color: var(--ink);
 }
 .btn:hover {
@@ -273,22 +347,22 @@ aside.note {
   border-radius: 999px;
   font-size: 0.82rem;
   background: var(--chip);
-  border: 1px solid #e0d8bf;
+  border: 1px solid var(--chip-border);
   margin: 0.15rem 0.2rem;
   white-space: nowrap;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 .chip.field {
   background: var(--bluebg);
-  border-color: #cdd9e4;
+  border-color: var(--blue-border);
   color: var(--blue);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.78rem;
 }
 .chip.q {
   cursor: pointer;
-  background: #fff;
-  border: 1px dashed #c9c0a4;
+  background: var(--input-bg);
+  border: 1px dashed var(--rule-dash);
 }
 .chip.q.active {
   background: var(--accentbg);
@@ -309,7 +383,7 @@ aside.note {
 .seg label {
   display: inline-flex;
   align-items: center;
-  background: #fbfaf3;
+  background: var(--surface2);
   padding: 0.45rem 1.1rem;
   color: var(--faint);
   cursor: pointer;
@@ -340,7 +414,7 @@ aside.note {
   border: 1px solid var(--rule);
   border-radius: 8px;
   padding: 1.1rem 1.2rem;
-  background: #fffefb;
+  background: var(--surface);
   min-height: 120px;
 }
 .qbox .qtext {
@@ -377,7 +451,7 @@ aside.note {
   border: 1px solid var(--rule);
   padding: 0.9rem;
   border-radius: 8px;
-  background: #fffefb;
+  background: var(--surface);
 }
 .gap .side h4 {
   margin: 0 0 0.5rem;
@@ -411,11 +485,11 @@ aside.note {
 }
 
 .schemaBox {
-  border: 1px dashed #c9c0a4;
+  border: 1px dashed var(--rule-dash);
   border-radius: 8px;
   padding: 0.9rem 1rem;
   min-height: 70px;
-  background: #fffef9;
+  background: var(--surface);
   margin: 0.6rem 0;
 }
 .schemaBox .empty {
@@ -450,7 +524,7 @@ aside.note {
   border: 1px solid var(--rule);
   border-radius: 8px;
   padding: 0.9rem 1rem;
-  background: #fffefb;
+  background: var(--surface);
 }
 .ba .pane h4 {
   margin: 0 0 0.5rem;
@@ -506,7 +580,7 @@ aside.note {
   border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 0.05rem 0.35rem;
-  background: #fbfaf3;
+  background: var(--surface2);
 }
 
 .disclose {
@@ -525,7 +599,7 @@ aside.note {
   padding: 0.55rem 0.8rem;
   border: 1px solid var(--rule);
   border-radius: 6px;
-  background: #fbfaf3;
+  background: var(--surface2);
 }
 .disclose > .head::-webkit-details-marker {
   display: none;
@@ -568,7 +642,7 @@ aside.note {
   border: 1px solid var(--rule);
   border-radius: 8px;
   padding: 0.7rem 0.8rem;
-  background: #fffefb;
+  background: var(--surface);
   cursor: pointer;
   position: relative;
   transition: 0.15s;
@@ -609,7 +683,7 @@ aside.note {
   inset-inline-end: 8px;
   font-size: 0.62rem;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   padding: 0.05rem 0.4rem;
   border-radius: 999px;
   letter-spacing: 0.04em;
@@ -682,7 +756,7 @@ aside.note {
   padding: 0.5rem 0.8rem;
   background: var(--bluebg);
   border-radius: 6px;
-  border: 1px solid #cdd9e4;
+  border: 1px solid var(--blue-border);
 }
 .compiledList {
   margin-top: 0.8rem;
@@ -758,7 +832,7 @@ aside.note {
   color: var(--good);
 }
 .state.dim {
-  background: #efefe8;
+  background: var(--dim-bg);
   color: var(--faint);
 }
 
@@ -773,7 +847,7 @@ aside.note {
   flex: 1 1 0;
   border: 1px solid var(--rule);
   border-radius: 8px;
-  background: #fffefb;
+  background: var(--surface);
   padding: 0.75rem 0.85rem;
 }
 .cnode h4 {
@@ -807,7 +881,7 @@ aside.note {
   top: 50%;
   left: 0;
   right: 0;
-  border-top: 1px dashed #c9c0a4;
+  border-top: 1px dashed var(--rule-dash);
 }
 .cgate > * {
   position: relative;
@@ -866,7 +940,7 @@ aside.note {
 .tree .tnode {
   border: 1px solid var(--rule);
   border-radius: 8px;
-  background: #fffefb;
+  background: var(--surface);
   padding: 0.65rem 0.9rem;
   max-width: 24rem;
 }
@@ -889,7 +963,7 @@ aside.note {
 .tree .tstem {
   width: 1px;
   height: 1.1rem;
-  background: #c9c0a4;
+  background: var(--rule-dash);
   margin: 0 auto;
 }
 .tree .tsplit,
@@ -897,13 +971,13 @@ aside.note {
   width: 50%;
   height: 1.1rem;
   margin: 0 auto;
-  border-inline: 1px solid #c9c0a4;
+  border-inline: 1px solid var(--rule-dash);
 }
 .tree .tsplit {
-  border-top: 1px solid #c9c0a4;
+  border-top: 1px solid var(--rule-dash);
 }
 .tree .tjoin {
-  border-bottom: 1px solid #c9c0a4;
+  border-bottom: 1px solid var(--rule-dash);
 }
 .tree .tnote {
   font-size: 0.7rem;
@@ -960,7 +1034,7 @@ aside.note {
     top: 0;
     bottom: 0;
     border-top: 0;
-    border-left: 1px dashed #c9c0a4;
+    border-left: 1px dashed var(--rule-dash);
   }
   .tree .trow.two {
     grid-template-columns: 1fr;
@@ -969,7 +1043,7 @@ aside.note {
   .tree .tjoin {
     width: 1px;
     border: 0;
-    background: #c9c0a4;
+    background: var(--rule-dash);
   }
   .tree .tnote {
     max-width: none;
@@ -986,7 +1060,7 @@ aside.note {
 .qa {
   border: 1px solid var(--rule);
   border-radius: 8px;
-  background: #fffefb;
+  background: var(--surface);
   padding: 0.9rem 1.1rem;
   margin: 1.1rem 0;
 }

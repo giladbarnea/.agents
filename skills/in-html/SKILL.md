@@ -87,7 +87,7 @@ Prose is the fallback for what genuinely has no shape — insights, caveats, syn
 
 ## Authoring rules
 
-Edit `index.html` by replacing only the `CONTENT START` block with arbitrary page content. Keep the imports intact for the chosen layer set.
+Edit `index.html` by replacing only the `CONTENT START` block with arbitrary page content. Keep the imports intact for the chosen layer set, including the small inline `<script>` in `<head>` — it picks a warm dark or light theme from the local time before first paint (OS `prefers-color-scheme` is the fallback when JS is off). Theming is fully automatic across every layer; author content as usual and leave the colors alone.
 
 Use normal HTML first: `h1`, `.sub`, `.lead`, `h2`, `p`, `aside.note`, `.card`, `.callout`, `.grid`, `.pane`, `.row`, `.chip`, `.btn`, `.kbd`.
 

@@ -1,6 +1,6 @@
 ::highlight(annotation-selection) {
-  background-color: #f5e3a0;
-  color: #3f3420;
+  background-color: var(--sel-bg);
+  color: var(--sel-ink);
 }
 .annotation-hover {
   cursor: crosshair;
@@ -106,7 +106,7 @@
   overflow: hidden;
   border: 1px solid var(--rule);
   border-radius: 8px;
-  background: #fffefb;
+  background: var(--surface);
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.18);
   padding: 0.7rem;
   opacity: 0;
@@ -171,7 +171,7 @@
   padding: 0.5rem 0.65rem;
   border: 1px solid var(--rule);
   border-radius: 6px;
-  background: #fff;
+  background: var(--input-bg);
   color: var(--ink);
   font: inherit;
   line-height: 1.5;
@@ -198,7 +198,7 @@
   font-size: 1rem;
   font-weight: 700;
   border: 1px solid currentColor;
-  background: #fff;
+  background: var(--input-bg);
 }
 .annotation-status.show {
   display: grid;
@@ -233,7 +233,7 @@
   overflow: auto;
   border: 1px solid var(--rule);
   border-radius: 10px;
-  background: #fffefb;
+  background: var(--surface);
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.14);
   padding: 0.75rem 0.85rem;
   transition:
