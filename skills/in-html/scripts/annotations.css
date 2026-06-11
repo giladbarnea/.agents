@@ -213,8 +213,12 @@
 .annotation-preview {
   position: fixed;
   z-index: 9998;
+  min-width: 14rem;
+  min-height: 5rem;
+  max-width: calc(100vw - 1rem);
   max-height: min(28rem, calc(100vh - 3rem));
-  overflow-y: auto;
+  resize: both;
+  overflow: auto;
   border: 1px solid var(--rule);
   border-radius: 10px;
   background: #fffefb;

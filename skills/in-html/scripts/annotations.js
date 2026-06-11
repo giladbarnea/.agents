@@ -488,8 +488,53 @@
       list.append(note);
     });
     preview.append(list);
+    makeAnnotationPreviewDraggable(preview);
 
     return preview;
+  }
+
+  // Dragging is offered on the preview's own padding (event.target is the
+  // preview itself there, never its text or buttons), so no visual handle is
+  // needed. The bottom-right corner is left to the native resize grip; grabbing
+  // either marks the preview user-placed so auto-layout stops moving it.
+  function makeAnnotationPreviewDraggable(preview) {
+    preview.addEventListener("mousedown", (event) => {
+      if (event.target !== preview) {
+        return;
+      }
+      preview.dataset.userPlaced = "true";
+
+      const rect = preview.getBoundingClientRect();
+      const onResizeGrip =
+        rect.right - event.clientX < 18 && rect.bottom - event.clientY < 18;
+      if (onResizeGrip) {
+        preview.style.maxHeight = "calc(100vh - 1rem)";
+        return;
+      }
+
+      event.preventDefault();
+      const grabX = event.clientX - rect.left;
+      const grabY = event.clientY - rect.top;
+
+      const onMove = (moveEvent) => {
+        const position = clampEditorPosition(
+          moveEvent.clientX - grabX,
+          moveEvent.clientY - grabY,
+          preview.offsetWidth,
+          preview.offsetHeight,
+        );
+        preview.style.left = `${position.left}px`;
+        preview.style.top = `${position.top}px`;
+      };
+
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    });
   }
 
   function cssPixels(value, fallback) {
@@ -526,9 +571,12 @@
     preview.style.top = `${top}px`;
   }
 
+  // Auto-layout only manages previews the user hasn't dragged or resized;
+  // user-placed ones keep their position and size.
   function positionAnnotationPreviews() {
     const gap = 12;
     const entries = Array.from(annotationPreviewsByElement.entries())
+      .filter(([, preview]) => !preview.dataset.userPlaced)
       .map(([element, preview]) => ({
         element,
         preview,
@@ -662,7 +710,7 @@
     editor.style.top = `${position.top}px`;
   }
 
-  function reclampAnnotationEditor(editor) {
+  function reclampFloatingPanel(editor) {
     const position = clampEditorPosition(
       Number.parseFloat(editor.style.left) || 0,
       Number.parseFloat(editor.style.top) || 0,
@@ -923,8 +971,13 @@
 
   window.addEventListener("resize", () => {
     if (activeAnnotationEditor) {
-      reclampAnnotationEditor(activeAnnotationEditor);
+      reclampFloatingPanel(activeAnnotationEditor);
     }
+    annotationPreviewsByElement.forEach((preview) => {
+      if (preview.dataset.userPlaced) {
+        reclampFloatingPanel(preview);
+      }
+    });
     if (highlightedAnnotationElement) {
       positionHoverOverlay(highlightedAnnotationElement, true);
     }
