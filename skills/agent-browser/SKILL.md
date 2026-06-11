@@ -36,6 +36,29 @@ agent-browser skills get agentcore
 
 Run `agent-browser skills list` to see what is available on this install.
 
+## Driving a real logged-in Chrome over CDP
+
+Some sites trip bot checks in headless runs. The workaround is a real, logged-in Chrome with remote debugging enabled, driven directly over CDP:
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.agent-browser/custom-debug-profile"
+```
+
+Building blocks:
+
+- `GET http://localhost:9222/json/list` enumerates open tabs; `GET /json/version` gives the browser-level websocket URL.
+- Send CDP commands as JSON over the tab's `webSocketDebuggerUrl` (pass `suppress_origin=True` with `websocket-client`): `Page.reload` to refresh, `Runtime.evaluate` with `document.body.innerText` to scrape, polling until expected text appears.
+- `Target.createTarget` with `"background": true` (via the browser-level socket) opens missing tabs without stealing focus. Prefer reuse+reload of an existing tab over opening new ones — runs stay idempotent and unobtrusive.
+- If connecting to a tab's `webSocketDebuggerUrl` returns 403 ("Rejected an incoming WebSocket connection"), connect instead to the browser-level socket (`/devtools/browser/...` from `/json/version`) and open a session with `Target.attachToTarget(targetId, flatten=True)`. Use the returned `sessionId` on every subsequent command to that tab — never connect to the tab socket directly.
+
+Techniques worth reusing:
+
+- **CDP request/response matching.** Each command you send carries an `id`; over the websocket, ignore every inbound message whose `id` doesn't match and surface any `error` field as a failure. Don't assume the first reply is yours.
+- **Poll for readiness, don't sleep blindly.** SPA content lands after reload. Re-`Runtime.evaluate` `document.body.innerText` on a short interval until a known sentinel string is present, with an overall deadline — rather than a fixed `sleep` that's either too short or too slow.
+- **Skip the browser entirely when you can.** The fastest path reads a site's JSON endpoints directly with the logged-in cookies, no tab driving at all. Use CDP scraping only as the fallback when the API path fails.
+- **Decrypt Chrome's cookies off disk (macOS).** Derive the AES key with PBKDF2 over the `Chrome Safe Storage` Keychain secret (salt `saltysalt`, 1003 iterations, SHA1). Copy the `Cookies` sqlite DB to a temp file before reading to dodge Chrome's WAL lock. Chrome 130+ prepends a 32-byte SHA256(host) integrity prefix to each `v10` value — strip it after removing PKCS7 padding.
+- **Keep cookies domain-scoped, not flattened by name.** Setting them per `host_key` prevents per-subdomain tokens (e.g. Cloudflare `__cf_bm` on different subdomains) from clobbering each other and tripping intermittent 403s.
+
 ## Tailored references
 
 - For `pi.dev`, read `references/pi-dev.md`.

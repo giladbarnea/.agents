@@ -649,18 +649,31 @@ def _codex_rate_limit_json() -> dict:
     return response.json()["rate_limit"]
 
 
-def fetch_via_cookies() -> list[Usage]:
+def _claude_reset_datetime(reset_raw: str | None, now: datetime, window_duration: timedelta) -> datetime:
+    """Parse Claude's reset timestamp, using now+window when no window has started yet.
+
+    >>> _claude_reset_datetime(None, datetime(2026, 1, 1, tzinfo=IDT), SESSION_DURATION).isoformat()
+    '2026-01-01T05:00:00+02:00'
+    """
+    if reset_raw is None:
+        return now + window_duration
+    return datetime.fromisoformat(reset_raw).astimezone(IDT)
+
+
+def fetch_via_cookies(now: datetime) -> list[Usage]:
     """First-line: read usage straight from the JSON endpoints, no browser process needed."""
     claude = _claude_usage_json()
     codex = _codex_rate_limit_json()
+    claude_session_reset = _claude_reset_datetime(claude["five_hour"]["resets_at"], now, SESSION_DURATION)
+    claude_weekly_reset = _claude_reset_datetime(claude["seven_day"]["resets_at"], now, timedelta(weeks=1))
     return [
         Usage(
             name="CLAUDE",
             session=Limit.until(float(claude["five_hour"]["utilization"]),
-                                datetime.fromisoformat(claude["five_hour"]["resets_at"]).astimezone(IDT),
+                                claude_session_reset,
                                 SESSION_DURATION),
             weekly=Limit.until(float(claude["seven_day"]["utilization"]),
-                               datetime.fromisoformat(claude["seven_day"]["resets_at"]).astimezone(IDT)),
+                               claude_weekly_reset),
         ),
         Usage(
             name="CODEX",
@@ -730,7 +743,7 @@ def main() -> None:
     console = Console()
 
     try:
-        usages = fetch_via_cookies()
+        usages = fetch_via_cookies(now)
     except Exception as error:
         print(
             f"WARNING: Direct cookie-based fetch failed ({type(error).__name__}: {error}); "
