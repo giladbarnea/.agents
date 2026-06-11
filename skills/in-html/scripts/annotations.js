@@ -297,9 +297,11 @@
     );
   }
 
-  function ensureAnnotationMarker(element) {
+  function ensureAnnotationMarker(element, annotation) {
+    const count = annotationUserInputs(annotation).length;
     const existingMarker = annotationMarkerForElement(element);
     if (existingMarker) {
+      existingMarker.textContent = count > 1 ? String(count) : "";
       return existingMarker;
     }
 
@@ -309,7 +311,10 @@
     marker.type = "button";
     marker.setAttribute("aria-label", "Show annotations");
     marker.setAttribute("aria-pressed", "false");
-    annotationMarkerHost(element).append(marker);
+    marker.textContent = count > 1 ? String(count) : "";
+    const host = annotationMarkerHost(element);
+    host.classList.add("annotation-marker-host");
+    host.append(marker);
     return marker;
   }
 
@@ -321,7 +326,7 @@
         : annotation;
     annotationsByElement.set(element, { selector, annotation: registeredAnnotation });
     element.classList.add("annotation-has-note");
-    ensureAnnotationMarker(element);
+    ensureAnnotationMarker(element, registeredAnnotation);
   }
 
   function recordWrittenAnnotation(element, userInput, specificallySelected, timestamp) {
