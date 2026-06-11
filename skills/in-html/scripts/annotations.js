@@ -131,7 +131,10 @@
     return element;
   }
 
-  const hoverOverlayOffset = 6;
+  // The reticle breathes wide on the horizontal axis, where the column has
+  // room, and stays tight vertically so it never bleeds into stacked neighbors.
+  const hoverOverlayOffsetX = 14;
+  const hoverOverlayOffsetY = 4;
 
   // `instant` snaps the ring into place (first reveal, scroll, resize); without
   // it the ring glides and resizes between adjacent elements.
@@ -140,10 +143,10 @@
     if (instant) {
       hoverOverlay.style.transition = "none";
     }
-    hoverOverlay.style.left = `${rect.left - hoverOverlayOffset}px`;
-    hoverOverlay.style.top = `${rect.top - hoverOverlayOffset}px`;
-    hoverOverlay.style.width = `${rect.width + hoverOverlayOffset * 2}px`;
-    hoverOverlay.style.height = `${rect.height + hoverOverlayOffset * 2}px`;
+    hoverOverlay.style.left = `${rect.left - hoverOverlayOffsetX}px`;
+    hoverOverlay.style.top = `${rect.top - hoverOverlayOffsetY}px`;
+    hoverOverlay.style.width = `${rect.width + hoverOverlayOffsetX * 2}px`;
+    hoverOverlay.style.height = `${rect.height + hoverOverlayOffsetY * 2}px`;
     if (instant) {
       hoverOverlay.getBoundingClientRect();
       hoverOverlay.style.transition = "";

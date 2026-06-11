@@ -616,7 +616,7 @@ aside.note {
 :dir(rtl) {
   letter-spacing: normal;
 }
-:dir(rtl) :is(.sub, em, aside.note, .qbox .qtext, .schemaBox .empty, .qline) {
+:dir(rtl) :is(.sub, em, aside.note, .qbox .qtext, .schemaBox .empty, .qline, .qa .q) {
   font-style: normal;
   font-weight: 500;
 }
@@ -905,4 +905,93 @@ aside.note {
   .tasks .state {
     justify-self: start;
   }
+}
+
+.qa {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: #fffefb;
+  padding: 0.9rem 1.1rem;
+  margin: 1.1rem 0;
+}
+.qa .q {
+  font-size: 0.85rem;
+  color: var(--faint);
+  font-style: italic;
+  margin: 0 0 0.45rem;
+}
+.qa .q::before {
+  content: "Q · ";
+  font-style: normal;
+  font-weight: 600;
+  color: var(--accent);
+}
+.ans {
+  border-inline-start: 3px solid var(--blue);
+  background: var(--bluebg);
+  padding: 0.55rem 0.85rem;
+  border-start-end-radius: 6px;
+  border-end-end-radius: 6px;
+  margin: 0.5rem 0;
+  font-size: 0.93rem;
+}
+.ans::before {
+  content: "YOU";
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--blue);
+  margin-bottom: 0.15rem;
+}
+.ans[data-speaker]::before {
+  content: attr(data-speaker);
+}
+.resp {
+  margin: 0.6rem 0 0.1rem;
+  font-size: 0.95rem;
+}
+.resp::before {
+  content: "ME · ";
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+.resp[data-speaker]::before {
+  content: attr(data-speaker) " · ";
+}
+
+table.data {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+table.data th {
+  text-align: start;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--faint);
+  border-bottom: 1.5px solid var(--ink);
+  padding: 0.3rem 0.5rem;
+}
+table.data td {
+  border-bottom: 1px solid var(--rule);
+  padding: 0.42rem 0.5rem;
+  vertical-align: top;
+}
+table.data td.num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+table.data tr.total td {
+  border-top: 2px solid var(--ink);
+  border-bottom: none;
+  font-weight: 600;
 }

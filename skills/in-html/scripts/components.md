@@ -267,3 +267,36 @@ Requires layer 1 only. Hierarchies, org charts, who-controls-what. Rows of nodes
   </div>
 </div>
 ```
+
+## Dialogue / Q&A exchange
+
+Requires layer 1 only. The native shape for **multi-round review loops**: a question the agent asked, the reviewer's answer (harvested from `annotations.json`), and the agent's reply on top. Use it when regenerating a page whose previous round was answered via annotations — answered questions become closed `.qa` blocks instead of open asks, and the conversation evolves in place.
+
+Speaker labels default to "YOU" (`.ans`) and "ME" (`.resp`); override with `data-speaker`. Add `dir="auto"` on `.ans` when answers may be RTL. Follow-up questions nest naturally as a `.tasks` list inside the block.
+
+```html
+<div class="qa" data-annotate-whole data-annotation-id="a-topic">
+  <p class="q">The question as originally asked, condensed.</p>
+  <div class="ans" dir="auto">The reviewer's answer, quoted or lightly trimmed.</div>
+  <p class="resp">The agent's reply: what this settles, what it implies.</p>
+  <ol class="tasks" style="margin:0.6rem 0 0">
+    <li data-annotate-whole data-annotation-id="q2-topic-followup">
+      <span class="state act">answer</span>
+      <div><strong>Optional follow-up question</strong> raised by the answer.</div>
+    </li>
+  </ol>
+</div>
+```
+
+## Data table
+
+Requires layer 1 only. For line items, build-ups, and per-row facts with numbers — estimates × hours, party × risk × move, cohort funnels. `td.num` right-aligns with tabular numerals; `tr.total` draws a summing rule. Headers/cells use logical alignment (`text-align: start/end`), so RTL works.
+
+```html
+<table class="data" data-annotate-whole data-annotation-id="buildup">
+  <tr><th>work item</th><th class="num">hours</th></tr>
+  <tr><td>First line item</td><td class="num">38</td></tr>
+  <tr><td>Second line item</td><td class="num">20</td></tr>
+  <tr class="total"><td>Total</td><td class="num">58</td></tr>
+</table>
+```

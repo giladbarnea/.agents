@@ -69,6 +69,8 @@ The page's job is to install knowledge, not to restyle text. The source material
 | Hierarchy, org chart, who-controls-what | `.tree` |
 | Process / sequence of stages | `.pipe` |
 | Comparison, before/after, either/or | `.ba` panes, segmented tabs |
+| Asked → answered → replied (multi-round review loops) | `.qa` dialogue block |
+| Line items, build-ups, per-row facts with numbers | `table.data` |
 | Background, reference, "later" material | `.disclose`, collapsed |
 | Insight, caveat, judgment | short prose, `aside.note`, `.callout` |
 
@@ -90,6 +92,8 @@ Edit `index.html` by replacing only the `CONTENT START` block with arbitrary pag
 Use normal HTML first: `h1`, `.sub`, `.lead`, `h2`, `p`, `aside.note`, `.card`, `.callout`, `.grid`, `.pane`, `.row`, `.chip`, `.btn`, `.kbd`.
 
 For ready-made components, read `/Users/giladbarnea/.agents/skills/in-html/scripts/components.md`. For a rendered reference, open `/Users/giladbarnea/.agents/skills/in-html/scripts/component-gallery.html` with the full layer set.
+
+Multi-round loops: when a previous round's questions were answered via annotations, regenerate the page with the answered items as `.qa` dialogue blocks (question → reviewer's answer → your reply) and give new asks fresh `data-annotation-id`s — old JSON keys then stay harmlessly orphaned instead of colliding with new content.
 
 When annotations are enabled, add `data-annotation-id="stable-name"` to important elements so JSON keys survive later edits. Without one, the key is a structural CSS path (tag + id + `:nth-of-type`, never classes) from the nearest `data-annotation-id` ancestor or `<body>` down to the element. Classes are visual/interaction state, not persistent identity. Add `data-annotate-whole` when Shift+click should annotate the whole box rather than a leaf text node. Bare clicks remain available for page interactions; annotations open with Shift+click. Elements with saved annotations get a subtle `※` marker; clicking the marker or Cmd+clicking the element toggles a styled preview beside the content column, and multiple previews can remain open. Bare Enter submits; modified Enter inserts a line break. Escape closes annotation UI. The editor can be dragged by the grip at its top (kept within the viewport) and grown from its bottom-right corner like a native textarea. Submitting reads the note back from disk and only confirms once the write is verified present.
 

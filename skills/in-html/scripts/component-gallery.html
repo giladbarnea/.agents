@@ -236,6 +236,56 @@
 
         <hr />
 
+        <h2 data-annotation-id="qa-example">
+          <span class="n">Dialogue</span>Q&amp;A exchange (multi-round review)
+        </h2>
+        <div class="qa" data-annotate-whole>
+          <p class="q">What is the V1 surface — web chat or WhatsApp bot?</p>
+          <div class="ans" dir="auto">
+            Web chat. I'll use a ready-made open-source GUI; they ship session
+            history out of the box.
+          </div>
+          <p class="resp">
+            Good choice — the real work item becomes wiring your backend into
+            the UI's expected API, not building chrome.
+          </p>
+          <ol class="tasks" style="margin: 0.6rem 0 0">
+            <li data-annotate-whole>
+              <span class="state act">answer</span>
+              <div>
+                <strong>Follow-up:</strong> agent runs take minutes — is
+                step-streaming in scope?
+              </div>
+            </li>
+          </ol>
+        </div>
+
+        <hr />
+
+        <h2 data-annotation-id="table-example">
+          <span class="n">Table</span>Data table
+        </h2>
+        <table class="data" data-annotate-whole>
+          <tr>
+            <th>work item</th>
+            <th class="num">hours</th>
+          </tr>
+          <tr>
+            <td>Nightly pipeline, productized</td>
+            <td class="num">38</td>
+          </tr>
+          <tr>
+            <td>Agent hardening + evals</td>
+            <td class="num">20</td>
+          </tr>
+          <tr class="total">
+            <td>Total</td>
+            <td class="num">58</td>
+          </tr>
+        </table>
+
+        <hr />
+
         <h2 data-annotation-id="chain-example">
           <span class="n">Visual</span>Gate chain
         </h2>
