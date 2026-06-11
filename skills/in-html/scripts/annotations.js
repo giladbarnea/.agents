@@ -31,6 +31,11 @@
     CSS.highlights.set("annotation-selection", annotationSelectionHighlight);
   }
 
+  const hoverOverlay = document.createElement("div");
+  hoverOverlay.className = "annotation-hover-overlay";
+  hoverOverlay.dataset.annotationUi = "hover";
+  document.body.appendChild(hoverOverlay);
+
   function elementHasOwnText(element) {
     return Array.from(element.childNodes).some(
       (node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim(),
@@ -126,6 +131,25 @@
     return element;
   }
 
+  const hoverOverlayOffset = 6;
+
+  // `instant` snaps the ring into place (first reveal, scroll, resize); without
+  // it the ring glides and resizes between adjacent elements.
+  function positionHoverOverlay(element, instant) {
+    const rect = element.getBoundingClientRect();
+    if (instant) {
+      hoverOverlay.style.transition = "none";
+    }
+    hoverOverlay.style.left = `${rect.left - hoverOverlayOffset}px`;
+    hoverOverlay.style.top = `${rect.top - hoverOverlayOffset}px`;
+    hoverOverlay.style.width = `${rect.width + hoverOverlayOffset * 2}px`;
+    hoverOverlay.style.height = `${rect.height + hoverOverlayOffset * 2}px`;
+    if (instant) {
+      hoverOverlay.getBoundingClientRect();
+      hoverOverlay.style.transition = "";
+    }
+  }
+
   function setHighlightedAnnotationElement(element) {
     if (highlightedAnnotationElement === element) {
       return;
@@ -134,8 +158,12 @@
       highlightedAnnotationElement.classList.remove("annotation-hover");
     }
     highlightedAnnotationElement = element;
-    if (highlightedAnnotationElement) {
-      highlightedAnnotationElement.classList.add("annotation-hover");
+    if (element) {
+      element.classList.add("annotation-hover");
+      positionHoverOverlay(element, !hoverOverlay.classList.contains("show"));
+      hoverOverlay.classList.add("show");
+    } else {
+      hoverOverlay.classList.remove("show");
     }
   }
 
@@ -339,14 +367,44 @@
     });
   }
 
-  function closeAnnotationEditor() {
-    if (activeAnnotationEditor) {
-      activeAnnotationEditor.remove();
+  // Removes the editor once its exit transition finishes, falling back to an
+  // immediate removal when motion is disabled (so reduced-motion never leaves
+  // an orphaned node waiting on a transitionend that never fires).
+  function removeEditorAfterTransition(editor) {
+    const maxDuration = Math.max(
+      0,
+      ...getComputedStyle(editor)
+        .transitionDuration.split(",")
+        .map((value) => Number.parseFloat(value) || 0),
+    );
+    if (maxDuration === 0) {
+      editor.remove();
+      return;
     }
+    let removed = false;
+    const remove = () => {
+      if (removed) {
+        return;
+      }
+      removed = true;
+      editor.remove();
+    };
+    editor.addEventListener("transitionend", remove, { once: true });
+    window.setTimeout(remove, maxDuration * 1000 + 60);
+  }
+
+  function closeAnnotationEditor() {
+    const editor = activeAnnotationEditor;
     activeAnnotationEditor = null;
     activeAnnotationElement = null;
     setActiveAnnotationSelection(null);
     setHighlightedAnnotationElement(null);
+    if (!editor) {
+      return;
+    }
+    editor.classList.remove("open");
+    editor.classList.add("closing");
+    removeEditorAfterTransition(editor);
   }
 
   function showAnnotationStatus(statusElement, className, text) {
@@ -533,13 +591,13 @@
     });
   }
 
-  async function writeAnnotation(element, userInput, specificallySelected, timestamp) {
+  async function writeAnnotation(selector, text, userInput, specificallySelected, timestamp) {
     const response = await fetch(annotationEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        selector: selectorForAnnotationElement(element),
-        text: normalizedElementText(element),
+        selector,
+        text,
         userInput,
         specificallySelected,
         timestamp,
@@ -554,6 +612,23 @@
     throw new Error(`Annotation write failed (${response.status}): ${details}`);
   }
 
+  // Reads the persisted annotations straight back to confirm the write landed,
+  // matching on the note text and its unique-per-submit timestamp.
+  async function annotationWasPersisted(selector, userInput, timestamp) {
+    const response = await fetch(annotationEndpoint, {
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (!response.ok) {
+      throw new Error(`Annotation read-back failed (${response.status}).`);
+    }
+
+    const annotations = await response.json();
+    return annotationUserInputs(annotations[selector] || {}).some(
+      (item) =>
+        annotationInputText(item) === userInput && item.timestamp === timestamp,
+    );
+  }
+
   function clamp(value, min, max) {
     if (max < min) {
       return min;
@@ -561,19 +636,70 @@
     return Math.min(Math.max(value, min), max);
   }
 
+  // The editor's left/top are its top-left corner: dragging and resizing both
+  // behave intuitively, and a single clamp keeps it fully inside the viewport.
+  function clampEditorPosition(left, top, width, height) {
+    return {
+      left: clamp(left, 0, window.innerWidth - width),
+      top: clamp(top, 0, window.innerHeight - height),
+    };
+  }
+
   function positionAnnotationEditor(editor, element) {
     const elementRect = element.getBoundingClientRect();
-    const editorRect = editor.getBoundingClientRect();
-    const targetCenterX = elementRect.left + elementRect.width / 2;
-    const targetTop = elementRect.top + elementRect.height / 2;
-    const left = clamp(
-      targetCenterX,
-      editorRect.width / 2,
-      window.innerWidth - editorRect.width / 2,
+    const width = editor.offsetWidth;
+    const height = editor.offsetHeight;
+    const position = clampEditorPosition(
+      elementRect.left + elementRect.width / 2 - width / 2,
+      elementRect.top + elementRect.height / 2,
+      width,
+      height,
     );
-    const top = clamp(targetTop, 0, window.innerHeight - editorRect.height);
-    editor.style.left = `${left}px`;
-    editor.style.top = `${top}px`;
+    editor.style.left = `${position.left}px`;
+    editor.style.top = `${position.top}px`;
+  }
+
+  function reclampAnnotationEditor(editor) {
+    const position = clampEditorPosition(
+      Number.parseFloat(editor.style.left) || 0,
+      Number.parseFloat(editor.style.top) || 0,
+      editor.offsetWidth,
+      editor.offsetHeight,
+    );
+    editor.style.left = `${position.left}px`;
+    editor.style.top = `${position.top}px`;
+  }
+
+  function makeAnnotationEditorDraggable(editor, handle) {
+    handle.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      // Settle any in-flight entrance transform before measuring, so a drag
+      // started mid-animation doesn't jump on the first move.
+      editor.classList.add("dragging");
+      const rect = editor.getBoundingClientRect();
+      const grabX = event.clientX - rect.left;
+      const grabY = event.clientY - rect.top;
+
+      const onMove = (moveEvent) => {
+        const position = clampEditorPosition(
+          moveEvent.clientX - grabX,
+          moveEvent.clientY - grabY,
+          editor.offsetWidth,
+          editor.offsetHeight,
+        );
+        editor.style.left = `${position.left}px`;
+        editor.style.top = `${position.top}px`;
+      };
+
+      const onUp = () => {
+        editor.classList.remove("dragging");
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    });
   }
 
   function openAnnotationEditor(element) {
@@ -587,18 +713,21 @@
 
     const editor = document.createElement("div");
     editor.className = "annotation-editor";
-    editor.style.visibility = "hidden";
     editor.innerHTML =
-      '<div class="annotation-selection-preview" hidden><span class="annotation-selection-arrow" aria-hidden="true">↳</span><q class="annotation-selection-text"></q></div><textarea aria-label="Annotation text" autofocus></textarea><div class="annotation-status"></div>';
+      '<div class="annotation-editor-handle" data-annotation-ui="handle" aria-hidden="true"></div><div class="annotation-selection-preview" hidden><span class="annotation-selection-arrow" aria-hidden="true">↳</span><q class="annotation-selection-text"></q></div><textarea aria-label="Annotation text" autofocus></textarea><div class="annotation-status"></div>';
     document.body.appendChild(editor);
     positionAnnotationEditor(editor, element);
-    editor.style.visibility = "visible";
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => editor.classList.add("open")),
+    );
 
     const textarea = editor.querySelector("textarea");
     const status = editor.querySelector(".annotation-status");
+    const handle = editor.querySelector(".annotation-editor-handle");
     activeAnnotationEditor = editor;
     updateAnnotationSelectionPreview();
     textarea.focus();
+    makeAnnotationEditorDraggable(editor, handle);
 
     textarea.addEventListener("keydown", async (event) => {
       if (
@@ -617,26 +746,42 @@
         return;
       }
 
+      const annotatedElement = activeAnnotationElement;
+      const specificallySelected = activeAnnotationSelection;
       const timestamp = localIsoTimestamp();
+      const selector = selectorForAnnotationElement(annotatedElement);
+      const text = normalizedElementText(annotatedElement);
+
+      textarea.disabled = true;
       try {
         await writeAnnotation(
-          activeAnnotationElement,
+          selector,
+          text,
           userInput,
-          activeAnnotationSelection,
+          specificallySelected,
           timestamp,
         );
+        const persisted = await annotationWasPersisted(
+          selector,
+          userInput,
+          timestamp,
+        );
+        if (!persisted) {
+          throw new Error(
+            "Write returned ok but the annotation was absent on read-back.",
+          );
+        }
         recordWrittenAnnotation(
-          activeAnnotationElement,
+          annotatedElement,
           userInput,
-          activeAnnotationSelection,
+          specificallySelected,
           timestamp,
         );
-        editor.classList.add("inactive");
-        textarea.disabled = true;
         showAnnotationStatus(status, "ok", "✓");
-        window.setTimeout(closeAnnotationEditor, 500);
+        closeAnnotationEditor();
       } catch (error) {
         console.error(error);
+        textarea.disabled = false;
         showAnnotationStatus(status, "fail", "✕");
         textarea.focus();
       }
@@ -774,13 +919,25 @@
   });
 
   window.addEventListener("resize", () => {
-    if (activeAnnotationEditor && activeAnnotationElement) {
-      positionAnnotationEditor(activeAnnotationEditor, activeAnnotationElement);
+    if (activeAnnotationEditor) {
+      reclampAnnotationEditor(activeAnnotationEditor);
+    }
+    if (highlightedAnnotationElement) {
+      positionHoverOverlay(highlightedAnnotationElement, true);
     }
     positionAnnotationPreviews();
   });
 
-  window.addEventListener("scroll", positionAnnotationPreviews, { passive: true });
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (highlightedAnnotationElement) {
+        positionHoverOverlay(highlightedAnnotationElement, true);
+      }
+      positionAnnotationPreviews();
+    },
+    { passive: true },
+  );
 
   loadAnnotations().catch((error) => console.warn(error));
 })();
