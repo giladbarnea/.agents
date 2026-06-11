@@ -173,3 +173,97 @@ Requires layer 1 only.
   <span class="imp">needs field_name</span>
 </p>
 ```
+
+## Status checklist
+
+Requires layer 1 only. The opening section of any status/brief page: one row per item, each with a state badge. States: `wait` (blue — blocked on someone else), `act` (amber — the reader's move), `flag` (red — open question or risk), `done` (green), `dim` (gray — deferred/later). Badge text is free-form; the class only sets the color.
+
+```html
+<ol class="tasks">
+  <li>
+    <span class="state wait">waiting</span>
+    <div><strong>Vendor sends credentials</strong> — promised today; chase if late.</div>
+  </li>
+  <li>
+    <span class="state act">your move</span>
+    <div><strong>Forward credentials to ops</strong> and request the copy.</div>
+  </li>
+  <li>
+    <span class="state flag">open question</span>
+    <div><strong>Which path is real?</strong> Two sources disagree.</div>
+  </li>
+  <li>
+    <span class="state dim">later</span>
+    <div><strong>Identify the file format</strong> once it arrives.</div>
+  </li>
+</ol>
+```
+
+## Gate chain
+
+Requires layer 1 only. A path through nodes with barriers between them — locks, approvals, network hops, format conversions. Each `.cgate` names the barrier, who holds its key, and its state: `open` (green), `shut` (red), or no class (neutral). Alternate `.cnode` and `.cgate` freely; nodes flex, gates are fixed-width. Stacks vertically on narrow screens.
+
+```html
+<div class="chain">
+  <div class="cnode">
+    <h4>Your laptop</h4>
+    <p>Where the file must land.</p>
+  </div>
+  <div class="cgate shut">
+    <span class="gicon">🔒</span>
+    <span class="gname">Network gate</span>
+    <span class="gwho">key: ops → host</span>
+    <span class="gstate">shut — no route</span>
+  </div>
+  <div class="cnode">
+    <h4>Server</h4>
+    <p>Holds the artifact; not publicly routable.</p>
+  </div>
+  <div class="cgate open">
+    <span class="gicon">🔓</span>
+    <span class="gname">Permission gate</span>
+    <span class="gwho">key: vendor</span>
+    <span class="gstate">opening today</span>
+  </div>
+  <div class="cnode">
+    <h4>The artifact</h4>
+    <p>Readable only with the vendor's credentials.</p>
+  </div>
+</div>
+```
+
+## Tree
+
+Requires layer 1 only. Hierarchies, org charts, who-controls-what. Rows of nodes joined by connector pieces: `.tstem` (vertical line), `.tsplit` (one parent fans out to two children), `.tjoin` (two parents merge into one child). `.trow.two` holds two siblings with an optional `.tnote` between them (add `.bad` to color it as a warning, e.g. "don't know each other"). `.tag` pills (`blue`/`amber`/`green`/`red`) mark layers or categories — reuse the same tag colors elsewhere on the page to cross-reference.
+
+```html
+<div class="tree">
+  <div class="trow">
+    <div class="tnode">
+      <h4>Client</h4>
+      <p>Contracted both vendors separately.</p>
+    </div>
+  </div>
+  <div class="tstem"></div>
+  <div class="tsplit"></div>
+  <div class="trow two">
+    <div class="tnode">
+      <h4>Vendor A <span class="tag blue">machine layer</span></h4>
+      <p>Administers the box. Can't touch the app's files.</p>
+    </div>
+    <div class="tnote bad">don't know<br />each other</div>
+    <div class="tnode">
+      <h4>Vendor B <span class="tag amber">file layer</span></h4>
+      <p>Owns the app and its files. No admin access to the box.</p>
+    </div>
+  </div>
+  <div class="tjoin"></div>
+  <div class="tstem"></div>
+  <div class="trow">
+    <div class="tnode">
+      <h4>The box</h4>
+      <p>One machine, two controllers on different layers.</p>
+    </div>
+  </div>
+</div>
+```

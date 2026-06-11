@@ -200,6 +200,106 @@
           <span class="counter">#1</span> A question ⇒
           <span class="imp">needs field_name</span>
         </p>
+
+        <hr />
+
+        <h2 data-annotation-id="tasks-example">
+          <span class="n">Status</span>Status checklist
+        </h2>
+        <ol class="tasks">
+          <li>
+            <span class="state wait">waiting</span>
+            <div>
+              <strong>Vendor sends credentials</strong> — promised today; chase
+              if late.
+            </div>
+          </li>
+          <li>
+            <span class="state act">your move</span>
+            <div>
+              <strong>Forward credentials to ops</strong> and request the copy.
+            </div>
+          </li>
+          <li>
+            <span class="state flag">open question</span>
+            <div><strong>Which path is real?</strong> Two sources disagree.</div>
+          </li>
+          <li>
+            <span class="state done">done</span>
+            <div><strong>Reached the vendor</strong> by phone.</div>
+          </li>
+          <li>
+            <span class="state dim">later</span>
+            <div><strong>Identify the file format</strong> once it arrives.</div>
+          </li>
+        </ol>
+
+        <hr />
+
+        <h2 data-annotation-id="chain-example">
+          <span class="n">Visual</span>Gate chain
+        </h2>
+        <div class="chain">
+          <div class="cnode">
+            <h4>Your laptop</h4>
+            <p>Where the file must land.</p>
+          </div>
+          <div class="cgate shut">
+            <span class="gicon">🔒</span>
+            <span class="gname">Network gate</span>
+            <span class="gwho">key: ops → host</span>
+            <span class="gstate">shut — no route</span>
+          </div>
+          <div class="cnode">
+            <h4>Server</h4>
+            <p>Holds the artifact; not publicly routable.</p>
+          </div>
+          <div class="cgate open">
+            <span class="gicon">🔓</span>
+            <span class="gname">Permission gate</span>
+            <span class="gwho">key: vendor</span>
+            <span class="gstate">opening today</span>
+          </div>
+          <div class="cnode">
+            <h4>The artifact</h4>
+            <p>Readable only with the vendor's credentials.</p>
+          </div>
+        </div>
+
+        <hr />
+
+        <h2 data-annotation-id="tree-example">
+          <span class="n">Visual</span>Tree
+        </h2>
+        <div class="tree">
+          <div class="trow">
+            <div class="tnode">
+              <h4>Client</h4>
+              <p>Contracted both vendors separately.</p>
+            </div>
+          </div>
+          <div class="tstem"></div>
+          <div class="tsplit"></div>
+          <div class="trow two">
+            <div class="tnode">
+              <h4>Vendor A <span class="tag blue">machine layer</span></h4>
+              <p>Administers the box. Can't touch the app's files.</p>
+            </div>
+            <div class="tnote bad">don't know<br />each other</div>
+            <div class="tnode">
+              <h4>Vendor B <span class="tag amber">file layer</span></h4>
+              <p>Owns the app and its files. No admin access to the box.</p>
+            </div>
+          </div>
+          <div class="tjoin"></div>
+          <div class="tstem"></div>
+          <div class="trow">
+            <div class="tnode">
+              <h4>The box</h4>
+              <p>One machine, two controllers on different layers.</p>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   </body>

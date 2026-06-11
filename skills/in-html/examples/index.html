@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Avidor DB Access</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&display=swap"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script defer src="interactions.js"></script>
+  </head>
+  <body>
+    <div class="wrap">
+      <main class="col" id="content" dir="auto">
+        <h1>Avidor DB Access</h1>
+        <p class="sub">
+          Nightly Oracle dump on 172.15.70.10 · status as of 2026-06-10
+        </p>
+        <p class="lead">
+          Two locks stand between you and the dump. One opens within the hour;
+          the other gets bypassed today and solved properly later.
+        </p>
+
+        <h2><span class="n">§1</span> Next moves</h2>
+        <ol class="tasks">
+          <li>
+            <span class="state wait">waiting</span>
+            <div>
+              <strong>Yuval sends username + password</strong> — promised
+              within the hour. If it doesn't arrive, chase him.
+            </div>
+          </li>
+          <li>
+            <span class="state act">your move</span>
+            <div>
+              <strong>Get the credentials to Elad</strong> so he can copy the
+              dump and send it to you. Ask for a Drive share to your account,
+              not a public link — this is the entire customer database, medical
+              data included.
+            </div>
+          </li>
+          <li>
+            <span class="state act">your move</span>
+            <div>
+              <strong>Same call — ask Elad for VPN or SSH access</strong> for
+              the repeatable nightly 2 AM sync. This is an Elad/Bezeq request;
+              Yuval can't help with it.
+            </div>
+          </li>
+          <li>
+            <span class="state flag">open question</span>
+            <div>
+              <strong>Which path is real?</strong> Elad sees
+              <code>/backup/export</code>; Yuval said
+              <code>/backup1/export</code>. Have Elad confirm while he's in
+              there.
+            </div>
+          </li>
+          <li>
+            <span class="state dim">later</span>
+            <div>
+              <strong>When the dump arrives, run <code>file</code> on
+                it</strong>
+              before anything else — everything downstream depends on its
+              format (see bottom).
+            </div>
+          </li>
+        </ol>
+
+        <h2><span class="n">§2</span> The two locks</h2>
+        <p>The path from your laptop to the file, and what blocks each leg:</p>
+
+        <div class="chain">
+          <div class="cnode">
+            <h4>Your laptop</h4>
+            <p>Where the file must land. No VPN, no route in.</p>
+          </div>
+          <div class="cgate shut">
+            <span class="gicon">🔒</span>
+            <span class="gname">Network lock</span>
+            <span class="gwho">key: Elad → Bezeq</span>
+            <span class="gstate">shut — no route</span>
+          </div>
+          <div class="cnode">
+            <h4>Server · 172.15.70.10</h4>
+            <p>
+              Ran's rented box in Bezeq's data center. Not publicly routable.
+              Elad can SSH in; Yuval's software runs on it.
+            </p>
+          </div>
+          <div class="cgate open">
+            <span class="gicon">🔓</span>
+            <span class="gname">File lock</span>
+            <span class="gwho">key: Yuval (Aviv)</span>
+            <span class="gstate">opening — creds in 1h</span>
+          </div>
+          <div class="cnode">
+            <h4>The dump</h4>
+            <p>
+              Nightly Oracle export, owned by Aviv's <code>oracle</code> OS
+              user. Listable but unreadable without Yuval's credentials.
+            </p>
+          </div>
+        </div>
+
+        <div class="callout good">
+          <strong>Today's path bypasses the network lock:</strong> Elad opens
+          the file lock with Yuval's credentials from <em>inside</em>, copies
+          the dump, and pushes it out to you via Drive. Only the nightly sync
+          needs the network lock truly opened — VPN/SSH, move #3 above.
+        </div>
+
+        <h2><span class="n">§3</span> Who's who</h2>
+        <p>
+          Three companies, one box. Each party controls exactly one layer and
+          can't see the others:
+        </p>
+
+        <div class="tree">
+          <div class="trow">
+            <div class="tnode">
+              <h4>Ran · Avidor</h4>
+              <p>
+                The client. Contracted Elad and Yuval separately — which is why
+                neither knows the other. Gave Elad your number; Elad expects
+                your call.
+              </p>
+            </div>
+          </div>
+          <div class="tstem"></div>
+          <div class="tsplit"></div>
+          <div class="trow two">
+            <div class="tnode">
+              <h4>
+                Elad &amp; Roma · LOGI
+                <span class="tag blue">machine layer</span>
+              </h4>
+              <p>
+                Ran's IT contractor. Administers the server — SSH, config,
+                Bezeq liaison. Cannot touch Oracle's files.
+              </p>
+            </div>
+            <div class="tnote bad">don't know<br />each other</div>
+            <div class="tnode">
+              <h4>
+                Yuval · Aviv
+                <span class="tag amber">file layer</span>
+              </h4>
+              <p>
+                CRM vendor. Runs Oracle and the nightly export job; owns the
+                file permissions. No admin access to the server itself.
+              </p>
+            </div>
+          </div>
+          <div class="tjoin"></div>
+          <div class="tstem"></div>
+          <div class="trow">
+            <div class="tnode">
+              <h4>Server · 172.15.70.10</h4>
+              <p>
+                Hosted by Bezeq — bottom of the stack, only relevant if the VPN
+                requires them. Elad administers it; Yuval's export job writes
+                the dump on it.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <aside class="note">
+          Yuval not knowing who Elad is is a signal, not a gap. Hosting
+          provider → IT contractor → application vendor is a standard stack,
+          and each layer is invisible to the one above it. Nobody was being
+          evasive.
+        </aside>
+
+        <hr />
+
+        <details class="disclose" id="cracking">
+          <summary class="head">
+            <span class="tri">▸</span> When the file arrives — cracking the
+            dump open
+          </summary>
+          <div class="body">
+            <p>
+              First, identify the format: run <code>file</code> on it and look
+              at the header. Two possibilities:
+            </p>
+            <div class="ba">
+              <div class="pane">
+                <h4><span>Data Pump export (.dmp)</span></h4>
+                <span class="verdict ok">best case</span>
+                <p class="txt">
+                  Import into Oracle Database Free — free, runs in Docker, no
+                  license — with <code>impdp</code>, then bulk-export
+                  everything to CSV/Parquet and load into DuckDB.
+                </p>
+              </div>
+              <div class="pane">
+                <h4><span>RMAN backup</span></h4>
+                <span class="verdict no">harder</span>
+                <p class="txt">
+                  Restores only into a matching Oracle instance; doable with
+                  the free edition if versions align. Better move: ask Yuval to
+                  add a Data Pump or CSV step to the nightly job — a request he
+                  anticipated.
+                </p>
+              </div>
+            </div>
+          </div>
+        </details>
+      </main>
+    </div>
+  </body>
+</html>

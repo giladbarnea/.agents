@@ -58,6 +58,31 @@ node annotation-writer.mjs
 
 Then open `http://127.0.0.1:8765/index.html`. If using a separate static server, run `node annotation-writer.mjs` too; annotation writes still post to `http://127.0.0.1:8765/annotations`.
 
+## Design principles
+
+The page's job is to install knowledge, not to restyle text. The source material was already prose; if the page renders the same facts as paragraphs inside prettier boxes, the reader still does all the extraction work and the transformation added nothing. Before authoring, identify the **shapes** hiding in the material and give each shape its native representation:
+
+| Content shape | Representation |
+| --- | --- |
+| Actions, statuses, owners, open questions | `.tasks` status checklist |
+| A path with barriers (locks, approvals, hops, conversions) | `.chain` gate chain |
+| Hierarchy, org chart, who-controls-what | `.tree` |
+| Process / sequence of stages | `.pipe` |
+| Comparison, before/after, either/or | `.ba` panes, segmented tabs |
+| Background, reference, "later" material | `.disclose`, collapsed |
+| Insight, caveat, judgment | short prose, `aside.note`, `.callout` |
+
+Prose is the fallback for what genuinely has no shape — insights, caveats, synthesis — not the default.
+
+1. Order by reader need: actions and answers first, the explanatory model second, reference material last and collapsed. Don't make the reader scroll past theory to find their next move.
+2. State each fact exactly once, in its best representation. If the same fact appears in two sections, one of them is the wrong representation — cut it from there. Target roughly a third of the source's word count.
+3. Encode state and urgency visually — state badges, gate colors, verdicts — never only in words. A status page where everything looks equally calm has failed.
+4. Disclosure polarity: collapse background and reference; never collapse operationally critical content. `open`-by-default is reserved for what the reader needs right now.
+5. Interaction must pay for itself: a click should reveal something the reader didn't need before clicking. Highlighting prose the reader must read anyway is decoration — omit it.
+6. The visually loudest element must be the most consequential one. Audit every `hot`, badge, and accent: does emphasis track importance?
+7. Don't force the densest content into the narrowest container, and don't let one section mix timescales or audiences (now vs. later, action vs. reference) — split it instead.
+8. The installation test, before shipping: after a 30-second read, could the reader redraw the diagrams and recite the next actions from memory? If a section only re-reads well rather than recalls well, reshape it.
+
 ## Authoring rules
 
 Edit `index.html` by replacing only the `CONTENT START` block with arbitrary page content. Keep the imports intact for the chosen layer set.

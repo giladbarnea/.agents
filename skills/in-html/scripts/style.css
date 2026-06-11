@@ -636,3 +636,273 @@ aside.note {
     transform: rotate(90deg);
   }
 }
+
+.tasks {
+  list-style: none;
+  margin: 1.2rem 0;
+  padding: 0;
+}
+.tasks li {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 0.9rem;
+  align-items: baseline;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.95rem;
+}
+.tasks li:first-child {
+  border-top: 1px solid var(--rule);
+}
+.state {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 0.18rem 0.4rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.state.wait {
+  background: var(--bluebg);
+  color: var(--blue);
+}
+.state.act {
+  background: var(--accentbg);
+  color: var(--accent);
+}
+.state.flag {
+  background: var(--badbg);
+  color: var(--bad);
+}
+.state.done {
+  background: var(--goodbg);
+  color: var(--good);
+}
+.state.dim {
+  background: #efefe8;
+  color: var(--faint);
+}
+
+.chain {
+  display: flex;
+  align-items: stretch;
+  margin: 1.6rem 0 0.8rem;
+  width: min(58rem, calc(100vw - 3rem));
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.cnode {
+  flex: 1 1 0;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: #fffefb;
+  padding: 0.75rem 0.85rem;
+}
+.cnode h4 {
+  margin: 0;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.cnode p {
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+  color: var(--faint);
+  line-height: 1.4;
+  max-width: none;
+}
+.cgate {
+  flex: 0 0 10.5rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.2rem;
+  padding: 0 0.4rem;
+}
+.cgate::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed #c9c0a4;
+}
+.cgate > * {
+  position: relative;
+  background: var(--paper);
+  padding: 0 0.25rem;
+}
+.cgate .gicon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+.cgate .gname {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.cgate .gwho {
+  font-size: 0.7rem;
+  color: var(--faint);
+}
+.cgate .gstate {
+  font-size: 0.7rem;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+}
+.cgate.open .gname {
+  color: var(--good);
+}
+.cgate.open .gstate {
+  background: var(--goodbg);
+  color: var(--good);
+}
+.cgate.shut .gname {
+  color: var(--bad);
+}
+.cgate.shut .gstate {
+  background: var(--badbg);
+  color: var(--bad);
+}
+
+.tree {
+  margin: 1.6rem 0 0.8rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.tree .trow {
+  display: flex;
+  justify-content: center;
+}
+.tree .trow.two {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 0.8rem;
+  align-items: start;
+}
+.tree .tnode {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: #fffefb;
+  padding: 0.65rem 0.9rem;
+  max-width: 24rem;
+}
+.tree .tnode h4 {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.tree .tnode p {
+  margin: 0.2rem 0 0;
+  color: var(--faint);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  max-width: none;
+}
+.tree .tstem {
+  width: 1px;
+  height: 1.1rem;
+  background: #c9c0a4;
+  margin: 0 auto;
+}
+.tree .tsplit,
+.tree .tjoin {
+  width: 50%;
+  height: 1.1rem;
+  margin: 0 auto;
+  border-inline: 1px solid #c9c0a4;
+}
+.tree .tsplit {
+  border-top: 1px solid #c9c0a4;
+}
+.tree .tjoin {
+  border-bottom: 1px solid #c9c0a4;
+}
+.tree .tnote {
+  font-size: 0.7rem;
+  font-style: italic;
+  color: var(--faint);
+  text-align: center;
+  max-width: 7.5rem;
+  line-height: 1.3;
+  align-self: center;
+}
+.tree .tnote.bad {
+  color: var(--bad);
+}
+
+.tag {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.tag.blue {
+  background: var(--bluebg);
+  color: var(--blue);
+}
+.tag.amber {
+  background: var(--accentbg);
+  color: var(--accent);
+}
+.tag.green {
+  background: var(--goodbg);
+  color: var(--good);
+}
+.tag.red {
+  background: var(--badbg);
+  color: var(--bad);
+}
+
+@media (max-width: 680px) {
+  .chain {
+    flex-direction: column;
+    width: auto;
+  }
+  .cgate {
+    flex-basis: auto;
+    padding: 0.7rem 0;
+  }
+  .cgate::before {
+    left: 50%;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    border-top: 0;
+    border-left: 1px dashed #c9c0a4;
+  }
+  .tree .trow.two {
+    grid-template-columns: 1fr;
+  }
+  .tree .tsplit,
+  .tree .tjoin {
+    width: 1px;
+    border: 0;
+    background: #c9c0a4;
+  }
+  .tree .tnote {
+    max-width: none;
+  }
+  .tasks li {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+  .tasks .state {
+    justify-self: start;
+  }
+}
