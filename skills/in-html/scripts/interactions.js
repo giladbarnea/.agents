@@ -125,6 +125,7 @@
     const returnButton = document.createElement("button");
     returnButton.type = "button";
     returnButton.className = "crossref-return";
+    returnButton.dataset.annotationUi = "crossref-return";
     returnButton.textContent = "↩ Back to where you were";
     returnButton.addEventListener("click", () => {
       const departureScrollY = returnStack.pop();
