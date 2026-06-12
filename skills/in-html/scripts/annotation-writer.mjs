@@ -74,6 +74,18 @@ function assertAnnotationPayload(payload) {
   }
 }
 
+function assertAnnotationsSnapshot(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Annotations snapshot must be an object.');
+  }
+
+  for (const [selector, annotation] of Object.entries(payload)) {
+    if (!annotation || typeof annotation !== 'object' || typeof annotation.text !== 'string' || !Array.isArray(annotation.userInputs)) {
+      throw new Error(`Annotations snapshot entry "${selector}" must have a string "text" and an array "userInputs".`);
+    }
+  }
+}
+
 async function readAnnotations() {
   try {
     const text = await fs.readFile(annotationsPath, 'utf8');
@@ -236,12 +248,44 @@ async function handleAnnotations(request, response) {
   sendJson(response, 200, {ok: true, path: annotationsPath});
 }
 
+// Replaces the entire annotations file with a client-held snapshot — the undo
+// path for a deletion: the client snapshots the file just before deleting and
+// writes it back verbatim on revert.
+async function handleAnnotationsRestore(request, response) {
+  if (!setCorsHeaders(request, response)) {
+    sendJson(response, 403, {ok: false, error: 'Origin is not allowed.'});
+    return;
+  }
+
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    sendJson(response, 405, {ok: false, error: 'Use POST /annotations/restore.'});
+    return;
+  }
+
+  const payload = await readRequestJson(request);
+  assertAnnotationsSnapshot(payload);
+  await writeAnnotations(payload);
+
+  sendJson(response, 200, {ok: true, path: annotationsPath});
+}
+
 const server = http.createServer(async (request, response) => {
   try {
     const requestUrl = new URL(request.url, `http://${request.headers.host}`);
 
     if (requestUrl.pathname === '/annotations') {
       await handleAnnotations(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/annotations/restore') {
+      await handleAnnotationsRestore(request, response);
       return;
     }
 

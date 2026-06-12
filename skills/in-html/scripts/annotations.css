@@ -385,6 +385,19 @@
   background: var(--badbg);
   color: var(--bad);
 }
+/* A deleted note stays in the preview as a struck-through tombstone whose
+   Revert (the only live button left) undoes the deletion by restoring the
+   annotations file exactly as it was the moment before the delete. The undo
+   lives only as long as the preview stays open. */
+.annotation-note-deleted p[contenteditable] {
+  color: var(--faint);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--bad) 55%, transparent);
+  cursor: default;
+}
+.annotation-note-deleted .annotation-preview-selected {
+  opacity: 0.55;
+}
 
 /* Under reduced motion, keep the gentle opacity fades (vestibular-safe) but
    drop the transform lift, scale, and positional glide. */

@@ -18,10 +18,17 @@ Decisions and why:
    replaces text in place and never touches the timestamp, and deletes are a `DELETE` of
    `{selector, timestamp}` (the selector entry goes with its last note). Legacy string-form notes
    have no timestamp and deliberately stay read-only. A non-matching timestamp 404s — no upsert.
-3. **Same trust chain as creation:** save and delete go write → read-back → only then update
-   in-memory state; `persistedNoteWithTimestamp` is the shared read-back, asserted present (text
-   matching) after a save and absent after a delete. Deleting an element's last note also retires
-   its marker and annotated status, so the page fully forgets it without a reload.
+3. **Same trust chain as creation:** save, delete, and restore go write → read-back → only then
+   update in-memory state; `persistedNoteWithTimestamp` is the shared read-back, asserted present
+   (text matching) after a save, absent after a delete, and present again after a restore.
+   Deleting an element's last note also retires its marker and annotated status, so the page fully
+   forgets it without a reload.
+4. **Deletion is undoable via a whole-file snapshot.** The client GETs the annotations file just
+   before the DELETE and a tombstoned note's Revert POSTs it back verbatim to
+   `/annotations/restore` — structure-agnostic by deliberate choice (the user's call) over
+   re-inserting the single note. Known trade-offs, accepted: a restore also rolls back any other
+   writes made between the delete and the revert, and multiple tombstones revert cleanly only in
+   last-deleted-first order. The undo is scoped to the open preview.
 4. Keyboard semantics mirror the editor (Enter saves, Escape reverts); the note's Escape stops
    propagation so it doesn't bubble into the document-level "close all previews" handler.
 
