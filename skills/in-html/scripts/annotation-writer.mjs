@@ -37,7 +37,7 @@ function setCorsHeaders(request, response) {
   }
 
   response.setHeader('Access-Control-Allow-Origin', origin ?? '*');
-  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   response.setHeader('Vary', 'Origin');
   return true;
@@ -67,6 +67,18 @@ function assertAnnotationPayload(payload) {
 
   if (payload.specificallySelected !== undefined && typeof payload.specificallySelected !== 'string') {
     throw new Error('Annotation payload field "specificallySelected" must be a string.');
+  }
+}
+
+function assertAnnotationEditPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Annotation edit payload must be an object.');
+  }
+
+  for (const key of ['selector', 'timestamp', 'userInput']) {
+    if (typeof payload[key] !== 'string') {
+      throw new Error(`Annotation edit payload field "${key}" must be a string.`);
+    }
   }
 }
 
@@ -158,8 +170,30 @@ async function handleAnnotations(request, response) {
     return;
   }
 
+  // PUT edits one existing note in place, identified by its selector and
+  // unique-per-submit timestamp; the timestamp stays as the note's identity.
+  if (request.method === 'PUT') {
+    const payload = await readRequestJson(request);
+    assertAnnotationEditPayload(payload);
+
+    const annotations = await readAnnotations();
+    const userInputs = annotations[payload.selector]?.userInputs;
+    const note = Array.isArray(userInputs)
+      ? userInputs.find(item => item?.timestamp === payload.timestamp)
+      : undefined;
+    if (!note) {
+      sendJson(response, 404, {ok: false, error: 'No annotation note matches that selector and timestamp.'});
+      return;
+    }
+    note.userInput = payload.userInput;
+    await writeAnnotations(annotations);
+
+    sendJson(response, 200, {ok: true, path: annotationsPath});
+    return;
+  }
+
   if (request.method !== 'POST') {
-    sendJson(response, 405, {ok: false, error: 'Use GET or POST /annotations.'});
+    sendJson(response, 405, {ok: false, error: 'Use GET, POST, or PUT /annotations.'});
     return;
   }
 

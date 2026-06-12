@@ -490,12 +490,113 @@
       const body = document.createElement("p");
       body.textContent = annotationInputText(userInput);
       note.append(body);
+      if (typeof userInput !== "string" && userInput.timestamp) {
+        enableAnnotationNoteEditing(note, body, element, userInput);
+      }
       list.append(note);
     });
     preview.append(list);
     makeAnnotationPreviewDraggable(preview);
 
     return preview;
+  }
+
+  // Notes edit in place: the paragraph is always plaintext-editable, so a
+  // click drops the caret exactly where the reader pressed. Save/Revert
+  // surface only once the text differs from what's on disk; a save replaces
+  // the note's text keyed by its original timestamp and goes through the same
+  // write-then-read-back verification as a new annotation. Legacy notes
+  // without a timestamp stay read-only — nothing identifies them on disk.
+  function enableAnnotationNoteEditing(note, noteBody, element, item) {
+    let savedText = annotationInputText(item);
+    noteBody.setAttribute("contenteditable", "plaintext-only");
+    noteBody.setAttribute("spellcheck", "false");
+    noteBody.setAttribute("aria-label", "Annotation note (editable)");
+
+    const actions = document.createElement("div");
+    actions.className = "annotation-note-actions";
+    actions.dataset.annotationUi = "note-actions";
+
+    const saveButton = document.createElement("button");
+    saveButton.className = "annotation-note-action save";
+    saveButton.type = "button";
+    saveButton.textContent = "Save";
+
+    const revertButton = document.createElement("button");
+    revertButton.className = "annotation-note-action revert";
+    revertButton.type = "button";
+    revertButton.textContent = "Revert";
+
+    actions.append(saveButton, revertButton);
+    note.append(actions);
+
+    const editedText = () => noteBody.innerText.trim();
+    const refreshDirtyState = () => {
+      note.classList.toggle("annotation-note-dirty", editedText() !== savedText);
+    };
+
+    function revertNoteEdit() {
+      noteBody.textContent = savedText;
+      saveButton.classList.remove("fail");
+      refreshDirtyState();
+    }
+
+    async function saveNoteEdit() {
+      const userInput = editedText();
+      if (!userInput || userInput === savedText) {
+        return;
+      }
+
+      const selector = annotationsByElement.get(element).selector;
+      saveButton.disabled = true;
+      revertButton.disabled = true;
+      try {
+        await writeAnnotationEdit(selector, item.timestamp, userInput);
+        const persisted = await annotationWasPersisted(
+          selector,
+          userInput,
+          item.timestamp,
+        );
+        if (!persisted) {
+          throw new Error(
+            "Edit returned ok but the new text was absent on read-back.",
+          );
+        }
+        item.userInput = userInput;
+        savedText = userInput;
+        noteBody.textContent = userInput;
+        saveButton.classList.remove("fail");
+        refreshDirtyState();
+      } catch (error) {
+        console.error(error);
+        saveButton.classList.add("fail");
+      } finally {
+        saveButton.disabled = false;
+        revertButton.disabled = false;
+      }
+    }
+
+    noteBody.addEventListener("input", refreshDirtyState);
+    saveButton.addEventListener("click", saveNoteEdit);
+    revertButton.addEventListener("click", revertNoteEdit);
+    noteBody.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        revertNoteEdit();
+        noteBody.blur();
+        return;
+      }
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey
+      ) {
+        event.preventDefault();
+        saveNoteEdit();
+      }
+    });
   }
 
   // Dragging is offered on the preview's own padding (event.target is the
@@ -666,6 +767,21 @@
 
     const details = await response.text();
     throw new Error(`Annotation write failed (${response.status}): ${details}`);
+  }
+
+  async function writeAnnotationEdit(selector, timestamp, userInput) {
+    const response = await fetch(annotationEndpoint, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selector, timestamp, userInput }),
+    });
+
+    if (response.ok) {
+      return;
+    }
+
+    const details = await response.text();
+    throw new Error(`Annotation edit failed (${response.status}): ${details}`);
   }
 
   // Reads the persisted annotations straight back to confirm the write landed,

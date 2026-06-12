@@ -309,6 +309,74 @@
   font-size: 0.92rem;
   line-height: 1.45;
 }
+/* A note edits in place: the paragraph is always plaintext-editable, so a
+   click drops the caret exactly where the reader pressed. At rest it is
+   untouched prose; only focus reveals the input affordance, and the
+   Save/Revert pair surfaces only once the text differs from what's on disk. */
+.annotation-preview-note p[contenteditable] {
+  white-space: pre-wrap;
+  border-radius: 4px;
+  padding: 0.15rem 0.3rem;
+  margin: -0.15rem -0.3rem;
+  cursor: text;
+  outline: none;
+  transition:
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.annotation-preview-note p[contenteditable]:focus {
+  background: var(--input-bg);
+  box-shadow: 0 0 0 2px var(--accentbg);
+}
+.annotation-note-actions {
+  display: none;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+.annotation-note-dirty .annotation-note-actions {
+  display: flex;
+  animation: annotation-status-pop 0.18s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.annotation-note-action {
+  appearance: none;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--faint);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.32em 0.85em;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+.annotation-note-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.annotation-note-action.save {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accentbg);
+  color: var(--accent);
+}
+.annotation-note-action.save:hover:enabled,
+.annotation-note-action.save:focus-visible {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accentbg);
+}
+.annotation-note-action.save.fail {
+  border-color: var(--bad);
+  background: var(--badbg);
+  color: var(--bad);
+}
+.annotation-note-action.revert:hover:enabled,
+.annotation-note-action.revert:focus-visible {
+  color: var(--ink);
+}
 
 /* Under reduced motion, keep the gentle opacity fades (vestibular-safe) but
    drop the transform lift, scale, and positional glide. */
@@ -332,6 +400,9 @@
     transition: none;
   }
   .annotation-status.show {
+    animation: none;
+  }
+  .annotation-note-dirty .annotation-note-actions {
     animation: none;
   }
 }
