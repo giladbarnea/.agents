@@ -17,7 +17,7 @@ Native HTML can import CSS and JavaScript, but not useful HTML partials. The old
 
 ### Layer 1: style only
 
-Use when the page must render without JavaScript. Disclosure, step expansion, and segmented tabs are still interactive here — they run on pure CSS (`<details>` and `:has()`). Only chip highlights and bar clicks need layer 2. layer 1 result has to be a single self-contained HTML file. Usually when the user requests layer 1, they want to view it on their iPhone. Ask whether to do it and if yes, cp the HTML into '/Users/giladbarnea/Library/Mobile Documents/com~apple~CloudDocs/'
+Use when the page must render without JavaScript. Disclosure, step expansion, and segmented tabs are still interactive here — they run on pure CSS (`<details>` and `:has()`). Only chip highlights and bar clicks need layer 2.
 
 ```bash
 workdir=$(mktemp -d)
@@ -26,7 +26,7 @@ cp /Users/giladbarnea/.agents/skills/in-html/scripts/style.css "$workdir/"
 cd "$workdir"
 ```
 
-Ship a single self-contained file by inlining the CSS: `./scripts/inline-css.py index.html style.css -o page.html`. Usually the user will want the output page synced into iCloud, at `~/Library/Mobile Documents/com~apple~CloudDocs/<domainful-name>.html`.
+The result must be a single self-contained HTML file — inline the CSS with `/Users/giladbarnea/.agents/skills/in-html/scripts/inline-css.py index.html style.css -o page.html`. Usually the user requests layer 1 to view the page on their iPhone; ask, and if yes, cp the output to `/Users/giladbarnea/Library/Mobile Documents/com~apple~CloudDocs/<domainful-name>.html` (iCloud-synced to the phone).
 
 ### Layers 1+2: style plus interactions
 
@@ -87,7 +87,7 @@ Prose is the fallback for what genuinely has no shape — insights, caveats, syn
 
 ## Authoring rules
 
-Edit `index.html` by replacing only the `CONTENT START` block with arbitrary page content. Keep the imports intact for the chosen layer set, including the small inline `<script>` in `<head>` — it picks a warm dark or light theme from the local time before first paint (OS `prefers-color-scheme` is the fallback when JS is off). Theming is fully automatic across every layer; author content as usual and leave the colors alone.
+Edit `index.html` by replacing only the `CONTENT START` block with arbitrary page content. Keep the imports intact for the chosen layer set, including the small inline `<script>` in `<head>` — it picks a warm dark or light theme from the local time before first paint (the OS color-scheme setting is the fallback when JS is off). Theming is fully automatic across every layer; author content as usual and leave the colors alone.
 
 Use normal HTML first: `h1`, `.sub`, `.lead`, `h2`, `p`, `aside.note`, `.card`, `.callout`, `.grid`, `.pane`, `.row`, `.chip`, `.btn`, `.kbd`.
 

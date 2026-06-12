@@ -1,91 +1,40 @@
-/* Warm editorial palette. Every color is a variable so the page can recolor
-   wholesale; the dark theme below is just a second set of these same names.
-   Surface/border tokens that used to be hardcoded live here too, so a single
-   override flips the whole document. */
+/* Warm editorial palette. Every color is a variable, and each token carries
+   its light and dark value in one light-dark() pair. The dark theme is a warm
+   espresso-and-gold counterpart to the cream paper, not a cold OLED black, so
+   the editorial character survives the flip. The inline script in the templates
+   pins data-theme (and thus color-scheme) from local time; with JS off,
+   `color-scheme: light dark` resolves from the OS setting instead. */
 :root {
-  color-scheme: light;
-  --paper: #fffff8;
-  --ink: #111;
-  --faint: #6b6b6b;
-  --rule: #d8d8cf;
-  --rule-dash: var(--rule-dash);
-  --accentbg: #fcf3d9;
-  --accent: #9a6b00;
-  --on-accent: #fff;
-  --good: #1f6b3b;
-  --goodbg: #e6f3ea;
-  --bad: #9b2226;
-  --badbg: #f7e7e6;
-  --blue: #2a4d69;
-  --bluebg: #e7eef4;
-  --blue-border: var(--blue-border);
-  --chip: #efe9d6;
-  --chip-border: #e0d8bf;
-  --surface: #fffefb;
-  --surface2: #fbfaf3;
-  --input-bg: #fff;
-  --dim-bg: #efefe8;
-  --sel-bg: #f5e3a0;
-  --sel-ink: #3f3420;
+  color-scheme: light dark;
+  --paper: light-dark(#fffff8, #14120d);
+  --ink: light-dark(#111, #e8e2d4);
+  --faint: light-dark(#6b6b6b, #968f80);
+  --rule: light-dark(#d8d8cf, #312d26);
+  --rule-dash: light-dark(#c9c0a4, #463f33);
+  --accentbg: light-dark(#fcf3d9, #2b2113);
+  --accent: light-dark(#9a6b00, #d8ab51);
+  --on-accent: light-dark(#fff, #1a1408);
+  --good: light-dark(#1f6b3b, #74c490);
+  --goodbg: light-dark(#e6f3ea, #18271d);
+  --bad: light-dark(#9b2226, #e2807c);
+  --badbg: light-dark(#f7e7e6, #2d1817);
+  --blue: light-dark(#2a4d69, #93b6d2);
+  --bluebg: light-dark(#e7eef4, #18242e);
+  --blue-border: light-dark(#cdd9e4, #2d3b46);
+  --chip: light-dark(#efe9d6, #272016);
+  --chip-border: light-dark(#e0d8bf, #3c3528);
+  --surface: light-dark(#fffefb, #1b1812);
+  --surface2: light-dark(#fbfaf3, #201c15);
+  --input-bg: light-dark(#fff, #211d16);
+  --dim-bg: light-dark(#efefe8, #25221b);
+  --sel-bg: light-dark(#f5e3a0, #5c4b1f);
+  --sel-ink: light-dark(#3f3420, #f1e7d0);
 }
-/* Dark theme: a warm espresso-and-gold counterpart to the cream paper, not a
-   cold OLED black, so the editorial character survives the flip. The two blocks
-   below carry identical values and must stay in sync — one is driven by JS
-   (time of day, see the inline script in the templates), the other is the
-   no-JS fallback that follows the OS setting when the script never runs. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --paper: #14120d;
-  --ink: #e8e2d4;
-  --faint: #968f80;
-  --rule: #312d26;
-  --rule-dash: #463f33;
-  --accentbg: #2b2113;
-  --accent: #d8ab51;
-  --on-accent: #1a1408;
-  --good: #74c490;
-  --goodbg: #18271d;
-  --bad: #e2807c;
-  --badbg: #2d1817;
-  --blue: #93b6d2;
-  --bluebg: #18242e;
-  --blue-border: #2d3b46;
-  --chip: #272016;
-  --chip-border: #3c3528;
-  --surface: #1b1812;
-  --surface2: #201c15;
-  --input-bg: #211d16;
-  --dim-bg: #25221b;
-  --sel-bg: #5c4b1f;
-  --sel-ink: #f1e7d0;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    color-scheme: dark;
-    --paper: #14120d;
-    --ink: #e8e2d4;
-    --faint: #968f80;
-    --rule: #312d26;
-    --rule-dash: #463f33;
-    --accentbg: #2b2113;
-    --accent: #d8ab51;
-    --on-accent: #1a1408;
-    --good: #74c490;
-    --goodbg: #18271d;
-    --bad: #e2807c;
-    --badbg: #2d1817;
-    --blue: #93b6d2;
-    --bluebg: #18242e;
-    --blue-border: #2d3b46;
-    --chip: #272016;
-    --chip-border: #3c3528;
-    --surface: #1b1812;
-    --surface2: #201c15;
-    --input-bg: #211d16;
-    --dim-bg: #25221b;
-    --sel-bg: #5c4b1f;
-    --sel-ink: #f1e7d0;
-  }
 }
 * {
   box-sizing: border-box;
@@ -119,7 +68,7 @@ a[href^="#"].refbroken {
   from {
     box-shadow:
       0 0 0 3px var(--accent),
-      0 0 18px rgba(154, 107, 0, 0.3);
+      0 0 18px color-mix(in srgb, var(--accent) 30%, transparent);
   }
   to {
     box-shadow: 0 0 0 3px transparent;
@@ -139,7 +88,7 @@ a[href^="#"].refbroken {
   align-items: center;
   gap: 0.4em;
   padding: 0.45em 1em;
-  border: 1px solid rgba(154, 107, 0, 0.45);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: 999px;
   background: var(--accentbg);
   color: var(--accent);
@@ -520,19 +469,7 @@ aside.note {
   gap: 1rem;
   margin: 1rem 0;
 }
-.ba .pane {
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  padding: 0.9rem 1rem;
-  background: var(--surface);
-}
 .ba .pane h4 {
-  margin: 0 0 0.5rem;
-  font-size: 0.74rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--faint);
-  font-weight: 600;
   display: flex;
   justify-content: space-between;
 }
@@ -771,22 +708,6 @@ aside.note {
   font-weight: 500;
 }
 
-@media (max-width: 680px) {
-  .grid,
-  .ba,
-  .gap {
-    grid-template-columns: 1fr;
-  }
-  .gap .mid {
-    flex-direction: row;
-    width: auto;
-    padding: 0.4rem;
-  }
-  .gap .mid .arrow {
-    transform: rotate(90deg);
-  }
-}
-
 .tasks {
   list-style: none;
   margin: 1.2rem 0;
@@ -1020,6 +941,19 @@ aside.note {
 }
 
 @media (max-width: 680px) {
+  .grid,
+  .ba,
+  .gap {
+    grid-template-columns: 1fr;
+  }
+  .gap .mid {
+    flex-direction: row;
+    width: auto;
+    padding: 0.4rem;
+  }
+  .gap .mid .arrow {
+    transform: rotate(90deg);
+  }
   .chain {
     flex-direction: column;
     width: auto;
