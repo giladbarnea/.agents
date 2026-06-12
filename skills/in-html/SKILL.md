@@ -56,7 +56,7 @@ cd "$workdir"
 node annotation-writer.mjs
 ```
 
-Then open `http://127.0.0.1:8765/index.html`. If using a separate static server, run `node annotation-writer.mjs` too; annotation writes still post to `http://127.0.0.1:8765/annotations`.
+Then open `http://127.0.0.1:8765/index.html`. The server binds `0.0.0.0`, so the page also works from other devices on the same LAN/tailnet (e.g. `http://gilads-macbook-pro.taila610c4.ts.net:8765/` from the user's iPhone over Tailscale) — annotation saves included, since the template's `annotation-endpoint` meta is the relative `/annotations` and CORS accepts same-origin requests. If serving the page from a *separate* static server instead, run `node annotation-writer.mjs` too and set the meta to the absolute `http://127.0.0.1:8765/annotations` — the relative default would post to the wrong server.
 
 ## Design principles
 

@@ -17,14 +17,14 @@ const contentTypes = {
   '.txt': 'text/plain; charset=utf-8'
 };
 
-function isAllowedOrigin(origin) {
+function isAllowedOrigin(origin, requestHost) {
   if (!origin || origin === 'null') {
     return true;
   }
 
   try {
     const url = new URL(origin);
-    return ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    return url.host === requestHost || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
   } catch {
     return false;
   }
@@ -32,7 +32,7 @@ function isAllowedOrigin(origin) {
 
 function setCorsHeaders(request, response) {
   const origin = request.headers.origin;
-  if (!isAllowedOrigin(origin)) {
+  if (!isAllowedOrigin(origin, request.headers.host)) {
     return false;
   }
 
@@ -204,8 +204,8 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(port, '127.0.0.1', () => {
-  console.log(`in-html server listening on http://127.0.0.1:${port}`);
+server.listen(port, '0.0.0.0', () => {
+  console.log(`in-html server listening on http://0.0.0.0:${port}`);
   console.log(`Serving ${rootDirectory}`);
   console.log(`Writing ${annotationsPath}`);
 });
