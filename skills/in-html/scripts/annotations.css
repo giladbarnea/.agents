@@ -311,8 +311,10 @@
 }
 /* A note edits in place: the paragraph is always plaintext-editable, so a
    click drops the caret exactly where the reader pressed. At rest it is
-   untouched prose; only focus reveals the input affordance, and the
-   Save/Revert pair surfaces only once the text differs from what's on disk. */
+   untouched prose; only focus reveals the input affordance. Each note carries
+   a permanent action row — Save and Revert sit inactive until the text
+   differs from what's on disk; Delete is always live, set apart at the far
+   edge so the destructive act never neighbors the safe pair. */
 .annotation-preview-note p[contenteditable] {
   white-space: pre-wrap;
   border-radius: 4px;
@@ -329,13 +331,9 @@
   box-shadow: 0 0 0 2px var(--accentbg);
 }
 .annotation-note-actions {
-  display: none;
+  display: flex;
   gap: 0.4rem;
   margin-top: 0.5rem;
-}
-.annotation-note-dirty .annotation-note-actions {
-  display: flex;
-  animation: annotation-status-pop 0.18s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .annotation-note-action {
   appearance: none;
@@ -351,7 +349,8 @@
   transition:
     background-color 0.16s ease,
     border-color 0.16s ease,
-    color 0.16s ease;
+    color 0.16s ease,
+    opacity 0.16s ease;
 }
 .annotation-note-action:disabled {
   opacity: 0.45;
@@ -368,14 +367,23 @@
   border-color: var(--accent);
   color: var(--accentbg);
 }
-.annotation-note-action.save.fail {
+.annotation-note-action.revert:hover:enabled,
+.annotation-note-action.revert:focus-visible {
+  color: var(--ink);
+}
+.annotation-note-action.delete {
+  margin-inline-start: auto;
+}
+.annotation-note-action.delete:hover:enabled,
+.annotation-note-action.delete:focus-visible {
   border-color: var(--bad);
   background: var(--badbg);
   color: var(--bad);
 }
-.annotation-note-action.revert:hover:enabled,
-.annotation-note-action.revert:focus-visible {
-  color: var(--ink);
+.annotation-note-action.fail {
+  border-color: var(--bad);
+  background: var(--badbg);
+  color: var(--bad);
 }
 
 /* Under reduced motion, keep the gentle opacity fades (vestibular-safe) but
@@ -400,9 +408,6 @@
     transition: none;
   }
   .annotation-status.show {
-    animation: none;
-  }
-  .annotation-note-dirty .annotation-note-actions {
     animation: none;
   }
 }

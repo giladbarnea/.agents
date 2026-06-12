@@ -37,7 +37,7 @@ function setCorsHeaders(request, response) {
   }
 
   response.setHeader('Access-Control-Allow-Origin', origin ?? '*');
-  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   response.setHeader('Vary', 'Origin');
   return true;
@@ -54,31 +54,23 @@ async function readRequestJson(request) {
   return JSON.parse(body);
 }
 
-function assertAnnotationPayload(payload) {
+function assertPayloadStringFields(payload, fields) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error('Annotation payload must be an object.');
   }
 
-  for (const key of ['selector', 'text', 'userInput', 'timestamp']) {
+  for (const key of fields) {
     if (typeof payload[key] !== 'string') {
       throw new Error(`Annotation payload field "${key}" must be a string.`);
     }
   }
+}
+
+function assertAnnotationPayload(payload) {
+  assertPayloadStringFields(payload, ['selector', 'text', 'userInput', 'timestamp']);
 
   if (payload.specificallySelected !== undefined && typeof payload.specificallySelected !== 'string') {
     throw new Error('Annotation payload field "specificallySelected" must be a string.');
-  }
-}
-
-function assertAnnotationEditPayload(payload) {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw new Error('Annotation edit payload must be an object.');
-  }
-
-  for (const key of ['selector', 'timestamp', 'userInput']) {
-    if (typeof payload[key] !== 'string') {
-      throw new Error(`Annotation edit payload field "${key}" must be a string.`);
-    }
   }
 }
 
@@ -174,7 +166,7 @@ async function handleAnnotations(request, response) {
   // unique-per-submit timestamp; the timestamp stays as the note's identity.
   if (request.method === 'PUT') {
     const payload = await readRequestJson(request);
-    assertAnnotationEditPayload(payload);
+    assertPayloadStringFields(payload, ['selector', 'timestamp', 'userInput']);
 
     const annotations = await readAnnotations();
     const userInputs = annotations[payload.selector]?.userInputs;
@@ -192,8 +184,34 @@ async function handleAnnotations(request, response) {
     return;
   }
 
+  // DELETE removes one note, again keyed by selector + timestamp; the whole
+  // selector entry goes with its last note.
+  if (request.method === 'DELETE') {
+    const payload = await readRequestJson(request);
+    assertPayloadStringFields(payload, ['selector', 'timestamp']);
+
+    const annotations = await readAnnotations();
+    const userInputs = annotations[payload.selector]?.userInputs;
+    const remaining = Array.isArray(userInputs)
+      ? userInputs.filter(item => item?.timestamp !== payload.timestamp)
+      : [];
+    if (!Array.isArray(userInputs) || remaining.length === userInputs.length) {
+      sendJson(response, 404, {ok: false, error: 'No annotation note matches that selector and timestamp.'});
+      return;
+    }
+    if (remaining.length === 0) {
+      delete annotations[payload.selector];
+    } else {
+      annotations[payload.selector].userInputs = remaining;
+    }
+    await writeAnnotations(annotations);
+
+    sendJson(response, 200, {ok: true, path: annotationsPath});
+    return;
+  }
+
   if (request.method !== 'POST') {
-    sendJson(response, 405, {ok: false, error: 'Use GET, POST, or PUT /annotations.'});
+    sendJson(response, 405, {ok: false, error: 'Use GET, POST, PUT, or DELETE /annotations.'});
     return;
   }
 

@@ -3,8 +3,8 @@
 Date: 2026-06-12 · Files: `scripts/annotations.js`, `scripts/annotations.css`, `scripts/annotation-writer.mjs`, `SKILL.md`
 
 The ask: notes inside an open annotation preview become editable on click, with the caret landing
-where the user clicked, and Save/Revert controls appearing only once the text actually differs
-from what's on disk.
+where the user clicked. Each note carries a permanent Save / Revert / Delete row: Save and Revert
+are disabled until the text actually differs from what's on disk; Delete is always active.
 
 Decisions and why:
 
@@ -15,10 +15,13 @@ Decisions and why:
    changes to coexist.
 2. **The note's `timestamp` is its identity.** It was already unique per submit (used for write
    read-back verification), so edits are a `PUT` of `{selector, timestamp, userInput}` that
-   replaces text in place and never touches the timestamp. Legacy string-form notes have no
-   timestamp and deliberately stay read-only. A non-matching timestamp 404s — no upsert.
-3. **Same trust chain as creation:** save goes write → read-back → only then update in-memory
-   state, reusing `annotationWasPersisted` unchanged since it matches on text + timestamp.
+   replaces text in place and never touches the timestamp, and deletes are a `DELETE` of
+   `{selector, timestamp}` (the selector entry goes with its last note). Legacy string-form notes
+   have no timestamp and deliberately stay read-only. A non-matching timestamp 404s — no upsert.
+3. **Same trust chain as creation:** save and delete go write → read-back → only then update
+   in-memory state; `persistedNoteWithTimestamp` is the shared read-back, asserted present (text
+   matching) after a save and absent after a delete. Deleting an element's last note also retires
+   its marker and annotated status, so the page fully forgets it without a reload.
 4. Keyboard semantics mirror the editor (Enter saves, Escape reverts); the note's Escape stops
    propagation so it doesn't bubble into the document-level "close all previews" handler.
 

@@ -375,6 +375,33 @@
     });
   }
 
+  // Forgets a deleted note everywhere at once: the in-memory annotation, the
+  // open preview, and — when the element's last note goes — the marker and
+  // the element's annotated status.
+  function removeAnnotationNote(note, element, item) {
+    const entry = annotationsByElement.get(element);
+    entry.annotation.userInputs = annotationUserInputs(entry.annotation).filter(
+      (candidate) => candidate !== item,
+    );
+    const count = entry.annotation.userInputs.length;
+
+    if (count === 0) {
+      closeAnnotationPreview(element);
+      annotationMarkerForElement(element)?.remove();
+      annotationMarkerHost(element).classList.remove("annotation-marker-host");
+      element.classList.remove("annotation-has-note");
+      annotationsByElement.delete(element);
+      return;
+    }
+
+    const preview = note.closest(".annotation-preview");
+    note.remove();
+    preview.querySelector(".annotation-preview-title").textContent =
+      annotationCountLabel(count);
+    ensureAnnotationMarker(element, entry.annotation);
+    positionAnnotationPreviews();
+  }
+
   // Removes the editor once its exit transition finishes, falling back to an
   // immediate removal when motion is disabled (so reduced-motion never leaves
   // an orphaned node waiting on a transitionend that never fires).
@@ -441,6 +468,10 @@
     annotationPreviewsByElement.clear();
   }
 
+  function annotationCountLabel(count) {
+    return count === 1 ? "1 annotation" : `${count} annotations`;
+  }
+
   function createAnnotationPreview(element, annotation) {
     const preview = document.createElement("aside");
     const userInputs = annotationUserInputs(annotation);
@@ -453,8 +484,7 @@
 
     const title = document.createElement("div");
     title.className = "annotation-preview-title";
-    title.textContent =
-      userInputs.length === 1 ? "1 annotation" : `${userInputs.length} annotations`;
+    title.textContent = annotationCountLabel(userInputs.length);
 
     const closeButton = document.createElement("button");
     closeButton.className = "annotation-preview-close";
@@ -502,11 +532,13 @@
   }
 
   // Notes edit in place: the paragraph is always plaintext-editable, so a
-  // click drops the caret exactly where the reader pressed. Save/Revert
-  // surface only once the text differs from what's on disk; a save replaces
-  // the note's text keyed by its original timestamp and goes through the same
-  // write-then-read-back verification as a new annotation. Legacy notes
-  // without a timestamp stay read-only — nothing identifies them on disk.
+  // click drops the caret exactly where the reader pressed. Each note carries
+  // a permanent Save / Revert / Delete row — Save and Revert sit inactive
+  // until the text differs from what's on disk, Delete is always live. A save
+  // replaces the note's text keyed by its original timestamp and goes through
+  // the same write-then-read-back verification as a new annotation; a delete
+  // is verified absent the same way. Legacy notes without a timestamp stay
+  // read-only — nothing identifies them on disk.
   function enableAnnotationNoteEditing(note, noteBody, element, item) {
     let savedText = annotationInputText(item);
     noteBody.setAttribute("contenteditable", "plaintext-only");
@@ -527,13 +559,21 @@
     revertButton.type = "button";
     revertButton.textContent = "Revert";
 
-    actions.append(saveButton, revertButton);
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "annotation-note-action delete";
+    deleteButton.type = "button";
+    deleteButton.textContent = "Delete";
+
+    actions.append(saveButton, revertButton, deleteButton);
     note.append(actions);
 
     const editedText = () => noteBody.innerText.trim();
     const refreshDirtyState = () => {
-      note.classList.toggle("annotation-note-dirty", editedText() !== savedText);
+      const dirty = editedText() !== savedText;
+      saveButton.disabled = !dirty;
+      revertButton.disabled = !dirty;
     };
+    refreshDirtyState();
 
     function revertNoteEdit() {
       noteBody.textContent = savedText;
@@ -550,6 +590,7 @@
       const selector = annotationsByElement.get(element).selector;
       saveButton.disabled = true;
       revertButton.disabled = true;
+      deleteButton.disabled = true;
       try {
         await writeAnnotationEdit(selector, item.timestamp, userInput);
         const persisted = await annotationWasPersisted(
@@ -566,19 +607,44 @@
         savedText = userInput;
         noteBody.textContent = userInput;
         saveButton.classList.remove("fail");
-        refreshDirtyState();
       } catch (error) {
         console.error(error);
         saveButton.classList.add("fail");
       } finally {
-        saveButton.disabled = false;
-        revertButton.disabled = false;
+        deleteButton.disabled = false;
+        refreshDirtyState();
+      }
+    }
+
+    async function deleteNote() {
+      const selector = annotationsByElement.get(element).selector;
+      saveButton.disabled = true;
+      revertButton.disabled = true;
+      deleteButton.disabled = true;
+      try {
+        await writeAnnotationDeletion(selector, item.timestamp);
+        const persistedNote = await persistedNoteWithTimestamp(
+          selector,
+          item.timestamp,
+        );
+        if (persistedNote) {
+          throw new Error(
+            "Delete returned ok but the note was still present on read-back.",
+          );
+        }
+        removeAnnotationNote(note, element, item);
+      } catch (error) {
+        console.error(error);
+        deleteButton.classList.add("fail");
+        deleteButton.disabled = false;
+        refreshDirtyState();
       }
     }
 
     noteBody.addEventListener("input", refreshDirtyState);
     saveButton.addEventListener("click", saveNoteEdit);
     revertButton.addEventListener("click", revertNoteEdit);
+    deleteButton.addEventListener("click", deleteNote);
     noteBody.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         event.stopPropagation();
@@ -784,9 +850,25 @@
     throw new Error(`Annotation edit failed (${response.status}): ${details}`);
   }
 
-  // Reads the persisted annotations straight back to confirm the write landed,
-  // matching on the note text and its unique-per-submit timestamp.
-  async function annotationWasPersisted(selector, userInput, timestamp) {
+  async function writeAnnotationDeletion(selector, timestamp) {
+    const response = await fetch(annotationEndpoint, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selector, timestamp }),
+    });
+
+    if (response.ok) {
+      return;
+    }
+
+    const details = await response.text();
+    throw new Error(`Annotation delete failed (${response.status}): ${details}`);
+  }
+
+  // Reads the persisted annotations straight back and returns the note with
+  // this unique-per-submit timestamp — the read-back that confirms a write
+  // landed (note present, text matches) or a delete took (note absent).
+  async function persistedNoteWithTimestamp(selector, timestamp) {
     const response = await fetch(annotationEndpoint, {
       headers: { "Cache-Control": "no-cache" },
     });
@@ -795,10 +877,14 @@
     }
 
     const annotations = await response.json();
-    return annotationUserInputs(annotations[selector] || {}).some(
-      (item) =>
-        annotationInputText(item) === userInput && item.timestamp === timestamp,
+    return annotationUserInputs(annotations[selector] || {}).find(
+      (item) => item.timestamp === timestamp,
     );
+  }
+
+  async function annotationWasPersisted(selector, userInput, timestamp) {
+    const note = await persistedNoteWithTimestamp(selector, timestamp);
+    return !!note && annotationInputText(note) === userInput;
   }
 
   function clamp(value, min, max) {
