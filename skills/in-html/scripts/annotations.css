@@ -436,24 +436,36 @@
   background: var(--accentbg);
   color: var(--accent);
 }
-.annotation-note-action.save:hover:enabled,
 .annotation-note-action.save:focus-visible {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accentbg);
 }
-.annotation-note-action.revert:hover:enabled,
 .annotation-note-action.revert:focus-visible {
   color: var(--ink);
 }
 .annotation-note-action.delete {
   margin-inline-start: auto;
 }
-.annotation-note-action.delete:hover:enabled,
 .annotation-note-action.delete:focus-visible {
   border-color: var(--bad);
   background: var(--badbg);
   color: var(--bad);
+}
+@media (hover: hover) {
+  .annotation-note-action.save:hover:enabled {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accentbg);
+  }
+  .annotation-note-action.revert:hover:enabled {
+    color: var(--ink);
+  }
+  .annotation-note-action.delete:hover:enabled {
+    border-color: var(--bad);
+    background: var(--badbg);
+    color: var(--bad);
+  }
 }
 .annotation-note-action.fail {
   border-color: var(--bad);
@@ -564,5 +576,10 @@
     border-radius: 14px 14px 0 0;
     padding-bottom: max(0.85rem, env(safe-area-inset-bottom));
     box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.22);
+  }
+  .annotation-note-action {
+    min-height: 2.4rem;
+    padding-inline: 1em;
+    font-size: 0.82rem;
   }
 }
