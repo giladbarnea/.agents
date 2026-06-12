@@ -101,6 +101,8 @@ When annotations are enabled, add `data-annotation-id="stable-name"` to importan
 
 Selecting text inside the annotated element before Shift+click, or drag-selecting it while the editor is open, captures that span alongside the note. The captured phrase is subtly highlighted in the page and shown in the editor as `↳ “selected text”`; only selections fully inside the annotated element are recorded.
 
+Every layer adapts to touch screens on its own — same files, same markup rules, nothing extra to author. Tapping an element parks the highlight reticle on it and offers an ✎ Annotate action (plus a ※ note count when the element already carries annotations); the editor and note previews open as bottom sheets with explicit Save / Cancel / close buttons; a phrase selected by long-press while the editor is open is captured exactly like a desktop drag-selection.
+
 Annotation JSON shape — each key maps to the element text plus the accumulated reviewer notes (re-annotating the same element appends rather than overwrites). Every note is an object carrying `userInput` and a local ISO 8601 `timestamp` with timezone offset (e.g. `+03:00` for IST); `specificallySelected` is present only when the reviewer had text selected:
 
 ```json

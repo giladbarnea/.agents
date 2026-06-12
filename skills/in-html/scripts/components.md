@@ -8,6 +8,8 @@ Layer guide:
 2. Layer 2 (`interactions.js`) enables chip highlights and bar clicks.
 3. Layer 3 (`annotations.css`, `annotations.js`, `annotation-writer.mjs`) enables Shift+click annotations.
 
+All layers work with plain taps on touch screens; annotation gestures surface as a tap-summoned ✎ action bar and bottom sheets. Markup is identical.
+
 ## Segmented toggle + content panels
 
 Requires layer 1. Pure CSS via hidden radios + `:has()` (any 2022+ browser).
