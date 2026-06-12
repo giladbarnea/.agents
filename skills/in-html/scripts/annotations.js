@@ -15,6 +15,11 @@
     "[data-annotation-ignore]",
   ].join(",");
   const annotationWholeSelector = "[data-annotate-whole], .step, .bar";
+  // On coarse-pointer screens the editor and previews render as bottom
+  // sheets (annotations.css keys off the same query), which fit one at a time.
+  const sheetLayoutInput = window.matchMedia(
+    "(hover: none) and (pointer: coarse)",
+  );
   const annotationsByElement = new Map();
   const annotationPreviewsByElement = new Map();
   let highlightedAnnotationElement = null;
@@ -839,6 +844,9 @@
     if (!entry) {
       return;
     }
+    if (sheetLayoutInput.matches) {
+      closeAllAnnotationPreviews();
+    }
 
     const preview = createAnnotationPreview(element, entry.annotation);
     preview.style.visibility = "hidden";
@@ -1042,6 +1050,62 @@
     });
   }
 
+  // One submit path serves every input mode: bare Enter on desktop, the
+  // footer's Save button on touch screens.
+  async function submitActiveAnnotationEditor() {
+    const editor = activeAnnotationEditor;
+    const annotatedElement = activeAnnotationElement;
+    if (!editor || !annotatedElement) {
+      return;
+    }
+
+    const textarea = editor.querySelector("textarea");
+    const status = editor.querySelector(".annotation-status");
+    const userInput = textarea.value.trim();
+    if (!userInput) {
+      return;
+    }
+
+    const specificallySelected = activeAnnotationSelection;
+    const timestamp = localIsoTimestamp();
+    const selector = selectorForAnnotationElement(annotatedElement);
+    const text = normalizedElementText(annotatedElement);
+
+    textarea.disabled = true;
+    try {
+      await writeAnnotation(
+        selector,
+        text,
+        userInput,
+        specificallySelected,
+        timestamp,
+      );
+      const persisted = await annotationWasPersisted(
+        selector,
+        userInput,
+        timestamp,
+      );
+      if (!persisted) {
+        throw new Error(
+          "Write returned ok but the annotation was absent on read-back.",
+        );
+      }
+      recordWrittenAnnotation(
+        annotatedElement,
+        userInput,
+        specificallySelected,
+        timestamp,
+      );
+      showAnnotationStatus(status, "ok", "✓");
+      closeAnnotationEditor();
+    } catch (error) {
+      console.error(error);
+      textarea.disabled = false;
+      showAnnotationStatus(status, "fail", "✕");
+      textarea.focus();
+    }
+  }
+
   function openAnnotationEditor(element) {
     closeAllAnnotationPreviews();
     if (activeAnnotationEditor) {
@@ -1054,7 +1118,7 @@
     const editor = document.createElement("div");
     editor.className = "annotation-editor";
     editor.innerHTML =
-      '<div class="annotation-editor-handle" data-annotation-ui="handle" aria-hidden="true"></div><div class="annotation-selection-preview" hidden><span class="annotation-selection-arrow" aria-hidden="true">↳</span><q class="annotation-selection-text"></q></div><textarea aria-label="Annotation text" autofocus></textarea><div class="annotation-status"></div>';
+      '<div class="annotation-editor-handle" data-annotation-ui="handle" aria-hidden="true"></div><div class="annotation-selection-preview" hidden><span class="annotation-selection-arrow" aria-hidden="true">↳</span><q class="annotation-selection-text"></q></div><textarea aria-label="Annotation text" autofocus></textarea><div class="annotation-editor-footer" data-annotation-ui="footer"><button type="button" class="annotation-editor-cancel">Cancel</button><button type="button" class="annotation-editor-save">Save</button></div><div class="annotation-status"></div>';
     document.body.appendChild(editor);
     positionAnnotationEditor(editor, element);
     requestAnimationFrame(() =>
@@ -1062,14 +1126,20 @@
     );
 
     const textarea = editor.querySelector("textarea");
-    const status = editor.querySelector(".annotation-status");
     const handle = editor.querySelector(".annotation-editor-handle");
     activeAnnotationEditor = editor;
     updateAnnotationSelectionPreview();
     textarea.focus();
     makeAnnotationEditorDraggable(editor, handle);
 
-    textarea.addEventListener("keydown", async (event) => {
+    editor
+      .querySelector(".annotation-editor-cancel")
+      .addEventListener("click", closeAnnotationEditor);
+    editor
+      .querySelector(".annotation-editor-save")
+      .addEventListener("click", submitActiveAnnotationEditor);
+
+    textarea.addEventListener("keydown", (event) => {
       if (
         event.key !== "Enter" ||
         event.shiftKey ||
@@ -1080,55 +1150,16 @@
         return;
       }
       event.preventDefault();
-
-      const userInput = textarea.value.trim();
-      if (!userInput) {
-        return;
-      }
-
-      const annotatedElement = activeAnnotationElement;
-      const specificallySelected = activeAnnotationSelection;
-      const timestamp = localIsoTimestamp();
-      const selector = selectorForAnnotationElement(annotatedElement);
-      const text = normalizedElementText(annotatedElement);
-
-      textarea.disabled = true;
-      try {
-        await writeAnnotation(
-          selector,
-          text,
-          userInput,
-          specificallySelected,
-          timestamp,
-        );
-        const persisted = await annotationWasPersisted(
-          selector,
-          userInput,
-          timestamp,
-        );
-        if (!persisted) {
-          throw new Error(
-            "Write returned ok but the annotation was absent on read-back.",
-          );
-        }
-        recordWrittenAnnotation(
-          annotatedElement,
-          userInput,
-          specificallySelected,
-          timestamp,
-        );
-        showAnnotationStatus(status, "ok", "✓");
-        closeAnnotationEditor();
-      } catch (error) {
-        console.error(error);
-        textarea.disabled = false;
-        showAnnotationStatus(status, "fail", "✕");
-        textarea.focus();
-      }
+      submitActiveAnnotationEditor();
     });
   }
 
-  document.addEventListener("mousemove", (event) => {
+  // Hover semantics belong to hover-capable pointers; taps reach the touch
+  // bindings below instead of impersonating a mouse.
+  document.addEventListener("pointermove", (event) => {
+    if (event.pointerType === "touch") {
+      return;
+    }
     const marker = annotationMarkerFromEvent(event);
     const linkedElement = marker
       ? annotatedElementFromMarker(marker)
@@ -1240,7 +1271,9 @@
     true,
   );
 
-  document.addEventListener("mouseup", () => {
+  // selectionchange feeds the open editor from every selection mechanism —
+  // mouse drags, keyboard selection, and touch long-press handles alike.
+  document.addEventListener("selectionchange", () => {
     if (!activeAnnotationEditor || !activeAnnotationElement) {
       return;
     }
@@ -1283,6 +1316,190 @@
     },
     { passive: true },
   );
+
+  // ----- Touch bindings ------------------------------------------------
+  // Touch has no hover and no modifier keys, so a tap takes over the hover
+  // reticle's role and grows it an action bar (✎ annotate, ※ notes). The
+  // gestures only translate into the same actions the desktop bindings call;
+  // everything above stays input-agnostic. Detection runs on pointer events
+  // with pointerType "touch", so mouse and trackpad input never engages it —
+  // and it works on elements iOS Safari won't synthesize click events for.
+
+  let annotationActionBar = null;
+  let annotationAnnotateButton = null;
+  let annotationViewNotesButton = null;
+
+  function ensureAnnotationActionBar() {
+    if (annotationActionBar) {
+      return annotationActionBar;
+    }
+
+    annotationActionBar = document.createElement("div");
+    annotationActionBar.className = "annotation-action-bar";
+    annotationActionBar.dataset.annotationUi = "action-bar";
+
+    annotationAnnotateButton = document.createElement("button");
+    annotationAnnotateButton.type = "button";
+    annotationAnnotateButton.textContent = "✎ Annotate";
+    annotationAnnotateButton.addEventListener("click", () => {
+      const element = highlightedAnnotationElement;
+      if (!element) {
+        return;
+      }
+      hideAnnotationActionBar();
+      setActiveAnnotationSelection(selectedRangeWithin(element));
+      openAnnotationEditor(element);
+    });
+
+    annotationViewNotesButton = document.createElement("button");
+    annotationViewNotesButton.type = "button";
+    annotationViewNotesButton.addEventListener("click", () => {
+      const element = highlightedAnnotationElement;
+      if (!element) {
+        return;
+      }
+      hideAnnotationActionBar();
+      setHighlightedAnnotationElement(null);
+      toggleAnnotationPreview(element);
+    });
+
+    annotationActionBar.append(
+      annotationAnnotateButton,
+      annotationViewNotesButton,
+    );
+    hoverOverlay.append(annotationActionBar);
+    return annotationActionBar;
+  }
+
+  function hideAnnotationActionBar() {
+    annotationActionBar?.classList.remove("show");
+  }
+
+  // The bar hangs below the reticle and slides up just enough to stay inside
+  // the viewport when the tapped element runs past the bottom of the screen.
+  function placeAnnotationActionBar(element) {
+    const rect = element.getBoundingClientRect();
+    const overlayTop = rect.top - hoverOverlayOffsetY;
+    const overlayHeight = rect.height + hoverOverlayOffsetY * 2;
+    const barHeight = annotationActionBar.offsetHeight;
+    const topWithinOverlay = clamp(
+      overlayHeight + 8,
+      10 - overlayTop,
+      window.innerHeight - overlayTop - barHeight - 10,
+    );
+    annotationActionBar.style.top = `${topWithinOverlay}px`;
+  }
+
+  function showAnnotationActionBar(element) {
+    const bar = ensureAnnotationActionBar();
+    const entry = annotationsByElement.get(element);
+    const noteCount = entry ? annotationUserInputs(entry.annotation).length : 0;
+    annotationViewNotesButton.hidden = noteCount === 0;
+    annotationViewNotesButton.textContent =
+      noteCount === 1 ? "※ 1 note" : `※ ${noteCount} notes`;
+    bar.classList.add("show");
+    placeAnnotationActionBar(element);
+  }
+
+  function handleTouchTap(event) {
+    if (
+      event.target.closest?.(
+        ".annotation-action-bar, .annotation-marker, .annotation-editor, .annotation-preview",
+      )
+    ) {
+      return;
+    }
+
+    closeAllAnnotationPreviews();
+
+    // Page taps while the editor is open select phrases or work the page;
+    // the editor closes through its own Cancel button.
+    if (activeAnnotationEditor) {
+      return;
+    }
+
+    if (event.target.closest?.("a[href]")) {
+      setHighlightedAnnotationElement(null);
+      hideAnnotationActionBar();
+      return;
+    }
+
+    const candidate = annotationCandidateFromPoint(
+      event.clientX,
+      event.clientY,
+    );
+    setHighlightedAnnotationElement(candidate);
+    if (candidate) {
+      showAnnotationActionBar(candidate);
+    } else {
+      hideAnnotationActionBar();
+    }
+  }
+
+  let touchTapOrigin = null;
+
+  document.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "touch" || !event.isPrimary) {
+      return;
+    }
+    touchTapOrigin = { x: event.clientX, y: event.clientY };
+  });
+
+  document.addEventListener("pointercancel", () => {
+    touchTapOrigin = null;
+  });
+
+  document.addEventListener("pointerup", (event) => {
+    if (event.pointerType !== "touch" || !touchTapOrigin) {
+      return;
+    }
+    const origin = touchTapOrigin;
+    touchTapOrigin = null;
+    const isTap =
+      Math.hypot(event.clientX - origin.x, event.clientY - origin.y) <= 12;
+    if (isTap) {
+      handleTouchTap(event);
+    }
+  });
+
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (
+        annotationActionBar?.classList.contains("show") &&
+        highlightedAnnotationElement
+      ) {
+        placeAnnotationActionBar(highlightedAnnotationElement);
+      }
+    },
+    { passive: true },
+  );
+
+  // iOS lays the software keyboard over position:fixed elements instead of
+  // resizing the page; the visual viewport is the only honest report of the
+  // space left. The inset feeds the bottom-sheet CSS.
+  function updateAnnotationKeyboardInset() {
+    const viewport = window.visualViewport;
+    const inset = Math.max(
+      0,
+      window.innerHeight - viewport.height - viewport.offsetTop,
+    );
+    document.documentElement.style.setProperty(
+      "--annotation-keyboard-inset",
+      `${inset}px`,
+    );
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener(
+      "resize",
+      updateAnnotationKeyboardInset,
+    );
+    window.visualViewport.addEventListener(
+      "scroll",
+      updateAnnotationKeyboardInset,
+    );
+  }
 
   loadAnnotations().catch((error) => console.warn(error));
 })();

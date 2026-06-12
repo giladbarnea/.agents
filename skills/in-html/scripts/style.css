@@ -51,8 +51,10 @@ a[href^="#"] {
   text-decoration: none;
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
 }
-a[href^="#"]:hover {
-  border-bottom-color: var(--accent);
+@media (hover: hover) {
+  a[href^="#"]:hover {
+    border-bottom-color: var(--accent);
+  }
 }
 a[href^="#"].refbroken {
   color: var(--bad);
@@ -81,7 +83,7 @@ a[href^="#"].refbroken {
 .crossref-return {
   position: fixed;
   left: 50%;
-  bottom: 1.1rem;
+  bottom: calc(1.1rem + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%) translateY(0.5rem);
   z-index: 9996;
   display: inline-flex;
@@ -112,11 +114,17 @@ a[href^="#"].refbroken {
   pointer-events: auto;
   transform: translateX(-50%);
 }
-.crossref-return:hover,
 .crossref-return:focus-visible {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accentbg);
+}
+@media (hover: hover) {
+  .crossref-return:hover {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accentbg);
+  }
 }
 body {
   margin: 0;
@@ -283,8 +291,10 @@ aside.note {
   background: var(--surface2);
   color: var(--ink);
 }
-.btn:hover {
-  background: var(--bluebg);
+@media (hover: hover) {
+  .btn:hover {
+    background: var(--bluebg);
+  }
 }
 .btn:disabled {
   opacity: 0.45;
@@ -541,8 +551,10 @@ aside.note {
 .disclose > .head::-webkit-details-marker {
   display: none;
 }
-.disclose > .head:hover {
-  background: var(--bluebg);
+@media (hover: hover) {
+  .disclose > .head:hover {
+    background: var(--bluebg);
+  }
 }
 .disclose > .head .tri {
   transition: transform 0.18s;
@@ -584,8 +596,10 @@ aside.note {
   position: relative;
   transition: 0.15s;
 }
-.step:hover {
-  background: var(--bluebg);
+@media (hover: hover) {
+  .step:hover {
+    background: var(--bluebg);
+  }
 }
 .step.hot {
   border-color: var(--accent);
@@ -646,8 +660,10 @@ aside.note {
   transition: 0.2s;
   min-width: 14px;
 }
-.bar:hover {
-  filter: brightness(1.15);
+@media (hover: hover) {
+  .bar:hover {
+    filter: brightness(1.15);
+  }
 }
 .bar.compiled {
   background: var(--accent);
@@ -941,6 +957,22 @@ aside.note {
 }
 
 @media (max-width: 680px) {
+  .wrap {
+    padding: 2.6rem 1.1rem 4.5rem;
+  }
+  h1 {
+    font-size: 2.1rem;
+  }
+  /* The inner tbody re-becomes the table so row rules span full width while
+     wide tables scroll sideways instead of bursting the column. */
+  table.data {
+    display: block;
+    overflow-x: auto;
+  }
+  table.data tbody {
+    display: table;
+    width: 100%;
+  }
   .grid,
   .ba,
   .gap {
@@ -1078,4 +1110,49 @@ table.data tr.total td {
   border-top: 2px solid var(--ink);
   border-bottom: none;
   font-weight: 600;
+}
+
+/* Touch ergonomics: press feedback stands in for the hover states (scoped to
+   hover-capable devices above), targets grow toward finger size, double-tap
+   zoom stays off interactive controls, and the webkit tap flash is dropped in
+   favor of these explicit :active states. */
+@media (hover: none) and (pointer: coarse) {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  a,
+  button,
+  .chip.q,
+  .seg label,
+  .disclose > .head,
+  .step,
+  .bar {
+    touch-action: manipulation;
+  }
+  a[href^="#"]:active {
+    background: var(--accentbg);
+  }
+  .btn:active,
+  .disclose > .head:active,
+  .step:active {
+    background: var(--bluebg);
+  }
+  .chip.q:active {
+    background: var(--accentbg);
+  }
+  .bar:active {
+    filter: brightness(1.15);
+  }
+  .btn {
+    padding: 0.55rem 1rem;
+  }
+  .seg label {
+    padding: 0.55rem 1.2rem;
+  }
+  .disclose > .head {
+    padding: 0.65rem 0.9rem;
+  }
+  .crossref-return {
+    padding: 0.6em 1.15em;
+  }
 }
