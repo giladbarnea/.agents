@@ -285,9 +285,25 @@
       : element;
   }
 
+  // One rail per block straddles its top-right edge and holds the verdict pill
+  // and the notes badge side by side, on the border line where no content lives.
+  // Created lazily by whichever of the two needs it first.
+  function ensureAnnotationRail(host) {
+    const existing = host.querySelector(":scope > .annotation-rail");
+    if (existing) {
+      return existing;
+    }
+    const rail = document.createElement("span");
+    rail.className = "annotation-rail";
+    rail.dataset.annotationUi = "rail";
+    host.classList.add("annotation-marker-host");
+    host.append(rail);
+    return rail;
+  }
+
   function annotationMarkerForElement(element) {
     return annotationMarkerHost(element).querySelector(
-      ":scope > .annotation-marker",
+      ":scope > .annotation-rail > .annotation-marker",
     );
   }
 
@@ -321,9 +337,7 @@
     marker.setAttribute("aria-label", "Show annotations");
     marker.setAttribute("aria-pressed", "false");
     marker.textContent = count > 1 ? String(count) : "";
-    const host = annotationMarkerHost(element);
-    host.classList.add("annotation-marker-host");
-    host.append(marker);
+    ensureAnnotationRail(annotationMarkerHost(element)).append(marker);
     return marker;
   }
 
@@ -413,7 +427,6 @@
 
     if (entry.annotation.userInputs.length === 0) {
       annotationMarkerForElement(element)?.remove();
-      annotationMarkerHost(element).classList.remove("annotation-marker-host");
       element.classList.remove("annotation-has-note");
       annotationsByElement.delete(element);
     } else {
@@ -1349,6 +1362,7 @@
   let annotationActionBar = null;
   let annotationAnnotateButton = null;
   let annotationViewNotesButton = null;
+  let annotationVerdictSegment = null;
 
   function ensureAnnotationActionBar() {
     if (annotationActionBar) {
@@ -1384,7 +1398,32 @@
       toggleAnnotationPreview(element);
     });
 
+    // Touch's verdict picker — the mobile twin of the desktop hover split-button.
+    // One tap commits; tapping the selected segment again clears. The bar stays
+    // open so the choice reads back in place. Shown only for verdict-eligible
+    // blocks (toggled in updateActionBarVerdict).
+    annotationVerdictSegment = document.createElement("div");
+    annotationVerdictSegment.className = "annotation-verdict-segment";
+    annotationVerdictSegment.dataset.annotationUi = "verdict-segment";
+    annotationChoices.forEach((choice) => {
+      const option = document.createElement("button");
+      option.type = "button";
+      option.className = "annotation-verdict-option";
+      option.textContent = choice;
+      option.addEventListener("click", async () => {
+        const element = highlightedAnnotationElement;
+        if (!element) {
+          return;
+        }
+        const current = choiceByElement.get(element)?.value || "";
+        await setChoice(element, choice === current ? "" : choice);
+        updateActionBarVerdict(element);
+      });
+      annotationVerdictSegment.append(option);
+    });
+
     annotationActionBar.append(
+      annotationVerdictSegment,
       annotationAnnotateButton,
       annotationViewNotesButton,
     );
@@ -1411,6 +1450,26 @@
     annotationActionBar.style.top = `${topWithinOverlay}px`;
   }
 
+  // The bar carries the verdict picker only for blocks that can hold a verdict,
+  // reflecting the block's current choice — touch's stand-in for the desktop
+  // rail split-button.
+  function updateActionBarVerdict(element) {
+    if (!annotationVerdictSegment) {
+      return;
+    }
+    const eligible = choiceControlByElement.has(element);
+    annotationVerdictSegment.hidden = !eligible;
+    if (!eligible) {
+      return;
+    }
+    const value = choiceByElement.get(element)?.value || "";
+    annotationVerdictSegment
+      .querySelectorAll(".annotation-verdict-option")
+      .forEach((option) => {
+        option.classList.toggle("selected", option.textContent === value);
+      });
+  }
+
   function showAnnotationActionBar(element) {
     const bar = ensureAnnotationActionBar();
     const entry = annotationsByElement.get(element);
@@ -1418,6 +1477,7 @@
     annotationViewNotesButton.hidden = noteCount === 0;
     annotationViewNotesButton.textContent =
       noteCount === 1 ? "※ 1 note" : `※ ${noteCount} notes`;
+    updateActionBarVerdict(element);
     bar.classList.add("show");
     placeAnnotationActionBar(element);
   }
@@ -1703,9 +1763,7 @@
     });
 
     control.append(primary, caret);
-    const host = annotationMarkerHost(element);
-    host.classList.add("annotation-choice-host");
-    host.append(control);
+    ensureAnnotationRail(annotationMarkerHost(element)).append(control);
     choiceControlByElement.set(element, control);
     return control;
   }

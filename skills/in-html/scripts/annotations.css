@@ -48,7 +48,10 @@
   top: calc(100% + 8px);
   right: 0;
   display: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.5rem;
+  max-width: calc(100vw - 1.5rem);
   pointer-events: auto;
 }
 .annotation-action-bar.show {
@@ -122,20 +125,31 @@
   background: var(--goodbg);
   color: var(--good);
 }
-/* The marker is a comment-count badge straddling the element's top-right edge,
-   like a notification badge on an app icon: the straddle declares which box it
-   belongs to, the pill shape reads as pressable, and the count carries actual
-   information. Opaque paper fill lets it punch through a card border. */
+/* Every annotatable block carries one metadata rail straddling its top-right
+   edge — the border line where no content lives — holding a one-word verdict
+   pill and the notes-count badge side by side. Each reads like a notification
+   badge on an app icon: the straddle declares which block it belongs to, the
+   pill shape reads as pressable, opaque fill punches through a card border. */
 .annotation-marker-host {
   position: relative;
 }
-.annotation-marker {
-  appearance: none;
+.annotation-rail {
   position: absolute;
   top: 0;
   right: 1.1rem;
   transform: translateY(-50%);
-  z-index: 1;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  pointer-events: none;
+}
+.annotation-rail > * {
+  pointer-events: auto;
+}
+.annotation-marker {
+  appearance: none;
+  order: 2;
   display: inline-flex;
   align-items: center;
   gap: 0.32em;
@@ -534,44 +548,45 @@
   opacity: 0.55;
 }
 
-/* Quick-answer split button: a one-click "Yes" with a caret that opens the
-   other mutually-exclusive choices (Agreed, Locked). It sits inside the
-   bottom-right corner of every whole-annotation block, below the top-right
-   note marker. Subtle at rest, it brightens on hover and turns solid-accent
-   once a choice is set; free-text notes append independently. */
-.annotation-choice-host {
-  position: relative;
-}
+/* Quick-answer verdict: a one-word stance on a block that is a statement, not a
+   question. It lives on the block's top-border rail (left of the notes badge),
+   never over content. On a hover-capable pointer it is a ghost split-button
+   revealed when the block is hovered — the primary side commits "Yes" or toggles
+   it off, the caret opens the other mutually-exclusive choices (Agreed, Locked).
+   On touch the picker rides the tap action bar instead (.annotation-verdict-
+   segment) and this rail pill is a display-only indicator. A committed verdict is
+   always present: solid, checked, on the rail. Free-text notes append
+   independently, so a block can hold many notes and exactly one verdict. */
 .annotation-choice {
-  position: absolute;
-  bottom: 0.5rem;
-  right: 0.6rem;
-  z-index: 2;
+  order: 1;
   display: inline-flex;
   align-items: stretch;
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border: 1px solid var(--rule);
   border-radius: 999px;
   overflow: hidden;
   background: var(--surface);
-  opacity: 0.32;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  color: var(--faint);
+  visibility: hidden;
+  opacity: 0;
   transition:
     opacity 0.16s ease,
+    visibility 0.16s,
     border-color 0.16s ease,
-    box-shadow 0.16s ease;
+    background-color 0.16s ease,
+    color 0.16s ease;
 }
-.annotation-hover .annotation-choice {
-  opacity: 0.9;
-}
-.annotation-choice:hover,
-.annotation-choice:focus-within {
-  opacity: 1;
+@media (hover: hover) {
+  .annotation-marker-host:hover > .annotation-rail > .annotation-choice {
+    visibility: visible;
+    opacity: 1;
+  }
 }
 .annotation-choice.is-set {
+  visibility: visible;
   opacity: 1;
   border-color: var(--accent);
   background: var(--accent);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 25%, transparent);
+  color: var(--on-accent);
 }
 .annotation-choice.fail {
   border-color: var(--bad);
@@ -584,7 +599,8 @@
   appearance: none;
   border: 0;
   background: transparent;
-  color: var(--accent);
+  color: inherit;
+  cursor: pointer;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
@@ -596,19 +612,20 @@
   gap: 0.3em;
   padding: 0.3em 0.55em 0.3em 0.72em;
 }
+.annotation-choice.is-set .annotation-choice-primary::before {
+  content: "✓";
+  font-size: 0.9em;
+}
 .annotation-choice-caret {
-  border-inline-start: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-inline-start: 1px solid color-mix(in srgb, currentColor 30%, transparent);
   padding: 0.3em 0.5em;
   font-size: 0.62rem;
 }
-.annotation-choice.is-set .annotation-choice-primary,
-.annotation-choice.is-set .annotation-choice-caret {
-  color: var(--on-accent);
-}
-.annotation-choice.is-set .annotation-choice-caret {
-  border-inline-start-color: color-mix(in srgb, var(--on-accent) 35%, transparent);
-}
 @media (hover: hover) {
+  .annotation-choice:not(.is-set):hover {
+    border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+    color: var(--accent);
+  }
   .annotation-choice-primary:hover,
   .annotation-choice-caret:hover {
     background: color-mix(in srgb, var(--accent) 14%, transparent);
@@ -617,6 +634,42 @@
   .annotation-choice.is-set .annotation-choice-caret:hover {
     background: color-mix(in srgb, var(--on-accent) 18%, transparent);
   }
+}
+/* Touch's verdict picker: a segmented control in the tap action bar, the mobile
+   twin of the desktop hover split-button. Selected segment fills solid. */
+.annotation-verdict-segment {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.annotation-verdict-segment[hidden] {
+  display: none;
+}
+.annotation-verdict-segment .annotation-verdict-option {
+  appearance: none;
+  border: 0;
+  border-inline-start: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1;
+  min-height: 2.6rem;
+  padding: 0.4em 0.95em;
+  white-space: nowrap;
+}
+.annotation-verdict-segment .annotation-verdict-option:first-child {
+  border-inline-start: 0;
+}
+.annotation-verdict-segment .annotation-verdict-option.selected {
+  background: var(--accent);
+  color: var(--on-accent);
 }
 /* The caret's dropdown of mutually-exclusive choices. */
 .annotation-choice-menu {
@@ -765,14 +818,14 @@
     padding: 0.55em 1.15em;
   }
   .annotation-choice {
-    opacity: 0.65;
+    pointer-events: none;
   }
-  .annotation-choice-primary,
   .annotation-choice-caret {
-    padding-block: 0.5em;
-    font-size: 0.8rem;
+    display: none;
   }
-  .annotation-choice-option {
-    padding-block: 0.6em;
+  .annotation-verdict-segment .annotation-verdict-option {
+    min-height: 2.8rem;
+    padding-inline: 1.15em;
+    font-size: 0.9rem;
   }
 }
