@@ -1361,7 +1361,6 @@
 
   let annotationActionBar = null;
   let annotationAnnotateButton = null;
-  let annotationViewNotesButton = null;
   let annotationVerdictSegment = null;
 
   function ensureAnnotationActionBar() {
@@ -1384,18 +1383,6 @@
       hideAnnotationActionBar();
       setActiveAnnotationSelection(selectedRangeWithin(element));
       openAnnotationEditor(element);
-    });
-
-    annotationViewNotesButton = document.createElement("button");
-    annotationViewNotesButton.type = "button";
-    annotationViewNotesButton.addEventListener("click", () => {
-      const element = highlightedAnnotationElement;
-      if (!element) {
-        return;
-      }
-      hideAnnotationActionBar();
-      setHighlightedAnnotationElement(null);
-      toggleAnnotationPreview(element);
     });
 
     // Touch's verdict picker — the mobile twin of the desktop hover split-button.
@@ -1422,11 +1409,7 @@
       annotationVerdictSegment.append(option);
     });
 
-    annotationActionBar.append(
-      annotationVerdictSegment,
-      annotationAnnotateButton,
-      annotationViewNotesButton,
-    );
+    annotationActionBar.append(annotationVerdictSegment, annotationAnnotateButton);
     hoverOverlay.append(annotationActionBar);
     return annotationActionBar;
   }
@@ -1470,13 +1453,15 @@
       });
   }
 
+  // One button for adding an annotation; its label reflects how many notes the
+  // element already has. Viewing existing notes is the ※ rail badge's job, on
+  // touch as on desktop — so the bar never carries a redundant second button.
   function showAnnotationActionBar(element) {
     const bar = ensureAnnotationActionBar();
     const entry = annotationsByElement.get(element);
     const noteCount = entry ? annotationUserInputs(entry.annotation).length : 0;
-    annotationViewNotesButton.hidden = noteCount === 0;
-    annotationViewNotesButton.textContent =
-      noteCount === 1 ? "※ 1 note" : `※ ${noteCount} notes`;
+    annotationAnnotateButton.textContent =
+      noteCount === 0 ? "✎ Annotate" : `✎ Annotate · ${noteCount}`;
     updateActionBarVerdict(element);
     bar.classList.add("show");
     placeAnnotationActionBar(element);

@@ -46,13 +46,17 @@
 .annotation-action-bar {
   position: absolute;
   top: calc(100% + 8px);
+  left: 0;
   right: 0;
   display: none;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 0.5rem;
-  max-width: calc(100vw - 1.5rem);
   pointer-events: auto;
+}
+/* The verdict picker sits at the block's leading edge; the single Annotate
+   button is pushed to the trailing edge. */
+.annotation-action-bar > button {
+  margin-inline-start: auto;
 }
 .annotation-action-bar.show {
   display: flex;
