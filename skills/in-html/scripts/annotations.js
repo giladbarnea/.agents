@@ -1501,5 +1501,85 @@
     );
   }
 
+  // ----- Jump to the next un-annotated unit ----------------------------
+  // The author marks every unit of communication as a whole-annotation target
+  // (annotationWholeSelector), so that — not "any element with text" — is what
+  // "information-carrying" means here. This pill walks downward from where the
+  // reviewer is: it scrolls to the nearest unit without a note whose center
+  // sits below the viewport center (anything at or above center is treated as
+  // already passed) and lights the reticle on it. When the walk runs past the
+  // last one, it wraps to the topmost unanswered unit so units skipped upstream
+  // stay reachable. Created only when the page actually has whole-units.
+  function nextUnannotatedWholeElement() {
+    const unanswered = Array.from(
+      document.querySelectorAll(annotationWholeSelector),
+    ).filter(
+      (element) =>
+        !annotationsByElement.has(element) && normalizedElementText(element),
+    );
+    const viewportCenter = window.innerHeight / 2;
+    // A unit counts as "below" only if its center clears the viewport center by
+    // a hair — so the unit we just centered (its center now sits on that line)
+    // reads as already passed, and a second press advances to the next one down.
+    const isBelowViewportCenter = (element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.top + rect.height / 2 > viewportCenter + 2;
+    };
+    return unanswered.find(isBelowViewportCenter) || unanswered[0];
+  }
+
+  function setupNextUnannotatedButton() {
+    if (!document.querySelector(annotationWholeSelector)) {
+      return;
+    }
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "annotation-next-unannotated";
+    button.dataset.annotationUi = "next-unannotated";
+    button.setAttribute("aria-label", "Scroll to the next un-annotated item");
+
+    const icon = document.createElement("span");
+    icon.className = "annotation-next-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "↓";
+
+    const label = document.createElement("span");
+    label.className = "annotation-next-label";
+    label.textContent = "Next unanswered";
+    button.append(icon, label);
+    document.body.append(button);
+
+    let resetTimer = 0;
+    button.addEventListener("click", () => {
+      const target = nextUnannotatedWholeElement();
+      if (target) {
+        const rect = target.getBoundingClientRect();
+        // Center with a plain scroll, not scrollIntoView — the page's
+        // scroll-margin-top would otherwise land the unit a notch low, leaving
+        // its center just below the viewport center and re-selecting it on the
+        // next press instead of advancing.
+        window.scrollTo({
+          top:
+            window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2,
+          behavior: "smooth",
+        });
+        setHighlightedAnnotationElement(target);
+        return;
+      }
+      // Nothing left to answer: confirm in place, then settle back.
+      window.clearTimeout(resetTimer);
+      button.classList.add("done");
+      icon.textContent = "✓";
+      label.textContent = "All answered";
+      resetTimer = window.setTimeout(() => {
+        button.classList.remove("done");
+        icon.textContent = "↓";
+        label.textContent = "Next unanswered";
+      }, 1600);
+    });
+  }
+
+  setupNextUnannotatedButton();
   loadAnnotations().catch((error) => console.warn(error));
 })();
