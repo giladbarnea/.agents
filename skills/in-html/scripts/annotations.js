@@ -22,6 +22,10 @@
   );
   const annotationsByElement = new Map();
   const annotationPreviewsByElement = new Map();
+  const choiceByElement = new Map();
+  const choiceControlByElement = new Map();
+  const annotationChoices = ["Yes", "Agreed", "Locked"];
+  let activeChoiceMenu = null;
   let highlightedAnnotationElement = null;
   let activeAnnotationEditor = null;
   let activeAnnotationElement = null;
@@ -374,8 +378,22 @@
     const annotations = await response.json();
     Object.entries(annotations).forEach(([selector, annotation]) => {
       const element = elementForAnnotationSelector(selector);
-      if (element) {
+      if (!element) {
+        return;
+      }
+      if (annotationUserInputs(annotation).length) {
         registerAnnotatedElement(element, selector, annotation);
+      }
+      if (annotation.choice && annotation.choice.value) {
+        if (element.matches("[data-annotate-whole]")) {
+          ensureChoiceControl(element);
+        }
+        choiceByElement.set(element, {
+          selector,
+          value: annotation.choice.value,
+          timestamp: annotation.choice.timestamp,
+        });
+        applyChoiceState(element);
       }
     });
   }
@@ -1286,12 +1304,14 @@
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      closeChoiceMenu();
       closeAnnotationEditor();
       closeAllAnnotationPreviews();
     }
   });
 
   window.addEventListener("resize", () => {
+    closeChoiceMenu();
     if (activeAnnotationEditor) {
       reclampFloatingPanel(activeAnnotationEditor);
     }
@@ -1309,6 +1329,7 @@
   window.addEventListener(
     "scroll",
     () => {
+      closeChoiceMenu();
       if (highlightedAnnotationElement) {
         positionHoverOverlay(highlightedAnnotationElement, true);
       }
@@ -1501,6 +1522,205 @@
     );
   }
 
+  // ----- Quick-answer choice control -----------------------------------
+  // Some whole-units are statements, not questions; this split button lets the
+  // reviewer commit a one-word verdict. The primary side commits (or toggles
+  // off) the shown value; the caret opens the other mutually-exclusive choices.
+  // Unlike free-text notes, which append, a choice overwrites the previous one
+  // and lives in its own `choice` field — so an element can carry both many
+  // notes and exactly one choice. Subtle on every data-annotate-whole block,
+  // solid once a choice is set.
+  async function writeAnnotationChoice(selector, text, value, timestamp) {
+    const response = await fetch(`${annotationEndpoint}/choice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ selector, text, value, timestamp }),
+    });
+    if (response.ok) {
+      return;
+    }
+    const details = await response.text();
+    throw new Error(
+      `Annotation choice write failed (${response.status}): ${details}`,
+    );
+  }
+
+  async function persistedChoiceValue(selector) {
+    const annotations = await readPersistedAnnotations();
+    return annotations[selector]?.choice?.value || "";
+  }
+
+  function applyChoiceState(element) {
+    const control = choiceControlByElement.get(element);
+    if (!control) {
+      return;
+    }
+    const value = choiceByElement.get(element)?.value || "";
+    control.classList.toggle("is-set", Boolean(value));
+    control.querySelector(".annotation-choice-label").textContent =
+      value || annotationChoices[0];
+    control
+      .querySelector(".annotation-choice-primary")
+      .setAttribute("aria-pressed", value ? "true" : "false");
+  }
+
+  // Every choice mutation writes, reads the file straight back to confirm the
+  // value landed (or cleared), and only then updates local state — the same
+  // write-then-verify contract the notes use.
+  async function setChoice(element, value) {
+    const control = choiceControlByElement.get(element);
+    const selector = selectorForAnnotationElement(element);
+    const text = normalizedElementText(element);
+    const timestamp = localIsoTimestamp();
+    control.classList.remove("fail");
+    control.classList.add("annotation-choice-pending");
+    try {
+      await writeAnnotationChoice(selector, text, value, timestamp);
+      if ((await persistedChoiceValue(selector)) !== value) {
+        throw new Error("Choice write was absent on read-back.");
+      }
+      if (value) {
+        choiceByElement.set(element, { selector, value, timestamp });
+      } else {
+        choiceByElement.delete(element);
+      }
+      applyChoiceState(element);
+    } catch (error) {
+      console.error(error);
+      control.classList.add("fail");
+    } finally {
+      control.classList.remove("annotation-choice-pending");
+    }
+  }
+
+  function closeChoiceMenu() {
+    if (!activeChoiceMenu) {
+      return;
+    }
+    activeChoiceMenu.control
+      .querySelector(".annotation-choice-caret")
+      .setAttribute("aria-expanded", "false");
+    document.removeEventListener("mousedown", activeChoiceMenu.onOutside, true);
+    activeChoiceMenu.menu.remove();
+    activeChoiceMenu = null;
+  }
+
+  function openChoiceMenu(element, control) {
+    closeChoiceMenu();
+    const activeValue = choiceByElement.get(element)?.value || "";
+    const menu = document.createElement("div");
+    menu.className = "annotation-choice-menu";
+    menu.dataset.annotationUi = "choice-menu";
+    annotationChoices.forEach((choice) => {
+      const option = document.createElement("button");
+      option.type = "button";
+      option.className = "annotation-choice-option";
+      option.textContent = choice;
+      if (choice === activeValue) {
+        option.classList.add("selected");
+      }
+      option.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        closeChoiceMenu();
+        setChoice(element, choice === activeValue ? "" : choice);
+      });
+      menu.append(option);
+    });
+    document.body.append(menu);
+
+    const caret = control.querySelector(".annotation-choice-caret");
+    const caretRect = caret.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    menu.style.left = `${clamp(
+      caretRect.right - menuRect.width,
+      8,
+      window.innerWidth - menuRect.width - 8,
+    )}px`;
+    menu.style.top = `${clamp(
+      caretRect.bottom + 4,
+      8,
+      window.innerHeight - menuRect.height - 8,
+    )}px`;
+    caret.setAttribute("aria-expanded", "true");
+
+    const onOutside = (event) => {
+      if (!menu.contains(event.target) && !control.contains(event.target)) {
+        closeChoiceMenu();
+      }
+    };
+    document.addEventListener("mousedown", onOutside, true);
+    activeChoiceMenu = { element, control, menu, onOutside };
+  }
+
+  function toggleChoiceMenu(element, control) {
+    if (activeChoiceMenu && activeChoiceMenu.element === element) {
+      closeChoiceMenu();
+      return;
+    }
+    openChoiceMenu(element, control);
+  }
+
+  function ensureChoiceControl(element) {
+    const existing = choiceControlByElement.get(element);
+    if (existing) {
+      return existing;
+    }
+
+    // A <span> root stays valid phrasing content inside a <p> (the .stance
+    // blocks) where a <div> would be hoisted out; buttons are phrasing too.
+    const control = document.createElement("span");
+    control.className = "annotation-choice";
+    control.dataset.annotationUi = "choice";
+
+    const primary = document.createElement("button");
+    primary.type = "button";
+    primary.className = "annotation-choice-primary";
+    primary.setAttribute("aria-pressed", "false");
+    const label = document.createElement("span");
+    label.className = "annotation-choice-label";
+    label.textContent = annotationChoices[0];
+    primary.append(label);
+
+    const caret = document.createElement("button");
+    caret.type = "button";
+    caret.className = "annotation-choice-caret";
+    caret.setAttribute("aria-haspopup", "true");
+    caret.setAttribute("aria-expanded", "false");
+    caret.setAttribute("aria-label", "Choose a different answer");
+    caret.textContent = "▾";
+
+    primary.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const active = choiceByElement.get(element)?.value || "";
+      setChoice(element, active ? "" : annotationChoices[0]);
+    });
+    caret.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleChoiceMenu(element, control);
+    });
+
+    control.append(primary, caret);
+    const host = annotationMarkerHost(element);
+    host.classList.add("annotation-choice-host");
+    host.append(control);
+    choiceControlByElement.set(element, control);
+    return control;
+  }
+
+  function setupChoiceButtons() {
+    document.querySelectorAll("[data-annotate-whole]").forEach((element) => {
+      // A positioned control can't be hosted inside table internals (it would
+      // be foster-parented out of the table), so tables keep notes only.
+      if (element.closest("table") || !normalizedElementText(element)) {
+        return;
+      }
+      ensureChoiceControl(element);
+    });
+  }
+
   // ----- Jump to the next un-annotated unit ----------------------------
   // The author marks every unit of communication as a whole-annotation target
   // (annotationWholeSelector), so that — not "any element with text" — is what
@@ -1515,7 +1735,9 @@
       document.querySelectorAll(annotationWholeSelector),
     ).filter(
       (element) =>
-        !annotationsByElement.has(element) && normalizedElementText(element),
+        !annotationsByElement.has(element) &&
+        !choiceByElement.has(element) &&
+        normalizedElementText(element),
     );
     const viewportCenter = window.innerHeight / 2;
     // A unit counts as "below" only if its center clears the viewport center by
@@ -1580,6 +1802,7 @@
     });
   }
 
+  setupChoiceButtons();
   setupNextUnannotatedButton();
   loadAnnotations().catch((error) => console.warn(error));
 })();

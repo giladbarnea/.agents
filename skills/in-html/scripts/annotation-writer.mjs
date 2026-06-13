@@ -211,7 +211,7 @@ async function handleAnnotations(request, response) {
       sendJson(response, 404, {ok: false, error: 'No annotation note matches that selector and timestamp.'});
       return;
     }
-    if (remaining.length === 0) {
+    if (remaining.length === 0 && !annotations[payload.selector].choice) {
       delete annotations[payload.selector];
     } else {
       annotations[payload.selector].userInputs = remaining;
@@ -240,6 +240,7 @@ async function handleAnnotations(request, response) {
   item.timestamp = payload.timestamp;
   userInputs.push(item);
   annotations[payload.selector] = {
+    ...existing,
     text: payload.text,
     userInputs
   };
@@ -275,6 +276,58 @@ async function handleAnnotationsRestore(request, response) {
   sendJson(response, 200, {ok: true, path: annotationsPath});
 }
 
+// Sets or clears the single mutually-exclusive choice on a selector (Yes /
+// Agreed / Locked …), independent of the appended free-text notes: an empty
+// value clears it, and the selector entry is dropped only when neither a choice
+// nor any notes remain.
+async function handleAnnotationsChoice(request, response) {
+  if (!setCorsHeaders(request, response)) {
+    sendJson(response, 403, {ok: false, error: 'Origin is not allowed.'});
+    return;
+  }
+
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
+
+  if (request.method !== 'POST') {
+    sendJson(response, 405, {ok: false, error: 'Use POST /annotations/choice.'});
+    return;
+  }
+
+  const payload = await readRequestJson(request);
+  assertPayloadStringFields(payload, ['selector', 'text', 'timestamp']);
+  if (payload.value !== undefined && typeof payload.value !== 'string') {
+    throw new Error('Annotation choice field "value" must be a string.');
+  }
+
+  const annotations = await readAnnotations();
+  const existing = annotations[payload.selector];
+  const value = (payload.value ?? '').trim();
+
+  if (!value) {
+    if (existing) {
+      delete existing.choice;
+      if (!Array.isArray(existing.userInputs) || existing.userInputs.length === 0) {
+        delete annotations[payload.selector];
+      }
+    }
+  } else {
+    const userInputs = Array.isArray(existing?.userInputs) ? existing.userInputs : [];
+    annotations[payload.selector] = {
+      ...existing,
+      text: payload.text,
+      userInputs,
+      choice: {value, timestamp: payload.timestamp}
+    };
+  }
+
+  await writeAnnotations(annotations);
+  sendJson(response, 200, {ok: true, path: annotationsPath});
+}
+
 const server = http.createServer(async (request, response) => {
   try {
     const requestUrl = new URL(request.url, `http://${request.headers.host}`);
@@ -286,6 +339,11 @@ const server = http.createServer(async (request, response) => {
 
     if (requestUrl.pathname === '/annotations/restore') {
       await handleAnnotationsRestore(request, response);
+      return;
+    }
+
+    if (requestUrl.pathname === '/annotations/choice') {
+      await handleAnnotationsChoice(request, response);
       return;
     }
 

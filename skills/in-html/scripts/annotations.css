@@ -534,6 +534,136 @@
   opacity: 0.55;
 }
 
+/* Quick-answer split button: a one-click "Yes" with a caret that opens the
+   other mutually-exclusive choices (Agreed, Locked). It sits inside the
+   bottom-right corner of every whole-annotation block, below the top-right
+   note marker. Subtle at rest, it brightens on hover and turns solid-accent
+   once a choice is set; free-text notes append independently. */
+.annotation-choice-host {
+  position: relative;
+}
+.annotation-choice {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.6rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+  opacity: 0.32;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transition:
+    opacity 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.annotation-hover .annotation-choice {
+  opacity: 0.9;
+}
+.annotation-choice:hover,
+.annotation-choice:focus-within {
+  opacity: 1;
+}
+.annotation-choice.is-set {
+  opacity: 1;
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.annotation-choice.fail {
+  border-color: var(--bad);
+}
+.annotation-choice.annotation-choice-pending {
+  opacity: 0.6;
+}
+.annotation-choice-primary,
+.annotation-choice-caret {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+.annotation-choice-primary {
+  gap: 0.3em;
+  padding: 0.3em 0.55em 0.3em 0.72em;
+}
+.annotation-choice-caret {
+  border-inline-start: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  padding: 0.3em 0.5em;
+  font-size: 0.62rem;
+}
+.annotation-choice.is-set .annotation-choice-primary,
+.annotation-choice.is-set .annotation-choice-caret {
+  color: var(--on-accent);
+}
+.annotation-choice.is-set .annotation-choice-caret {
+  border-inline-start-color: color-mix(in srgb, var(--on-accent) 35%, transparent);
+}
+@media (hover: hover) {
+  .annotation-choice-primary:hover,
+  .annotation-choice-caret:hover {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+  .annotation-choice.is-set .annotation-choice-primary:hover,
+  .annotation-choice.is-set .annotation-choice-caret:hover {
+    background: color-mix(in srgb, var(--on-accent) 18%, transparent);
+  }
+}
+/* The caret's dropdown of mutually-exclusive choices. */
+.annotation-choice-menu {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  min-width: 7rem;
+  padding: 0.3rem;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.18);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.annotation-choice-option {
+  appearance: none;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: start;
+  padding: 0.4em 0.7em;
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+}
+.annotation-choice-option::before {
+  content: "";
+  width: 0.85em;
+  font-size: 0.85em;
+}
+.annotation-choice-option.selected {
+  color: var(--accent);
+  font-weight: 600;
+}
+.annotation-choice-option.selected::before {
+  content: "✓";
+}
+@media (hover: hover) {
+  .annotation-choice-option:hover {
+    background: var(--bluebg);
+  }
+}
+
 /* Under reduced motion, keep the gentle opacity fades (vestibular-safe) but
    drop the transform lift, scale, and positional glide. */
 @media (prefers-reduced-motion: reduce) {
@@ -633,5 +763,16 @@
   .annotation-next-unannotated {
     min-height: 2.6rem;
     padding: 0.55em 1.15em;
+  }
+  .annotation-choice {
+    opacity: 0.65;
+  }
+  .annotation-choice-primary,
+  .annotation-choice-caret {
+    padding-block: 0.5em;
+    font-size: 0.8rem;
+  }
+  .annotation-choice-option {
+    padding-block: 0.6em;
   }
 }
