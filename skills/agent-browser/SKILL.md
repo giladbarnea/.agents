@@ -63,6 +63,7 @@ Techniques worth reusing:
 
 - For `pi.dev`, read `references/pi-dev.md`.
 - For Claude/Codex usage limits, read `references/ai-usage.md`.
+- For scraping `claude.ai/code` (Claude Code web) session transcripts, read `references/claude-code-web.md`.
 - For GitHub repo changelogs, use `scripts/scrape_changelogs.py`.
 
 For these tailored cases, lightly skim the core docs and then follow the dedicated reference.
