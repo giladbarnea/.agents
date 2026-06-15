@@ -20,25 +20,17 @@
   const sheetLayoutInput = window.matchMedia(
     "(hover: none) and (pointer: coarse)",
   );
+  // The panel is the one annotation surface on both pointer types. On coarse
+  // pointers it is a draggable bottom sheet (the collapse/expand state machine
+  // below); on fine pointers it is a static side card — always "expanded", no
+  // handle, no drag. This gate fences off the touch-only sheet machinery.
+  const isSheet = () => sheetLayoutInput.matches;
   const annotationsByElement = new Map();
-  const annotationPreviewsByElement = new Map();
   const choiceByElement = new Map();
   const choiceControlByElement = new Map();
   const annotationChoices = ["Yes", "Agreed", "Locked"];
   let activeChoiceMenu = null;
   let highlightedAnnotationElement = null;
-  let activeAnnotationEditor = null;
-  let activeAnnotationElement = null;
-  let activeAnnotationSelection = "";
-  let activeAnnotationSelectionRange = null;
-
-  // A persistent custom highlight survives focus changes and styles the
-  // captured phrase distinctly from a native browser selection.
-  const annotationSelectionHighlight =
-    typeof Highlight === "function" && CSS.highlights ? new Highlight() : null;
-  if (annotationSelectionHighlight) {
-    CSS.highlights.set("annotation-selection", annotationSelectionHighlight);
-  }
 
   const hoverOverlay = document.createElement("div");
   hoverOverlay.className = "annotation-hover-overlay";
@@ -57,58 +49,6 @@
       .querySelectorAll("[data-annotation-ui]")
       .forEach((node) => node.remove());
     return clone.textContent.trim().replace(/\s+/g, " ");
-  }
-
-  function selectedRangeWithin(element) {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-      return null;
-    }
-
-    const range = selection.getRangeAt(0);
-    if (
-      !element.contains(range.startContainer) ||
-      !element.contains(range.endContainer)
-    ) {
-      return null;
-    }
-
-    const text = selection.toString().trim().replace(/\s+/g, " ");
-    if (!text) {
-      return null;
-    }
-
-    return { text, range: range.cloneRange() };
-  }
-
-  function updateAnnotationSelectionHighlight() {
-    if (!annotationSelectionHighlight) {
-      return;
-    }
-    annotationSelectionHighlight.clear();
-    if (activeAnnotationSelectionRange) {
-      annotationSelectionHighlight.add(activeAnnotationSelectionRange);
-    }
-  }
-
-  function updateAnnotationSelectionPreview() {
-    const preview = activeAnnotationEditor?.querySelector(
-      ".annotation-selection-preview",
-    );
-    if (!preview) {
-      return;
-    }
-
-    preview.hidden = !activeAnnotationSelection;
-    preview.querySelector(".annotation-selection-text").textContent =
-      activeAnnotationSelection;
-  }
-
-  function setActiveAnnotationSelection(selection) {
-    activeAnnotationSelection = selection?.text || "";
-    activeAnnotationSelectionRange = selection?.range || null;
-    updateAnnotationSelectionHighlight();
-    updateAnnotationSelectionPreview();
   }
 
   function annotationCandidateFromPoint(clientX, clientY) {
@@ -223,6 +163,15 @@
     return typeof userInput === "string" ? userInput : userInput.userInput;
   }
 
+  // NOTE: phrase-level annotation was mistakenly dropped in the desktop/mobile
+  // unification refactor. This function (and the ↳ line in buildPreviewNote)
+  // still RENDERS notes anchored to a sub-phrase, but the authoring path —
+  // click-drag to select text within a block, then comment on just that
+  // selection — was removed with the old floating editor. Restore the capture
+  // side (text selection + CSS Custom Highlight API + selection preview); the
+  // dropped implementation survives in the in-html skill repo at
+  // scripts/annotations.js as of commit ef218d9 (the last state before this
+  // unified version was transferred in over it).
   function annotationSelectionText(userInput) {
     return typeof userInput === "string"
       ? ""
@@ -313,13 +262,6 @@
 
   function annotatedElementFromMarker(marker) {
     return marker.closest(".annotation-has-note");
-  }
-
-  function setAnnotationMarkerPressed(element, pressed) {
-    annotationMarkerForElement(element)?.setAttribute(
-      "aria-pressed",
-      pressed ? "true" : "false",
-    );
   }
 
   function ensureAnnotationMarker(element, annotation) {
@@ -436,133 +378,28 @@
     return { annotation: entry.annotation, itemIndex };
   }
 
-  // Removes the editor once its exit transition finishes, falling back to an
-  // immediate removal when motion is disabled (so reduced-motion never leaves
-  // an orphaned node waiting on a transitionend that never fires).
-  function removeEditorAfterTransition(editor) {
-    const maxDuration = Math.max(
-      0,
-      ...getComputedStyle(editor)
-        .transitionDuration.split(",")
-        .map((value) => Number.parseFloat(value) || 0),
-    );
-    if (maxDuration === 0) {
-      editor.remove();
-      return;
+  // One note row: the selected-phrase line (when present), the note body, and —
+  // for a persisted note — in-place editing with Save / Revert / Delete. Shared
+  // by the first render and the re-render after a draft is saved.
+  function buildPreviewNote(element, userInput) {
+    const note = document.createElement("article");
+    note.className = "annotation-preview-note";
+
+    const selectedText = annotationSelectionText(userInput);
+    if (selectedText) {
+      const selected = document.createElement("div");
+      selected.className = "annotation-preview-selected";
+      selected.textContent = `↳ “${selectedText}”`;
+      note.append(selected);
     }
-    let removed = false;
-    const remove = () => {
-      if (removed) {
-        return;
-      }
-      removed = true;
-      editor.remove();
-    };
-    editor.addEventListener("transitionend", remove, { once: true });
-    window.setTimeout(remove, maxDuration * 1000 + 60);
-  }
 
-  function closeAnnotationEditor() {
-    const editor = activeAnnotationEditor;
-    activeAnnotationEditor = null;
-    activeAnnotationElement = null;
-    setActiveAnnotationSelection(null);
-    setHighlightedAnnotationElement(null);
-    if (!editor) {
-      return;
+    const body = document.createElement("p");
+    body.textContent = annotationInputText(userInput);
+    note.append(body);
+    if (typeof userInput !== "string" && userInput.timestamp) {
+      enableAnnotationNoteEditing(note, body, element, userInput);
     }
-    editor.classList.remove("open");
-    editor.classList.add("closing");
-    removeEditorAfterTransition(editor);
-  }
-
-  function showAnnotationStatus(statusElement, className, text) {
-    statusElement.className = `annotation-status show ${className}`;
-    statusElement.textContent = text;
-  }
-
-  function closeAnnotationPreview(element) {
-    const preview = annotationPreviewsByElement.get(element);
-    if (!preview) {
-      return;
-    }
-    preview.remove();
-    element.classList.remove("annotation-linked-hover");
-    annotationPreviewsByElement.delete(element);
-    setAnnotationMarkerPressed(element, false);
-    positionAnnotationPreviews();
-  }
-
-  function closeAllAnnotationPreviews() {
-    annotationPreviewsByElement.forEach((preview, element) => {
-      preview.remove();
-      element.classList.remove("annotation-linked-hover");
-      setAnnotationMarkerPressed(element, false);
-    });
-    annotationPreviewsByElement.clear();
-  }
-
-  function annotationCountLabel(count) {
-    return count === 1 ? "1 annotation" : `${count} annotations`;
-  }
-
-  function createAnnotationPreview(element, annotation) {
-    const preview = document.createElement("aside");
-    const userInputs = annotationUserInputs(annotation);
-    preview.className = "annotation-preview";
-    preview.setAttribute("role", "dialog");
-    preview.setAttribute("aria-label", "Annotation preview");
-
-    const header = document.createElement("div");
-    header.className = "annotation-preview-header";
-
-    const title = document.createElement("div");
-    title.className = "annotation-preview-title";
-    title.textContent = annotationCountLabel(userInputs.length);
-
-    const closeButton = document.createElement("button");
-    closeButton.className = "annotation-preview-close";
-    closeButton.type = "button";
-    closeButton.setAttribute("aria-label", "Close annotation preview");
-    closeButton.textContent = "×";
-    closeButton.addEventListener("click", () => closeAnnotationPreview(element));
-    preview.addEventListener("mouseenter", () => setLinkedAnnotationElement(element));
-    preview.addEventListener("mouseleave", () => setLinkedAnnotationElement(null));
-
-    header.append(title, closeButton);
-    preview.append(header);
-
-    const targetText = document.createElement("div");
-    targetText.className = "annotation-preview-target";
-    targetText.textContent = annotation.text;
-    preview.append(targetText);
-
-    const list = document.createElement("div");
-    list.className = "annotation-preview-list";
-    userInputs.forEach((userInput) => {
-      const note = document.createElement("article");
-      note.className = "annotation-preview-note";
-
-      const selectedText = annotationSelectionText(userInput);
-      if (selectedText) {
-        const selected = document.createElement("div");
-        selected.className = "annotation-preview-selected";
-        selected.textContent = `↳ “${selectedText}”`;
-        note.append(selected);
-      }
-
-      const body = document.createElement("p");
-      body.textContent = annotationInputText(userInput);
-      note.append(body);
-      if (typeof userInput !== "string" && userInput.timestamp) {
-        enableAnnotationNoteEditing(note, body, element, userInput);
-      }
-      list.append(note);
-    });
-    preview.append(list);
-    makeAnnotationPreviewDraggable(preview);
-
-    return preview;
+    return note;
   }
 
   // Notes edit in place: the paragraph is always plaintext-editable, so a
@@ -576,6 +413,10 @@
   // without a timestamp stay read-only — nothing identifies them on disk.
   function enableAnnotationNoteEditing(note, noteBody, element, item) {
     let savedText = annotationInputText(item);
+    // Mirror the persisted text onto the node so a panel-wide "is anything
+    // dirty?" check is a single stateless DOM read (innerText vs data-saved-text)
+    // without reaching into this closure.
+    noteBody.dataset.savedText = savedText;
     noteBody.setAttribute("contenteditable", "plaintext-only");
     noteBody.setAttribute("spellcheck", "false");
     noteBody.setAttribute("aria-label", "Annotation note (editable)");
@@ -612,15 +453,6 @@
     };
     refreshDirtyState();
 
-    const refreshPreviewTitle = () => {
-      const entry = annotationsByElement.get(element);
-      const count = entry ? annotationUserInputs(entry.annotation).length : 0;
-      note
-        .closest(".annotation-preview")
-        .querySelector(".annotation-preview-title").textContent =
-        annotationCountLabel(count);
-    };
-
     function revertNoteEdit() {
       noteBody.textContent = savedText;
       saveButton.classList.remove("fail");
@@ -651,6 +483,7 @@
         }
         item.userInput = userInput;
         savedText = userInput;
+        noteBody.dataset.savedText = userInput;
         noteBody.textContent = userInput;
         saveButton.classList.remove("fail");
       } catch (error) {
@@ -693,9 +526,7 @@
       }
       note.classList.add("annotation-note-deleted");
       noteBody.setAttribute("contenteditable", "false");
-      refreshPreviewTitle();
       revertButton.disabled = false;
-      positionAnnotationPreviews();
     }
 
     async function restoreDeletedNote() {
@@ -726,10 +557,8 @@
       note.classList.remove("annotation-note-deleted");
       noteBody.setAttribute("contenteditable", "plaintext-only");
       revertButton.classList.remove("fail");
-      refreshPreviewTitle();
       deleteButton.disabled = false;
       refreshDirtyState();
-      positionAnnotationPreviews();
     }
 
     noteBody.addEventListener("input", refreshDirtyState);
@@ -762,156 +591,9 @@
     });
   }
 
-  // Dragging is offered on the preview's own padding (event.target is the
-  // preview itself there, never its text or buttons), so no visual handle is
-  // needed. The bottom-right corner is left to the native resize grip; grabbing
-  // either marks the preview user-placed so auto-layout stops moving it.
-  function makeAnnotationPreviewDraggable(preview) {
-    preview.addEventListener("mousedown", (event) => {
-      if (event.target !== preview) {
-        return;
-      }
-      preview.dataset.userPlaced = "true";
-
-      const rect = preview.getBoundingClientRect();
-      const onResizeGrip =
-        rect.right - event.clientX < 18 && rect.bottom - event.clientY < 18;
-      if (onResizeGrip) {
-        preview.style.maxHeight = "calc(100vh - 1rem)";
-        return;
-      }
-
-      event.preventDefault();
-      const grabX = event.clientX - rect.left;
-      const grabY = event.clientY - rect.top;
-
-      const onMove = (moveEvent) => {
-        const position = clampEditorPosition(
-          moveEvent.clientX - grabX,
-          moveEvent.clientY - grabY,
-          preview.offsetWidth,
-          preview.offsetHeight,
-        );
-        preview.style.left = `${position.left}px`;
-        preview.style.top = `${position.top}px`;
-      };
-
-      const onUp = () => {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-      };
-
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    });
-  }
-
   function cssPixels(value, fallback) {
     const pixels = Number.parseFloat(value);
     return Number.isFinite(pixels) ? pixels : fallback;
-  }
-
-  function positionAnnotationPreview(preview, element) {
-    const elementRect = element.getBoundingClientRect();
-    const columnRect = (element.closest(".col") || element).getBoundingClientRect();
-    const wrap = element.closest(".wrap");
-    const gap = wrap ? cssPixels(getComputedStyle(wrap).paddingRight, 24) : 24;
-    const corridorLeft = columnRect.right;
-    const corridorRight = window.innerWidth - gap;
-    const corridorWidth = corridorRight - corridorLeft;
-    const width = clamp(corridorWidth, 224, 360);
-
-    preview.style.width = `${width}px`;
-    const previewRect = preview.getBoundingClientRect();
-    const centeredLeft = corridorLeft + (corridorWidth - previewRect.width) / 2;
-    const fallbackLeft = clamp(
-      elementRect.left,
-      gap,
-      window.innerWidth - previewRect.width - gap,
-    );
-    const left = corridorWidth >= previewRect.width ? centeredLeft : fallbackLeft;
-    const top = clamp(
-      elementRect.top,
-      gap,
-      window.innerHeight - previewRect.height - gap,
-    );
-
-    preview.style.left = `${left}px`;
-    preview.style.top = `${top}px`;
-  }
-
-  // Auto-layout only manages previews the user hasn't dragged or resized;
-  // user-placed ones keep their position and size.
-  function positionAnnotationPreviews() {
-    const gap = 12;
-    const entries = Array.from(annotationPreviewsByElement.entries())
-      .filter(([, preview]) => !preview.dataset.userPlaced)
-      .map(([element, preview]) => ({
-        element,
-        preview,
-        top: element.getBoundingClientRect().top,
-      }))
-      .sort((first, second) => first.top - second.top);
-
-    entries.forEach(({ preview, element }) => {
-      positionAnnotationPreview(preview, element);
-    });
-
-    let previousBottom = -Infinity;
-    entries.forEach(({ preview }) => {
-      const rect = preview.getBoundingClientRect();
-      const top = clamp(
-        Math.max(rect.top, previousBottom + gap),
-        gap,
-        window.innerHeight - rect.height - gap,
-      );
-      preview.style.top = `${top}px`;
-      previousBottom = top + rect.height;
-    });
-  }
-
-  function openAnnotationPreview(element) {
-    const entry = annotationsByElement.get(element);
-    if (!entry) {
-      return;
-    }
-    if (sheetLayoutInput.matches) {
-      closeAllAnnotationPreviews();
-    }
-
-    const preview = createAnnotationPreview(element, entry.annotation);
-    preview.style.visibility = "hidden";
-    document.body.appendChild(preview);
-    annotationPreviewsByElement.set(element, preview);
-    setAnnotationMarkerPressed(element, true);
-    positionAnnotationPreviews();
-    preview.style.visibility = "visible";
-  }
-
-  function toggleAnnotationPreview(element) {
-    if (annotationPreviewsByElement.has(element)) {
-      closeAnnotationPreview(element);
-      return;
-    }
-    openAnnotationPreview(element);
-  }
-
-  function setLinkedAnnotationPreview(element) {
-    annotationPreviewsByElement.forEach((preview, previewElement) => {
-      preview.classList.toggle(
-        "annotation-preview-linked-hover",
-        previewElement === element,
-      );
-    });
-  }
-
-  function setLinkedAnnotationElement(element) {
-    annotationsByElement.forEach((_entry, annotatedElement) => {
-      annotatedElement.classList.toggle(
-        "annotation-linked-hover",
-        annotatedElement === element,
-      );
-    });
   }
 
   async function writeAnnotation(selector, text, userInput, specificallySelected, timestamp) {
@@ -1015,189 +697,12 @@
     return Math.min(Math.max(value, min), max);
   }
 
-  // The editor's left/top are its top-left corner: dragging and resizing both
-  // behave intuitively, and a single clamp keeps it fully inside the viewport.
-  function clampEditorPosition(left, top, width, height) {
-    return {
-      left: clamp(left, 0, window.innerWidth - width),
-      top: clamp(top, 0, window.innerHeight - height),
-    };
-  }
-
-  function positionAnnotationEditor(editor, element) {
-    const elementRect = element.getBoundingClientRect();
-    const width = editor.offsetWidth;
-    const height = editor.offsetHeight;
-    const position = clampEditorPosition(
-      elementRect.left + elementRect.width / 2 - width / 2,
-      elementRect.top + elementRect.height / 2,
-      width,
-      height,
-    );
-    editor.style.left = `${position.left}px`;
-    editor.style.top = `${position.top}px`;
-  }
-
-  function reclampFloatingPanel(editor) {
-    const position = clampEditorPosition(
-      Number.parseFloat(editor.style.left) || 0,
-      Number.parseFloat(editor.style.top) || 0,
-      editor.offsetWidth,
-      editor.offsetHeight,
-    );
-    editor.style.left = `${position.left}px`;
-    editor.style.top = `${position.top}px`;
-  }
-
-  function makeAnnotationEditorDraggable(editor, handle) {
-    handle.addEventListener("mousedown", (event) => {
-      event.preventDefault();
-      // Settle any in-flight entrance transform before measuring, so a drag
-      // started mid-animation doesn't jump on the first move.
-      editor.classList.add("dragging");
-      const rect = editor.getBoundingClientRect();
-      const grabX = event.clientX - rect.left;
-      const grabY = event.clientY - rect.top;
-
-      const onMove = (moveEvent) => {
-        const position = clampEditorPosition(
-          moveEvent.clientX - grabX,
-          moveEvent.clientY - grabY,
-          editor.offsetWidth,
-          editor.offsetHeight,
-        );
-        editor.style.left = `${position.left}px`;
-        editor.style.top = `${position.top}px`;
-      };
-
-      const onUp = () => {
-        editor.classList.remove("dragging");
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-      };
-
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    });
-  }
-
-  // One submit path serves every input mode: bare Enter on desktop, the
-  // footer's Save button on touch screens.
-  async function submitActiveAnnotationEditor() {
-    const editor = activeAnnotationEditor;
-    const annotatedElement = activeAnnotationElement;
-    if (!editor || !annotatedElement) {
-      return;
-    }
-
-    const textarea = editor.querySelector("textarea");
-    const status = editor.querySelector(".annotation-status");
-    const userInput = textarea.value.trim();
-    if (!userInput) {
-      return;
-    }
-
-    const specificallySelected = activeAnnotationSelection;
-    const timestamp = localIsoTimestamp();
-    const selector = selectorForAnnotationElement(annotatedElement);
-    const text = normalizedElementText(annotatedElement);
-
-    textarea.disabled = true;
-    try {
-      await writeAnnotation(
-        selector,
-        text,
-        userInput,
-        specificallySelected,
-        timestamp,
-      );
-      const persisted = await annotationWasPersisted(
-        selector,
-        userInput,
-        timestamp,
-      );
-      if (!persisted) {
-        throw new Error(
-          "Write returned ok but the annotation was absent on read-back.",
-        );
-      }
-      recordWrittenAnnotation(
-        annotatedElement,
-        userInput,
-        specificallySelected,
-        timestamp,
-      );
-      showAnnotationStatus(status, "ok", "✓");
-      closeAnnotationEditor();
-    } catch (error) {
-      console.error(error);
-      textarea.disabled = false;
-      showAnnotationStatus(status, "fail", "✕");
-      textarea.focus();
-    }
-  }
-
-  function openAnnotationEditor(element) {
-    closeAllAnnotationPreviews();
-    if (activeAnnotationEditor) {
-      closeAnnotationEditor();
-    }
-
-    activeAnnotationElement = element;
-    setHighlightedAnnotationElement(element);
-
-    const editor = document.createElement("div");
-    editor.className = "annotation-editor";
-    editor.innerHTML =
-      '<div class="annotation-editor-handle" data-annotation-ui="handle" aria-hidden="true"></div><div class="annotation-selection-preview" hidden><span class="annotation-selection-arrow" aria-hidden="true">↳</span><q class="annotation-selection-text"></q></div><textarea aria-label="Annotation text" autofocus></textarea><div class="annotation-editor-footer" data-annotation-ui="footer"><button type="button" class="annotation-editor-cancel">Cancel</button><button type="button" class="annotation-editor-save">Save</button></div><div class="annotation-status"></div>';
-    document.body.appendChild(editor);
-    positionAnnotationEditor(editor, element);
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => editor.classList.add("open")),
-    );
-
-    const textarea = editor.querySelector("textarea");
-    const handle = editor.querySelector(".annotation-editor-handle");
-    activeAnnotationEditor = editor;
-    updateAnnotationSelectionPreview();
-    textarea.focus();
-    makeAnnotationEditorDraggable(editor, handle);
-
-    editor
-      .querySelector(".annotation-editor-cancel")
-      .addEventListener("click", closeAnnotationEditor);
-    editor
-      .querySelector(".annotation-editor-save")
-      .addEventListener("click", submitActiveAnnotationEditor);
-
-    textarea.addEventListener("keydown", (event) => {
-      if (
-        event.key !== "Enter" ||
-        event.shiftKey ||
-        event.altKey ||
-        event.ctrlKey ||
-        event.metaKey
-      ) {
-        return;
-      }
-      event.preventDefault();
-      submitActiveAnnotationEditor();
-    });
-  }
-
-  // Hover semantics belong to hover-capable pointers; taps reach the touch
-  // bindings below instead of impersonating a mouse.
+  // Hover lights the reticle on whatever block sits under a fine pointer. The
+  // panel carries data-annotation-ui, so hovering it returns no candidate and
+  // the reticle clears instead of ringing the panel. Touch pointers skip this
+  // and reach the tap bindings further down.
   document.addEventListener("pointermove", (event) => {
     if (event.pointerType === "touch") {
-      return;
-    }
-    const marker = annotationMarkerFromEvent(event);
-    const linkedElement = marker
-      ? annotatedElementFromMarker(marker)
-      : annotatedElementFromPoint(event.clientX, event.clientY);
-    setLinkedAnnotationPreview(linkedElement);
-
-    if (activeAnnotationEditor) {
       return;
     }
     setHighlightedAnnotationElement(
@@ -1205,61 +710,24 @@
     );
   });
 
-  document.addEventListener("mouseleave", () => {
-    setLinkedAnnotationPreview(null);
-    setLinkedAnnotationElement(null);
-  });
-
+  // A bare mousedown on the ※ marker must not start a text selection or pull
+  // focus out of the panel; the open happens on the click below.
   document.addEventListener(
     "mousedown",
     (event) => {
-      if (activeAnnotationEditor || !event.shiftKey) {
-        return;
-      }
-
-      const element = annotationCandidateFromPoint(
-        event.clientX,
-        event.clientY,
-      );
-      if (!element) {
-        return;
-      }
-
-      const selection = selectedRangeWithin(element);
-      setActiveAnnotationSelection(selection);
-      if (selection) {
-        event.preventDefault();
-      }
-    },
-    true,
-  );
-
-  document.addEventListener(
-    "mousedown",
-    (event) => {
-      const marker = annotationMarkerFromEvent(event);
-      if (marker) {
+      if (annotationMarkerFromEvent(event)) {
         event.preventDefault();
         event.stopPropagation();
-        return;
       }
-
-      if (!event.metaKey || event.shiftKey || activeAnnotationEditor) {
-        return;
-      }
-
-      const element = annotatedElementFromPoint(event.clientX, event.clientY);
-      if (!element) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      toggleAnnotationPreview(element);
     },
     true,
   );
 
+  // Every fine-pointer gesture routes to the one panel:
+  //   ※ marker / ⌘-click an annotated block → open it to read its notes
+  //   Shift+click any block                  → open it with a focused composer
+  //   plain click off the panel              → dismiss it
+  // Touch taps are handled by handlePanelTouchTap on pointerup instead.
   document.addEventListener(
     "click",
     (event) => {
@@ -1269,74 +737,66 @@
         if (element) {
           event.preventDefault();
           event.stopPropagation();
-          toggleAnnotationPreview(element);
+          openOrSwitchPanel(element, { expand: true });
         }
         return;
       }
 
-      if (event.metaKey && !event.shiftKey && !activeAnnotationEditor) {
+      if (isSheet()) {
+        return;
+      }
+
+      if (event.metaKey && !event.shiftKey) {
         const element = annotatedElementFromPoint(event.clientX, event.clientY);
         if (element) {
           event.preventDefault();
           event.stopPropagation();
+          openOrSwitchPanel(element);
         }
         return;
       }
 
-      if (activeAnnotationEditor || !event.shiftKey) {
+      if (event.shiftKey) {
+        const element = annotationCandidateFromPoint(
+          event.clientX,
+          event.clientY,
+        );
+        if (element) {
+          event.preventDefault();
+          event.stopPropagation();
+          openOrSwitchPanel(element, { focusComposer: true });
+        }
         return;
       }
 
-      const element = annotationCandidateFromPoint(
-        event.clientX,
-        event.clientY,
-      );
-      if (!element) {
-        return;
+      // A plain click anywhere but the panel dismisses it (the discard guard
+      // still runs first if something is unsaved). Engaging a block needs
+      // Shift, so a stray click never re-opens what it just closed.
+      if (
+        panelOpen() &&
+        !event.target.closest(".annotation-panel, .annotation-confirm")
+      ) {
+        requestDismiss();
       }
-
-      event.preventDefault();
-      event.stopPropagation();
-      openAnnotationEditor(element);
     },
     true,
   );
 
-  // selectionchange feeds the open editor from every selection mechanism —
-  // mouse drags, keyboard selection, and touch long-press handles alike.
-  document.addEventListener("selectionchange", () => {
-    if (!activeAnnotationEditor || !activeAnnotationElement) {
-      return;
-    }
-
-    const selection = selectedRangeWithin(activeAnnotationElement);
-    if (selection) {
-      setActiveAnnotationSelection(selection);
-    }
-  });
-
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeChoiceMenu();
-      closeAnnotationEditor();
-      closeAllAnnotationPreviews();
+      requestDismiss();
     }
   });
 
   window.addEventListener("resize", () => {
     closeChoiceMenu();
-    if (activeAnnotationEditor) {
-      reclampFloatingPanel(activeAnnotationEditor);
-    }
-    annotationPreviewsByElement.forEach((preview) => {
-      if (preview.dataset.userPlaced) {
-        reclampFloatingPanel(preview);
-      }
-    });
     if (highlightedAnnotationElement) {
       positionHoverOverlay(highlightedAnnotationElement, true);
     }
-    positionAnnotationPreviews();
+    if (panelOpen() && !isSheet()) {
+      positionDesktopPanel();
+    }
   });
 
   window.addEventListener(
@@ -1346,159 +806,604 @@
       if (highlightedAnnotationElement) {
         positionHoverOverlay(highlightedAnnotationElement, true);
       }
-      positionAnnotationPreviews();
     },
     { passive: true },
   );
 
-  // ----- Touch bindings ------------------------------------------------
-  // Touch has no hover and no modifier keys, so a tap takes over the hover
-  // reticle's role and grows it an action bar (✎ annotate, ※ notes). The
-  // gestures only translate into the same actions the desktop bindings call;
-  // everything above stays input-agnostic. Detection runs on pointer events
-  // with pointerType "touch", so mouse and trackpad input never engages it —
-  // and it works on elements iOS Safari won't synthesize click events for.
+  // ----- Touch: the unified annotation panel ----------------------------
+  // On coarse pointers the action bar and the notes card are one component — a
+  // bottom sheet whose scrollable body stacks the action-bar section (context +
+  // verdict + Annotate), then the existing notes, then an always-present empty
+  // composer as the last item. Collapsed, the sheet shows only the handle and
+  // the action-bar section; dragging the handle up grows it to a fixed share of
+  // the screen and tucks the action bar away above the notes; dragging the
+  // handle down collapses it, and from collapsed dismisses it. The body scrolls
+  // natively — the handle alone owns the state-drag, so the two never fight.
 
-  let annotationActionBar = null;
-  let annotationAnnotateButton = null;
-  let annotationVerdictSegment = null;
+  const PANEL_VIEWPORT_SHARE = 0.64;
+  const PANEL_DETENT_THRESHOLD = 52;
+  const PANEL_DISMISS_THRESHOLD = 84;
 
-  function ensureAnnotationActionBar() {
-    if (annotationActionBar) {
-      return annotationActionBar;
+  let annotationPanel = null;
+  let panelHandle = null;
+  let panelBody = null;
+  let panelActionbar = null;
+  let panelContext = null;
+  let panelVerdictSegment = null;
+  let panelComposer = null;
+  let panelElement = null;
+  let panelExpanded = false;
+
+  function panelOpen() {
+    return Boolean(annotationPanel?.classList.contains("show"));
+  }
+
+  function readKeyboardInset() {
+    return cssPixels(
+      getComputedStyle(document.documentElement).getPropertyValue(
+        "--annotation-keyboard-inset",
+      ),
+      0,
+    );
+  }
+
+  // Expanded height is the smallest of three bounds: 64% of the screen (the
+  // spec's share), whatever clears the software keyboard (so the composer's
+  // Save/Cancel stay reachable), and the panel's own content height (so a short
+  // block hugs its content instead of leaving most of the sheet empty).
+  // scrollHeight reports the full content even while the body is collapsed and
+  // clipped, so this is valid in either mode.
+  function setPanelExpandedHeight() {
+    if (!annotationPanel || !isSheet()) {
+      return;
+    }
+    const full = window.innerHeight;
+    const content = panelHandle.offsetHeight + panelBody.scrollHeight;
+    const expanded = Math.min(
+      full * PANEL_VIEWPORT_SHARE,
+      full - readKeyboardInset() - 8,
+      content,
+    );
+    annotationPanel.style.setProperty(
+      "--panel-expanded",
+      `${Math.round(Math.max(expanded, 160))}px`,
+    );
+  }
+
+  // Collapsed shows exactly the handle and the action-bar section; its height is
+  // per-element (the context line wraps to one or two lines, the verdict row may
+  // be absent), so it is measured after each render.
+  function measurePanelCollapsedHeight() {
+    if (!annotationPanel || !isSheet()) {
+      return;
+    }
+    const padBottom = cssPixels(getComputedStyle(panelBody).paddingBottom, 0);
+    annotationPanel.style.setProperty(
+      "--panel-collapsed",
+      `${Math.round(
+        panelHandle.offsetHeight + panelActionbar.offsetHeight + padBottom,
+      )}px`,
+    );
+  }
+
+  function actionbarHeight() {
+    return panelActionbar.offsetHeight;
+  }
+
+  function ensureAnnotationPanel() {
+    if (annotationPanel) {
+      return annotationPanel;
     }
 
-    annotationActionBar = document.createElement("div");
-    annotationActionBar.className = "annotation-action-bar";
-    annotationActionBar.dataset.annotationUi = "action-bar";
+    annotationPanel = document.createElement("div");
+    annotationPanel.className = "annotation-panel";
+    annotationPanel.dataset.annotationUi = "panel";
 
-    annotationAnnotateButton = document.createElement("button");
-    annotationAnnotateButton.type = "button";
-    annotationAnnotateButton.textContent = "✎ Annotate";
-    annotationAnnotateButton.addEventListener("click", () => {
-      const element = highlightedAnnotationElement;
-      if (!element) {
-        return;
-      }
-      hideAnnotationActionBar();
-      setActiveAnnotationSelection(selectedRangeWithin(element));
-      openAnnotationEditor(element);
-    });
+    panelHandle = document.createElement("div");
+    panelHandle.className = "annotation-panel-handle";
+    panelHandle.setAttribute("aria-hidden", "true");
 
-    // Touch's verdict picker — the mobile twin of the desktop hover split-button.
-    // One tap commits; tapping the selected segment again clears. The bar stays
-    // open so the choice reads back in place. Shown only for verdict-eligible
-    // blocks (toggled in updateActionBarVerdict).
-    annotationVerdictSegment = document.createElement("div");
-    annotationVerdictSegment.className = "annotation-verdict-segment";
-    annotationVerdictSegment.dataset.annotationUi = "verdict-segment";
+    panelBody = document.createElement("div");
+    panelBody.className = "annotation-panel-body";
+    panelBody.dataset.annotationUi = "panel-body";
+
+    panelActionbar = document.createElement("div");
+    panelActionbar.className = "annotation-panel-actionbar";
+
+    panelContext = document.createElement("div");
+    panelContext.className = "annotation-action-context";
+
+    panelVerdictSegment = document.createElement("div");
+    panelVerdictSegment.className = "annotation-verdict-segment";
     annotationChoices.forEach((choice) => {
       const option = document.createElement("button");
       option.type = "button";
       option.className = "annotation-verdict-option";
       option.textContent = choice;
       option.addEventListener("click", async () => {
-        const element = highlightedAnnotationElement;
-        if (!element) {
+        if (!panelElement || !choiceControlByElement.has(panelElement)) {
           return;
         }
-        const current = choiceByElement.get(element)?.value || "";
-        await setChoice(element, choice === current ? "" : choice);
-        updateActionBarVerdict(element);
+        const current = choiceByElement.get(panelElement)?.value || "";
+        await setChoice(panelElement, choice === current ? "" : choice);
+        updatePanelVerdict();
       });
-      annotationVerdictSegment.append(option);
+      panelVerdictSegment.append(option);
     });
 
-    annotationActionBar.append(annotationVerdictSegment, annotationAnnotateButton);
-    hoverOverlay.append(annotationActionBar);
-    return annotationActionBar;
-  }
+    const annotateButton = document.createElement("button");
+    annotateButton.type = "button";
+    annotateButton.className = "annotation-panel-annotate";
+    annotateButton.textContent = "✎ Annotate";
+    annotateButton.addEventListener("click", () => {
+      if (panelElement) {
+        setPanelMode(true, { focusComposer: true });
+      }
+    });
 
-  function hideAnnotationActionBar() {
-    annotationActionBar?.classList.remove("show");
-  }
+    panelActionbar.append(panelContext, panelVerdictSegment, annotateButton);
+    panelBody.append(panelActionbar);
+    annotationPanel.append(panelHandle, panelBody);
+    document.body.append(annotationPanel);
+    makePanelDraggable();
 
-  // The bar hangs below the reticle and slides up just enough to stay inside
-  // the viewport when the tapped element runs past the bottom of the screen.
-  function placeAnnotationActionBar(element) {
-    const rect = element.getBoundingClientRect();
-    const overlayTop = rect.top - hoverOverlayOffsetY;
-    const overlayHeight = rect.height + hoverOverlayOffsetY * 2;
-    const barHeight = annotationActionBar.offsetHeight;
-    const topWithinOverlay = clamp(
-      overlayHeight + 8,
-      10 - overlayTop,
-      window.innerHeight - overlayTop - barHeight - 10,
-    );
-    annotationActionBar.style.top = `${topWithinOverlay}px`;
-  }
-
-  // The bar carries the verdict picker only for blocks that can hold a verdict,
-  // reflecting the block's current choice — touch's stand-in for the desktop
-  // rail split-button.
-  function updateActionBarVerdict(element) {
-    if (!annotationVerdictSegment) {
-      return;
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", () => {
+        if (panelOpen()) {
+          setPanelExpandedHeight();
+        }
+      });
     }
-    const eligible = choiceControlByElement.has(element);
-    annotationVerdictSegment.hidden = !eligible;
+    return annotationPanel;
+  }
+
+  function updatePanelVerdict() {
+    const eligible = panelElement && choiceControlByElement.has(panelElement);
+    panelVerdictSegment.hidden = !eligible;
     if (!eligible) {
       return;
     }
-    const value = choiceByElement.get(element)?.value || "";
-    annotationVerdictSegment
+    const value = choiceByElement.get(panelElement)?.value || "";
+    panelVerdictSegment
       .querySelectorAll(".annotation-verdict-option")
-      .forEach((option) => {
-        option.classList.toggle("selected", option.textContent === value);
-      });
+      .forEach((option) =>
+        option.classList.toggle("selected", option.textContent === value),
+      );
   }
 
-  // One button for adding an annotation; its label reflects how many notes the
-  // element already has. Viewing existing notes is the ※ rail badge's job, on
-  // touch as on desktop — so the bar never carries a redundant second button.
-  function showAnnotationActionBar(element) {
-    const bar = ensureAnnotationActionBar();
+  // The new-annotation composer is the bottom-most "note": always present, never
+  // auto-focused. It POSTs on Save, then the notes re-render with it as a real
+  // editable note and a fresh empty composer beneath. Cancel just clears it.
+  function buildPanelComposer(element) {
+    const note = document.createElement("article");
+    note.className = "annotation-preview-note annotation-note-draft";
+
+    const body = document.createElement("p");
+    body.className = "is-empty";
+    body.setAttribute("contenteditable", "plaintext-only");
+    body.setAttribute("spellcheck", "false");
+    body.setAttribute("aria-label", "New annotation note");
+    body.dataset.placeholder = "Add a note…";
+    body.dataset.savedText = "";
+    note.append(body);
+
+    const actions = document.createElement("div");
+    actions.className = "annotation-note-actions";
+
+    const saveButton = document.createElement("button");
+    saveButton.className = "annotation-note-action save";
+    saveButton.type = "button";
+    saveButton.textContent = "Save";
+    saveButton.disabled = true;
+
+    const cancelButton = document.createElement("button");
+    cancelButton.className = "annotation-note-action revert";
+    cancelButton.type = "button";
+    cancelButton.textContent = "Cancel";
+
+    actions.append(saveButton, cancelButton);
+    note.append(actions);
+
+    const draftText = () => body.innerText.trim();
+    const refresh = () => {
+      const empty = !draftText();
+      body.classList.toggle("is-empty", empty);
+      saveButton.disabled = empty;
+    };
+
+    function clearDraft() {
+      body.textContent = "";
+      refresh();
+      body.blur();
+    }
+
+    async function saveDraft() {
+      const userInput = draftText();
+      if (!userInput) {
+        return;
+      }
+      const timestamp = localIsoTimestamp();
+      const selector = selectorForAnnotationElement(element);
+      const text = normalizedElementText(element);
+      saveButton.disabled = true;
+      cancelButton.disabled = true;
+      body.setAttribute("contenteditable", "false");
+      try {
+        await writeAnnotation(selector, text, userInput, "", timestamp);
+        if (!(await annotationWasPersisted(selector, userInput, timestamp))) {
+          throw new Error(
+            "Write returned ok but the annotation was absent on read-back.",
+          );
+        }
+        recordWrittenAnnotation(element, userInput, "", timestamp);
+        // The write is async; only re-render if the panel is still on this block
+        // (the reader may have switched away while it was in flight).
+        if (panelElement === element) {
+          rerenderPanelNotes();
+        }
+      } catch (error) {
+        console.error(error);
+        saveButton.classList.add("fail");
+        body.setAttribute("contenteditable", "plaintext-only");
+        cancelButton.disabled = false;
+        refresh();
+      }
+    }
+
+    body.addEventListener("input", refresh);
+    saveButton.addEventListener("click", saveDraft);
+    cancelButton.addEventListener("click", clearDraft);
+    body.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        clearDraft();
+        return;
+      }
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey
+      ) {
+        event.preventDefault();
+        saveDraft();
+      }
+    });
+
+    refresh();
+    return note;
+  }
+
+  // Everything below the action-bar section is "the annotations": the persisted
+  // notes followed by the composer, rebuilt together from live state.
+  function fillPanelNotes(element) {
+    while (panelActionbar.nextSibling) {
+      panelActionbar.nextSibling.remove();
+    }
     const entry = annotationsByElement.get(element);
-    const noteCount = entry ? annotationUserInputs(entry.annotation).length : 0;
-    annotationAnnotateButton.textContent =
-      noteCount === 0 ? "✎ Annotate" : `✎ Annotate · ${noteCount}`;
-    updateActionBarVerdict(element);
-    bar.classList.add("show");
-    placeAnnotationActionBar(element);
+    annotationUserInputs(entry?.annotation || { userInputs: [] }).forEach(
+      (userInput) => panelBody.append(buildPreviewNote(element, userInput)),
+    );
+    panelComposer = buildPanelComposer(element);
+    panelBody.append(panelComposer);
   }
 
-  function handleTouchTap(event) {
+  function rerenderPanelNotes() {
+    if (!isSheet()) {
+      // Desktop card: rebuild the notes and keep the scroll where it was.
+      const top = panelBody.scrollTop;
+      fillPanelNotes(panelElement);
+      panelBody.scrollTop = top;
+      return;
+    }
+    const listOffset = Math.max(0, panelBody.scrollTop - actionbarHeight());
+    fillPanelNotes(panelElement);
+    // Content grew (or shrank), so both measured heights are re-derived before
+    // restoring the scroll, or a freshly saved note could fall outside a panel
+    // still sized to the old content.
+    measurePanelCollapsedHeight();
+    setPanelExpandedHeight();
+    if (panelExpanded) {
+      panelBody.scrollTop = actionbarHeight() + listOffset;
+    }
+  }
+
+  function renderPanelForElement(element) {
+    panelElement = element;
+    panelContext.textContent = normalizedElementText(element);
+    updatePanelVerdict();
+    fillPanelNotes(element);
+    measurePanelCollapsedHeight();
+  }
+
+  // Dirty = an editable note whose text differs from disk, or a non-empty
+  // composer. Pending-undo deletions (already persisted) do not count.
+  function isPanelDirty() {
+    if (!annotationPanel) {
+      return false;
+    }
+    return Array.from(
+      panelBody.querySelectorAll('p[contenteditable="plaintext-only"]'),
+    ).some((node) => node.innerText.trim() !== (node.dataset.savedText || ""));
+  }
+
+  function blurActiveEditable() {
+    const active = document.activeElement;
+    if (active?.closest?.(".annotation-panel")) {
+      active.blur();
+    }
+  }
+
+  // Collapsed and expanded are the panel's two heights (CSS vars). On expand the
+  // body is scrolled past the action-bar section so the annotations sit at the
+  // top; Annotate instead scrolls to the composer and focuses it.
+  function setPanelMode(
+    expanded,
+    { focusComposer = false, preserveListOffset = 0 } = {},
+  ) {
+    panelExpanded = expanded;
+    setPanelExpandedHeight();
+    annotationPanel.style.height = "";
+    annotationPanel.style.transform = "";
+    annotationPanel.classList.toggle("expanded", expanded);
+    annotationPanel.classList.toggle("collapsed", !expanded);
+    if (!expanded) {
+      panelBody.scrollTop = 0;
+      return;
+    }
+    // One frame later, so the .expanded class (overflow:auto, taller body) is in
+    // effect before scrolling — otherwise scrollTop clamps against the collapsed
+    // height. When the content fits, the target simply clamps to 0 (no tuck).
+    requestAnimationFrame(() => {
+      if (focusComposer) {
+        panelBody.scrollTop = panelBody.scrollHeight;
+        panelComposer?.querySelector("[contenteditable]")?.focus();
+      } else {
+        panelBody.scrollTop = actionbarHeight() + preserveListOffset;
+      }
+    });
+  }
+
+  // Desktop: park the card in the corridor to the right of the reading column,
+  // pinned near the top by CSS. Its width tracks the corridor but is clamped to
+  // a comfortable measure; when the window is too narrow to leave a corridor the
+  // card keeps its minimum width and floats over the column's right edge — the
+  // same fallback the old floating notes card used.
+  function positionDesktopPanel() {
+    const column = document.querySelector(".col");
+    const columnRight = column ? column.getBoundingClientRect().right : 0;
+    const gap = 20;
+    const width = clamp(window.innerWidth - columnRight - gap * 2, 300, 384);
+    const left = clamp(columnRight + gap, gap, window.innerWidth - gap - width);
+    annotationPanel.style.left = `${Math.round(left)}px`;
+    annotationPanel.style.width = `${Math.round(width)}px`;
+  }
+
+  function doOpenOrSwitch(element, { expand = null, focusComposer = false } = {}) {
+    const fresh = !panelOpen();
+    const wasExpanded = panelExpanded;
+    // Preserve the scroll *relative to the start of the notes* (sheet only),
+    // captured before the rebuild: the action-bar height differs per block, so
+    // the same pixel offset would land mid-note on a block with a shorter header.
+    const listOffset =
+      isSheet() && !fresh && wasExpanded
+        ? Math.max(0, panelBody.scrollTop - actionbarHeight())
+        : 0;
+    ensureAnnotationPanel();
+    // Switching lands the reader in read-mode: blur whatever was being edited
+    // and never auto-focus the new block (the composer is built focus-free) —
+    // only an explicit Shift+click, ※ marker, or Annotate puts a caret anywhere.
+    blurActiveEditable();
+    renderPanelForElement(element);
+    setHighlightedAnnotationElement(element);
+    annotationPanel.classList.add("show");
+    document.body.classList.add("annotation-panel-open");
+
+    if (!isSheet()) {
+      // The desktop card is always "expanded": no collapse, no handle, no height
+      // var. Position it, and on an annotate gesture drop the caret in the
+      // composer at the bottom; a plain open or a switch just refills in place.
+      panelExpanded = true;
+      positionDesktopPanel();
+      if (focusComposer) {
+        panelBody.scrollTop = panelBody.scrollHeight;
+        panelComposer?.querySelector("[contenteditable]")?.focus();
+      }
+      return;
+    }
+
+    setPanelExpandedHeight();
+    const expanded = expand === true ? true : fresh ? false : wasExpanded;
+    setPanelMode(expanded, { focusComposer, preserveListOffset: listOffset });
+  }
+
+  // A switch (or dismiss) while something is dirty asks first; the same guard
+  // covers every teardown, so unsaved text is never lost silently.
+  function openOrSwitchPanel(
+    element,
+    { expand = null, focusComposer = false } = {},
+  ) {
+    if (
+      panelOpen() &&
+      panelElement &&
+      panelElement !== element &&
+      isPanelDirty()
+    ) {
+      showDiscardConfirm(() => doOpenOrSwitch(element, { expand, focusComposer }));
+      return;
+    }
+    doOpenOrSwitch(element, { expand, focusComposer });
+  }
+
+  function dismissPanel() {
+    if (!annotationPanel) {
+      return;
+    }
+    blurActiveEditable();
+    annotationPanel.classList.remove("show");
+    annotationPanel.style.transform = "";
+    annotationPanel.style.height = "";
+    document.body.classList.remove("annotation-panel-open");
+    setHighlightedAnnotationElement(null);
+    panelElement = null;
+    panelExpanded = false;
+  }
+
+  function requestDismiss() {
+    if (isPanelDirty()) {
+      showDiscardConfirm(dismissPanel);
+      return;
+    }
+    dismissPanel();
+  }
+
+  function showDiscardConfirm(onDiscard) {
+    const previouslyFocused = document.activeElement;
+    const refocus = () => {
+      if (previouslyFocused?.isConnected) {
+        previouslyFocused.focus();
+      }
+    };
+    const overlay = document.createElement("div");
+    overlay.className = "annotation-confirm";
+    overlay.dataset.annotationUi = "confirm";
+    overlay.setAttribute("role", "alertdialog");
+    overlay.setAttribute("aria-label", "Discard changes");
+    overlay.innerHTML =
+      '<div class="annotation-confirm-box"><p class="annotation-confirm-text">Discard your unsaved changes?</p><div class="annotation-confirm-actions"><button type="button" class="annotation-confirm-keep">Keep editing</button><button type="button" class="annotation-confirm-discard">Discard</button></div></div>';
+    document.body.append(overlay);
+
+    const close = () => overlay.remove();
+    overlay
+      .querySelector(".annotation-confirm-keep")
+      .addEventListener("click", () => {
+        close();
+        refocus();
+      });
+    overlay
+      .querySelector(".annotation-confirm-discard")
+      .addEventListener("click", () => {
+        close();
+        blurActiveEditable();
+        onDiscard();
+      });
+    overlay.addEventListener("pointerdown", (event) => {
+      if (event.target === overlay) {
+        close();
+        refocus();
+      }
+    });
+    requestAnimationFrame(() => overlay.classList.add("open"));
+  }
+
+  // The handle is the only state-drag surface: up grows the sheet (collapsed →
+  // expanded), down shrinks it (expanded → collapsed) and, from collapsed,
+  // slides it off to dismiss. The body's own native scroll is untouched.
+  function makePanelDraggable() {
+    let pointerId = null;
+    let startY = 0;
+    let dragging = false;
+    let lastDy = 0;
+    let startExpanded = false;
+    let collapsedH = 0;
+    let expandedH = 0;
+
+    panelHandle.addEventListener("pointerdown", (event) => {
+      if (event.button && event.button !== 0) {
+        return;
+      }
+      pointerId = event.pointerId;
+      startY = event.clientY;
+      dragging = false;
+      lastDy = 0;
+      startExpanded = panelExpanded;
+      collapsedH = cssPixels(
+        getComputedStyle(annotationPanel).getPropertyValue("--panel-collapsed"),
+        160,
+      );
+      expandedH = cssPixels(
+        getComputedStyle(annotationPanel).getPropertyValue("--panel-expanded"),
+        420,
+      );
+    });
+
+    panelHandle.addEventListener("pointermove", (event) => {
+      if (pointerId === null || event.pointerId !== pointerId) {
+        return;
+      }
+      lastDy = event.clientY - startY;
+      if (!dragging) {
+        if (Math.abs(lastDy) < 8) {
+          return;
+        }
+        dragging = true;
+        annotationPanel.classList.add("dragging");
+        panelHandle.setPointerCapture?.(pointerId);
+      }
+      event.preventDefault();
+      if (!startExpanded && lastDy > 0) {
+        annotationPanel.style.transform = `translateY(${lastDy}px)`;
+      } else {
+        const base = startExpanded ? expandedH : collapsedH;
+        annotationPanel.style.transform = "";
+        annotationPanel.style.height = `${clamp(base - lastDy, collapsedH, expandedH)}px`;
+      }
+    });
+
+    function endPanelDrag(event) {
+      if (pointerId === null || event.pointerId !== pointerId) {
+        return;
+      }
+      const id = pointerId;
+      const wasDragging = dragging;
+      pointerId = null;
+      dragging = false;
+      if (!wasDragging) {
+        return;
+      }
+      if (panelHandle.hasPointerCapture?.(id)) {
+        panelHandle.releasePointerCapture(id);
+      }
+      annotationPanel.classList.remove("dragging");
+      annotationPanel.style.transform = "";
+      annotationPanel.style.height = "";
+      if (!startExpanded && lastDy > 0) {
+        if (lastDy >= PANEL_DISMISS_THRESHOLD) {
+          requestDismiss();
+        } else {
+          setPanelMode(false);
+        }
+      } else if (startExpanded) {
+        setPanelMode(lastDy < PANEL_DETENT_THRESHOLD);
+      } else {
+        setPanelMode(-lastDy >= PANEL_DETENT_THRESHOLD);
+      }
+    }
+
+    panelHandle.addEventListener("pointerup", endPanelDrag);
+    panelHandle.addEventListener("pointercancel", endPanelDrag);
+  }
+
+  // A page tap routes to the panel: an annotatable target opens or switches it;
+  // empty space (or a link) dismisses it only while collapsed — an expanded
+  // panel stays put, since reaching it signalled intent to dive in. Taps inside
+  // the panel, the confirm dialog, or on the ※ marker are handled elsewhere.
+  function handlePanelTouchTap(event) {
     if (
       event.target.closest?.(
-        ".annotation-action-bar, .annotation-marker, .annotation-editor, .annotation-preview",
+        ".annotation-panel, .annotation-confirm, .annotation-marker",
       )
     ) {
       return;
     }
-
-    closeAllAnnotationPreviews();
-
-    // Page taps while the editor is open select phrases or work the page;
-    // the editor closes through its own Cancel button.
-    if (activeAnnotationEditor) {
-      return;
-    }
-
-    if (event.target.closest?.("a[href]")) {
-      setHighlightedAnnotationElement(null);
-      hideAnnotationActionBar();
-      return;
-    }
-
-    const candidate = annotationCandidateFromPoint(
-      event.clientX,
-      event.clientY,
-    );
-    setHighlightedAnnotationElement(candidate);
+    const candidate = annotationCandidateFromPoint(event.clientX, event.clientY);
     if (candidate) {
-      showAnnotationActionBar(candidate);
-    } else {
-      hideAnnotationActionBar();
+      openOrSwitchPanel(candidate);
+      return;
+    }
+    if (panelOpen() && !panelExpanded) {
+      requestDismiss();
     }
   }
 
@@ -1524,22 +1429,9 @@
     const isTap =
       Math.hypot(event.clientX - origin.x, event.clientY - origin.y) <= 12;
     if (isTap) {
-      handleTouchTap(event);
+      handlePanelTouchTap(event);
     }
   });
-
-  window.addEventListener(
-    "scroll",
-    () => {
-      if (
-        annotationActionBar?.classList.contains("show") &&
-        highlightedAnnotationElement
-      ) {
-        placeAnnotationActionBar(highlightedAnnotationElement);
-      }
-    },
-    { passive: true },
-  );
 
   // iOS lays the software keyboard over position:fixed elements instead of
   // resizing the page; the visual viewport is the only honest report of the
@@ -1630,6 +1522,11 @@
         choiceByElement.delete(element);
       }
       applyChoiceState(element);
+      // Keep the panel's verdict segment in lockstep when the rail split-button
+      // (desktop) is what changed the choice on the block the panel is showing.
+      if (panelElement === element) {
+        updatePanelVerdict();
+      }
     } catch (error) {
       console.error(error);
       control.classList.add("fail");

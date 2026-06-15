@@ -1,7 +1,3 @@
-::highlight(annotation-selection) {
-  background-color: var(--sel-bg);
-  color: var(--sel-ink);
-}
 .annotation-hover {
   cursor: crosshair;
 }
@@ -12,7 +8,7 @@
    into the elements stacked above and below. */
 .annotation-hover-overlay {
   position: fixed;
-  z-index: 9997;
+  z-index: 9995;
   pointer-events: none;
   border-radius: 8px;
   opacity: 0;
@@ -38,40 +34,94 @@
   visibility: visible;
   transform: scale(1);
 }
-/* Touch affordance: a tap parks the reticle on the element and this bar offers
-   the actions that hover + modifier keys provide on desktop. It lives inside
-   the reticle overlay, so it tracks the element through scrolls for free; the
-   overlay's hidden visibility keeps it untappable whenever the reticle is off.
-   Only the touch bindings in annotations.js ever create it. */
-.annotation-action-bar {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  display: none;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  pointer-events: auto;
-}
-/* The verdict picker sits at the block's leading edge; the single Annotate
-   button is pushed to the trailing edge. */
-.annotation-action-bar > button {
-  margin-inline-start: auto;
-}
-.annotation-action-bar.show {
+/* The unified annotation panel — one surface for the verdict, the notes, and
+   the composer, on both pointer types. On a fine pointer it is a static side
+   card (this block): positioned by JS in the corridor right of the column,
+   always fully shown, no handle. On a coarse pointer the media block far below
+   reskins the same DOM into a draggable bottom sheet. Created lazily by
+   annotations.js. */
+.annotation-panel {
+  position: fixed;
+  top: 1rem;
+  z-index: 9996;
   display: flex;
+  flex-direction: column;
+  width: 22rem;
+  max-height: calc(100vh - 2rem);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px) scale(0.99);
+  transition:
+    opacity 0.18s cubic-bezier(0.32, 0.72, 0, 1),
+    transform 0.18s cubic-bezier(0.32, 0.72, 0, 1),
+    visibility 0.18s;
 }
-.annotation-action-bar button[hidden] {
+/* JS sets left + width per the corridor; here it just becomes visible. */
+.annotation-panel.show {
+  pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
+/* No handle on a fine pointer — the card never collapses. */
+.annotation-panel-handle {
   display: none;
 }
-.annotation-action-bar button {
+.annotation-panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.2rem 0.9rem 0.9rem;
+}
+.annotation-panel-actionbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+/* The block this panel acts on, echoed back at the top of the action-bar
+   section. */
+.annotation-action-context {
+  color: var(--faint);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.8rem;
+  font-style: italic;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.annotation-action-context::before {
+  content: "※";
+  margin-inline-end: 0.4em;
+  font-style: normal;
+  color: var(--accent);
+}
+/* The verdict segment and Annotate each span the action-bar section. */
+.annotation-panel-actionbar .annotation-verdict-segment {
+  width: 100%;
+}
+.annotation-panel-actionbar .annotation-verdict-option {
+  flex: 1 1 0;
+}
+.annotation-panel-annotate {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.35em;
+  width: 100%;
   min-height: 2.6rem;
   padding: 0.4em 1em;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  border-radius: 999px;
+  border-radius: 6px;
   background: var(--accentbg);
   color: var(--accent);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -79,7 +129,59 @@
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+}
+/* The discard guard: a switch or dismiss while something is unsaved confirms
+   first, so typed text is never lost silently. */
+.annotation-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+  background: color-mix(in srgb, var(--ink) 32%, transparent);
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+.annotation-confirm.open {
+  opacity: 1;
+}
+.annotation-confirm-box {
+  width: min(22rem, 100%);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+  padding: 1.1rem 1.2rem;
+}
+.annotation-confirm-text {
+  margin: 0 0 0.9rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.annotation-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.annotation-confirm-actions button {
+  appearance: none;
+  min-height: 2.6rem;
+  padding: 0.45em 1.1em;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface2);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.annotation-confirm-discard {
+  border-color: var(--bad);
+  background: var(--badbg);
+  color: var(--bad);
 }
 /* A fixed pill that walks the reviewer through the whole-annotation units they
    haven't answered yet — topmost first, so each saved note marches it down the
@@ -95,7 +197,7 @@
   gap: 0.45em;
   padding: 0.5em 1.05em;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  border-radius: 999px;
+  border-radius: 6px;
   background: var(--accentbg);
   color: var(--accent);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -103,11 +205,20 @@
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
   transition:
     background-color 0.16s ease,
     border-color 0.16s ease,
-    color 0.16s ease;
+    color 0.16s ease,
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+/* While the panel is up, the guided-walk pill steps aside so the two
+   bottom-anchored controls never stack or compete. */
+body.annotation-panel-open .annotation-next-unannotated {
+  opacity: 0;
+  transform: translateY(0.6rem);
+  pointer-events: none;
 }
 .annotation-next-unannotated .annotation-next-icon {
   font-size: 1.1em;
@@ -159,7 +270,7 @@
   gap: 0.32em;
   padding: 0.22em 0.62em;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  border-radius: 999px;
+  border-radius: 4px;
   background: var(--accentbg);
   color: var(--accent);
   cursor: pointer;
@@ -199,236 +310,6 @@
 .annotation-marker:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-}
-.annotation-linked-hover {
-  border-radius: 6px;
-  box-shadow: 0 0 0 2px var(--accentbg);
-}
-.annotation-editor {
-  position: fixed;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  width: clamp(18rem, 50vw, 42rem);
-  min-width: 14rem;
-  max-width: calc(100vw - 1rem);
-  min-height: 5.5rem;
-  max-height: calc(100vh - 1rem);
-  resize: both;
-  overflow: hidden;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.18);
-  padding: 0.7rem;
-  opacity: 0;
-  transform: translateY(6px) scale(0.985);
-  transition:
-    opacity 0.18s cubic-bezier(0.32, 0.72, 0, 1),
-    transform 0.18s cubic-bezier(0.32, 0.72, 0, 1);
-}
-.annotation-editor.open {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-}
-.annotation-editor.closing {
-  opacity: 0;
-  transform: translateY(6px) scale(0.985);
-}
-.annotation-editor.dragging {
-  transition: none;
-}
-.annotation-editor-handle {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  height: 0.85rem;
-  margin: -0.15rem 0 0.4rem;
-  cursor: grab;
-}
-.annotation-editor-handle::before {
-  content: "";
-  width: 2.2rem;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--rule);
-  transition: background-color 0.16s ease;
-}
-@media (hover: hover) {
-  .annotation-editor-handle:hover::before {
-    background: var(--faint);
-  }
-}
-.annotation-editor.dragging .annotation-editor-handle {
-  cursor: grabbing;
-}
-.annotation-selection-preview {
-  margin: 0 0 0.45rem;
-  color: var(--faint);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 0.78rem;
-  font-style: italic;
-  line-height: 1.35;
-}
-.annotation-selection-arrow {
-  color: var(--accent);
-  margin-right: 0.25rem;
-}
-.annotation-selection-text {
-  color: var(--faint);
-}
-.annotation-editor textarea {
-  flex: 1 1 auto;
-  display: block;
-  width: 100%;
-  min-height: 3.2em;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  background: var(--input-bg);
-  color: var(--ink);
-  font: inherit;
-  line-height: 1.5;
-  resize: none;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  outline: none;
-}
-.annotation-editor textarea:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accentbg);
-}
-/* Hidden where Enter and Escape do the job; the coarse-pointer block below
-   shows it as the bottom sheet's explicit controls. */
-.annotation-editor-footer {
-  display: none;
-  flex: 0 0 auto;
-  gap: 0.5rem;
-  justify-content: flex-end;
-  margin-top: 0.55rem;
-}
-.annotation-editor-footer button {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 0.92rem;
-  min-height: 2.6rem;
-  padding: 0.45em 1.2em;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  background: var(--surface2);
-  color: var(--ink);
-}
-.annotation-editor-footer .annotation-editor-save {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-  font-weight: 600;
-}
-.annotation-status {
-  position: absolute;
-  top: 0.35rem;
-  right: 0.35rem;
-  width: 1.55rem;
-  height: 1.55rem;
-  border-radius: 999px;
-  display: none;
-  place-items: center;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 1rem;
-  font-weight: 700;
-  border: 1px solid currentColor;
-  background: var(--input-bg);
-}
-.annotation-status.show {
-  display: grid;
-  animation: annotation-status-pop 0.18s cubic-bezier(0.32, 0.72, 0, 1);
-}
-@keyframes annotation-status-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.6);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-.annotation-status.ok {
-  color: var(--good);
-  background: var(--goodbg);
-}
-.annotation-status.fail {
-  color: var(--bad);
-  background: var(--badbg);
-}
-.annotation-preview {
-  position: fixed;
-  z-index: 9998;
-  min-width: 14rem;
-  min-height: 5rem;
-  max-width: calc(100vw - 1rem);
-  max-height: min(28rem, calc(100vh - 3rem));
-  resize: both;
-  overflow: auto;
-  border: 1px solid var(--rule);
-  border-radius: 10px;
-  background: var(--surface);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.14);
-  padding: 0.75rem 0.85rem;
-  transition:
-    border-color 0.16s ease,
-    box-shadow 0.16s ease,
-    transform 0.16s ease;
-}
-.annotation-preview-linked-hover {
-  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
-  box-shadow:
-    0 14px 40px rgba(0, 0, 0, 0.16),
-    0 0 0 2px var(--accentbg);
-  transform: translateY(-1px);
-}
-.annotation-preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-  margin-bottom: 0.5rem;
-  color: var(--accent);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-.annotation-preview-title {
-  font-size: 0.78rem;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.annotation-preview-title::before {
-  content: "※";
-  margin-right: 0.35rem;
-  opacity: 0.75;
-}
-.annotation-preview-close {
-  border: 0;
-  background: transparent;
-  color: var(--faint);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 1rem;
-  line-height: 1;
-  padding: 0.1rem 0.2rem;
-}
-@media (hover: hover) {
-  .annotation-preview-close:hover {
-    color: var(--ink);
-  }
-}
-.annotation-preview-target {
-  border-left: 2px solid var(--rule);
-  color: var(--faint);
-  font-size: 0.82rem;
-  font-style: italic;
-  line-height: 1.35;
-  margin-bottom: 0.65rem;
-  padding-left: 0.6rem;
 }
 .annotation-preview-note {
   padding: 0.65rem 0 0;
@@ -471,6 +352,13 @@
   background: var(--input-bg);
   box-shadow: 0 0 0 2px var(--accentbg);
 }
+/* The empty draft note (Annotate's Notion-style composer) shows its prompt
+   until the first keystroke. */
+.annotation-preview-note p[contenteditable].is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--faint);
+  pointer-events: none;
+}
 .annotation-note-actions {
   display: flex;
   gap: 0.4rem;
@@ -479,7 +367,7 @@
 .annotation-note-action {
   appearance: none;
   border: 1px solid var(--rule);
-  border-radius: 999px;
+  border-radius: 6px;
   background: var(--surface2);
   color: var(--faint);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -566,7 +454,7 @@
   display: inline-flex;
   align-items: stretch;
   border: 1px solid var(--rule);
-  border-radius: 999px;
+  border-radius: 6px;
   overflow: hidden;
   background: var(--surface);
   color: var(--faint);
@@ -645,7 +533,7 @@
   display: inline-flex;
   align-items: stretch;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  border-radius: 999px;
+  border-radius: 6px;
   overflow: hidden;
   background: var(--surface);
 }
@@ -733,26 +621,15 @@
   .annotation-hover-overlay.show {
     transform: none;
   }
-  .annotation-editor {
-    transform: none;
-    transition: opacity 0.18s ease;
-  }
-  .annotation-editor.open,
-  .annotation-editor.closing {
-    transform: none;
-  }
-  .annotation-editor-handle::before {
+  .annotation-panel {
     transition: none;
-  }
-  .annotation-status.show {
-    animation: none;
   }
 }
 
-/* Coarse pointers get the classic mobile shell: the editor and note previews
-   dock as bottom sheets (the !important entries override the inline desktop
-   positioning annotations.js applies), invisible hit-slop fattens the small
-   controls, and the sheets ride the software keyboard through the
+/* Coarse pointers get the classic mobile shell: the one panel reskins into a
+   full-width bottom sheet (the !important entries override the inline left/width
+   the desktop JS sets on the card), invisible hit-slop fattens the small
+   controls, and the sheet rides the software keyboard through the
    --annotation-keyboard-inset variable maintained by the touch bindings. */
 @media (hover: none) and (pointer: coarse) {
   .annotation-marker::after {
@@ -760,57 +637,66 @@
     position: absolute;
     inset: -10px;
   }
-  .annotation-preview-close {
-    position: relative;
-    padding: 0.3rem 0.45rem;
-  }
-  .annotation-preview-close::after {
-    content: "";
-    position: absolute;
-    inset: -10px;
-  }
-  .annotation-editor {
+  /* The bottom-sheet skin of the panel: full width, docked low, its height the
+     collapsed/expanded CSS var, sliding up from below. */
+  .annotation-panel {
     left: 0 !important;
-    top: auto !important;
     right: 0;
-    bottom: var(--annotation-keyboard-inset, 0px);
-    width: auto;
-    max-width: none;
-    max-height: calc(100vh - var(--annotation-keyboard-inset, 0px) - 4.5rem);
-    max-height: calc(100dvh - var(--annotation-keyboard-inset, 0px) - 4.5rem);
-    border-bottom: 0;
-    border-radius: 14px 14px 0 0;
-    resize: none;
-    padding: 0.85rem 0.9rem;
-    padding-bottom: max(0.85rem, env(safe-area-inset-bottom));
-    transform: translateY(101%);
-    box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.22);
-  }
-  .annotation-editor.open {
-    transform: translateY(0);
-  }
-  .annotation-editor.closing {
-    transform: translateY(101%);
-  }
-  .annotation-editor-handle {
-    display: none;
-  }
-  .annotation-editor-footer {
-    display: flex;
-  }
-  .annotation-preview {
-    left: 0 !important;
-    top: auto !important;
-    right: 0;
+    top: auto;
     bottom: var(--annotation-keyboard-inset, 0px);
     width: auto !important;
-    max-width: none;
-    max-height: min(50vh, 26rem);
-    resize: none;
-    border-bottom: 0;
+    height: var(--panel-collapsed, 9rem);
+    max-height: 100dvh;
+    border: 0;
+    border-top: 1px solid var(--rule);
     border-radius: 14px 14px 0 0;
-    padding-bottom: max(0.85rem, env(safe-area-inset-bottom));
     box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.22);
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(101%);
+    transition:
+      transform 0.24s cubic-bezier(0.32, 0.72, 0, 1),
+      height 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .annotation-panel.show {
+    transform: translateY(0);
+  }
+  .annotation-panel.collapsed {
+    height: var(--panel-collapsed, 9rem);
+  }
+  .annotation-panel.expanded {
+    height: var(--panel-expanded, 60vh);
+  }
+  .annotation-panel.dragging {
+    transition: none;
+  }
+  /* The handle reappears, pinned above the scroller; touch-action:none keeps the
+     state-drag gesture off the page scroll. */
+  .annotation-panel-handle {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    height: 1.5rem;
+    cursor: grab;
+    touch-action: none;
+  }
+  .annotation-panel-handle::before {
+    content: "";
+    width: 2.25rem;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--rule);
+  }
+  .annotation-panel.dragging .annotation-panel-handle {
+    cursor: grabbing;
+  }
+  .annotation-panel-body {
+    overflow-y: hidden;
+    padding: 0 0.9rem;
+    padding-bottom: max(0.8rem, env(safe-area-inset-bottom));
+  }
+  .annotation-panel.expanded .annotation-panel-body {
+    overflow-y: auto;
   }
   .annotation-note-action {
     min-height: 2.4rem;

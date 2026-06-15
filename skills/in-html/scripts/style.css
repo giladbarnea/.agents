@@ -91,7 +91,7 @@ a[href^="#"].refbroken {
   gap: 0.4em;
   padding: 0.45em 1em;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  border-radius: 999px;
+  border-radius: 6px;
   background: var(--accentbg);
   color: var(--accent);
   cursor: pointer;
@@ -100,7 +100,7 @@ a[href^="#"].refbroken {
   font-style: italic;
   font-weight: 400;
   line-height: 1;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
   opacity: 0;
   pointer-events: none;
   transition:
