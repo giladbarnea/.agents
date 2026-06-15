@@ -1,0 +1,7 @@
+# Runtime files copied in by setup.sh from ../../scripts (kept canonical there)
+style.css
+interactions.js
+annotations.css
+annotations.js
+annotation-writer.mjs
+annotations.json.tmp
