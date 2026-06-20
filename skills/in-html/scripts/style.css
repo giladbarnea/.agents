@@ -1156,3 +1156,221 @@ table.data tr.total td {
     padding: 0.6em 1.15em;
   }
 }
+
+/* ── .diff — line + word-level changeset (layer 1, pure CSS) ──────────────
+   Side-by-side ↔ unified via a .seg view toggle (:has(), same mechanism as
+   .tabs). Change blocks carry stable ids so Prev/Next are plain anchor jumps
+   (:target gives the global arrival flash); unchanged context collapses into a
+   native <details>. Add colours reuse --good/--bad; block accents reuse the
+   .tag palette. Narrow screens fold to the unified (stacked) form. */
+.diff {
+  margin: 1.4rem 0;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+}
+.diff-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface2);
+}
+.diff-bar .seg {
+  margin: 0;
+}
+.diff-bar .grow {
+  flex: 1;
+}
+.dcols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+  border-bottom: 1px solid var(--rule);
+}
+.dcols span {
+  padding: 0.35rem 0.7rem;
+}
+.dcols .r {
+  border-inline-start: 1px solid var(--rule);
+}
+.drow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.dc {
+  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  padding: 0.25rem 0.7rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.drow .dc.l {
+  border-inline-end: 1px solid var(--rule);
+}
+.drow + .drow .dc,
+.dchange .drow:first-child .dc {
+  border-top: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
+}
+.drow.ctx .dc {
+  color: var(--faint);
+}
+.dc.del {
+  background: var(--badbg);
+}
+.dc.add {
+  background: var(--goodbg);
+}
+.dc.empty {
+  background: repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 6px,
+    color-mix(in srgb, var(--faint) 9%, transparent) 6px,
+    color-mix(in srgb, var(--faint) 9%, transparent) 12px
+  );
+}
+.wd.add {
+  background: color-mix(in srgb, var(--good) 26%, transparent);
+  border-radius: 3px;
+}
+.wd.del {
+  background: color-mix(in srgb, var(--bad) 24%, transparent);
+  border-radius: 3px;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--bad) 60%, transparent);
+}
+.dchange {
+  border-inline-start: 3px solid var(--rule);
+}
+.dchange.blue {
+  border-inline-start-color: var(--blue);
+}
+.dchange.amber {
+  border-inline-start-color: var(--accent);
+}
+.dchange.green {
+  border-inline-start-color: var(--good);
+}
+.dchange.red {
+  border-inline-start-color: var(--bad);
+}
+.dhead {
+  padding: 0.7rem 0.8rem 0.6rem;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--rule);
+}
+.dhead .dnum {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.7rem;
+  color: var(--faint);
+  margin-inline-start: 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+.dhead .dtitle {
+  display: block;
+  font-weight: 600;
+  font-size: 1rem;
+  margin-top: 0.35rem;
+}
+.dhead .why {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  color: var(--faint);
+  max-width: none;
+}
+.dhead .why em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--ink);
+}
+.dnav {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  border-top: 1px solid var(--rule);
+  background: var(--surface2);
+}
+.dnav .dpos {
+  flex: 1;
+  text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.76rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.dnav .btn.off {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.dctx > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0.35rem 0.8rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.74rem;
+  color: var(--faint);
+  background: color-mix(in srgb, var(--faint) 5%, transparent);
+}
+.dctx > summary::-webkit-details-marker {
+  display: none;
+}
+.dctx > summary::before {
+  content: "⋯  ";
+}
+/* unified view — keyed off the 2nd .seg label (Unified), like .tabs */
+.diff:has(.diff-view label:nth-child(2) input:checked) .dcols {
+  grid-template-columns: 1fr;
+}
+.diff:has(.diff-view label:nth-child(2) input:checked) .dcols .r,
+.diff:has(.diff-view label:nth-child(2) input:checked) .drow.ctx .dc.r,
+.diff:has(.diff-view label:nth-child(2) input:checked) .dc.empty {
+  display: none;
+}
+.diff:has(.diff-view label:nth-child(2) input:checked) .drow {
+  grid-template-columns: 1fr;
+}
+.diff:has(.diff-view label:nth-child(2) input:checked) .dc.l {
+  border-inline-end: 0;
+}
+.diff:has(.diff-view label:nth-child(2) input:checked) .dc.del::before {
+  content: "−  ";
+  color: var(--bad);
+}
+.diff:has(.diff-view label:nth-child(2) input:checked) .dc.add::before {
+  content: "+  ";
+  color: var(--good);
+}
+@media (max-width: 680px) {
+  /* phones: collapse to the unified (stacked) form regardless of the toggle */
+  .diff .dcols,
+  .diff .drow {
+    grid-template-columns: 1fr;
+  }
+  .diff .dcols .r,
+  .diff .drow.ctx .dc.r,
+  .diff .dc.empty {
+    display: none;
+  }
+  .diff .dc.l {
+    border-inline-end: 0;
+  }
+  .diff .dc.del::before {
+    content: "−  ";
+    color: var(--bad);
+  }
+  .diff .dc.add::before {
+    content: "+  ";
+    color: var(--good);
+  }
+}

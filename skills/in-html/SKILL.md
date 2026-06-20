@@ -1,6 +1,7 @@
 ---
 name: in-html
 description: Build a reusable local HTML page for a CLI-agent review loop, with selectable boilerplate layers — styling, browser interactions, and optional Shift+click annotations persisted to JSON.
+last_updated: 2026-06-19 17:08
 ---
 
 # in-html
@@ -69,6 +70,7 @@ The page's job is to install knowledge, not to restyle text. The source material
 | Hierarchy, org chart, who-controls-what | `.tree` |
 | Process / sequence of stages | `.pipe` |
 | Comparison, before/after, either/or | `.ba` panes, segmented tabs |
+| Two versions of one text; exactly what changed | `.diff` line/word-level changeset (`diff_to_html.py`) |
 | Asked → answered → replied (multi-round review loops) | `.qa` dialogue block |
 | Line items, build-ups, per-row facts with numbers | `table.data` |
 | Background, reference, "later" material | `.disclose`, collapsed |
@@ -91,7 +93,7 @@ Edit `index.html` by replacing only the `CONTENT START` block with arbitrary pag
 
 Use normal HTML first: `h1`, `.sub`, `.lead`, `h2`, `p`, `aside.note`, `.card`, `.callout`, `.grid`, `.pane`, `.row`, `.chip`, `.btn`, `.kbd`.
 
-For ready-made components, read `/Users/giladbarnea/.agents/skills/in-html/scripts/components.md`. For a rendered reference, open `/Users/giladbarnea/.agents/skills/in-html/scripts/component-gallery.html` with the full layer set.
+For ready-made components, read `/Users/giladbarnea/.agents/skills/in-html/scripts/components.md`. For a rendered reference, open `/Users/giladbarnea/.agents/skills/in-html/scripts/component-gallery.html` with the full layer set. To show exactly what changed between two versions of a text, don't hand-build it — generate the `.diff` component with `/Users/giladbarnea/.agents/skills/in-html/scripts/diff_to_html.py` (see the "Line / word-level diff" section of `components.md`).
 
 Cross-references: never write a bare "§7", "Draft 2", or "the table above" — you know what it points to; the reader doesn't share your mental map of the page. Make every such mention a link: `<a href="#stable-name">§7</a>`. Every `data-annotation-id` doubles as a link target (`interactions.js` mirrors it into `id`), so important elements are already addressable; in layer 1 (no JS) write the `id` attribute on the target yourself. Internal links are styled automatically (no class needed), scroll smoothly, and flash the target on arrival; a "↩ Back to where you were" pill then returns the reader to their departure point (chained jumps unwind in order). A link whose target doesn't exist renders red with a console warning — fix it before shipping.
 

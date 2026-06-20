@@ -1,3 +1,8 @@
+---
+description: Ready-made copy-paste components for in-html pages, with layer requirements and markup.
+last_updated: 2026-06-19 17:08
+---
+
 # in-html ready-made components
 
 Use these snippets inside `<main class="col" id="content">`.
@@ -38,6 +43,32 @@ Each `.seg label` maps to the panel at the same position inside `.panels`. Mark 
 ```
 
 Bare click switches panels. With layer 3, Shift+click annotates instead.
+
+## Line / word-level diff
+
+Requires layer 1. The native shape for **"what changed between these two texts"** — a precise line + intraline-word diff with a Side-by-side ↔ Unified toggle (pure CSS, the same `.seg` + `:has()` mechanism as the panels above), collapsible unchanged context, and change blocks that are `#`-addressable so **Prev / Next** are plain anchor jumps (no JS — works in iOS Quick Look). Reach for it over `.ba` panes whenever the comparison is two *versions of the same text* rather than two unrelated alternatives.
+
+Don't hand-write the rows — **generate them**. The diff is mechanical; only the *meaning* of each change is yours:
+
+```bash
+# two files (to diff git revisions, materialize them first with `git show ref:path > /tmp/x`)
+scripts/diff_to_html.py OLD NEW --left-label before --right-label after --id d1 > frag.html
+# with annotations, and a unique id when a page holds more than one diff:
+scripts/diff_to_html.py a.md b.md --id pricing --annotations notes.json
+```
+
+Paste the fragment into the `CONTENT` block, then inline `style.css` as usual. `--context N` sets how many unchanged lines stay inline before a run collapses into a `<details>`.
+
+**Annotations** are an optional JSON list that tags change blocks. Match a block by 1-based change index (`n`) or by a `match` substring found anywhere in it; `tag` ∈ `blue` `amber` `green` `red` (reuses the `.tag` palette as the block's left-rail accent). The diff component invents nothing — supply the labels:
+
+```json
+[
+  {"n": 1, "tag": "blue", "label": "META", "title": "Header sync", "note": "Why this block matters; <em>emphasis</em> allowed."},
+  {"match": "recipes", "tag": "amber", "label": "DEBIAS", "note": "Matched by substring instead of index."}
+]
+```
+
+Class anatomy, if you ever need to author or post-edit a block by hand: `.diff` wraps a `.diff-bar` (holds the `.seg.diff-view` toggle), a `.dcols` header (`.l`/`.r` labels), and `.diff-body`. Inside, each line is a `.drow` of two cells `.dc.l` / `.dc.r`; changed cells carry `.del` (red) or `.add` (green), an absent side is `.dc.empty` (hatched), and intraline spans are `.wd.del` / `.wd.add`. An annotated change is a `<section class="dchange {tag}" id="{id}-c{n}">` with a `.dhead` and a `.dnav` (Prev/All/Next anchors). Unchanged runs collapse inside `<details class="dctx">`. Narrow screens fold to the unified stacked form automatically.
 
 ## Chip toggle + highlights/notes
 
