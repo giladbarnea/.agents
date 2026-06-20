@@ -93,7 +93,7 @@ Then run the script with `uv run script.py`. No need to specify the Python versi
 <using-sub-agents>
 {{ available_agents }}{% block using_sub_agents %}
 
-Always load the `write-prompt` skill before launching a subagent.
+Always load the `write-prompt` skill before launching a subagent or writing ai-audience Markdown files.
 {% endblock %}
 </using-sub-agents>
 
@@ -109,7 +109,7 @@ Always load the `write-prompt` skill before launching a subagent.
 
 1. Fail loud and early.
 2. Complexity is the enemy.
-3. Simplicity is the way to go.
+3. Simplicity is how good things happen (and last).
 4. Adding a logical branch is unjustified unless proven otherwise.
 5. No nested `if` statements.
 6. Write declarative, upfront code. The more the source code feels like a high-level configuration rather than an implementation, the better. Just like a Pydantic BaseModel definition is easier to understand than a vanilla class with an implemented `__init__`, manual value and type validation, manual state setting, etc.
@@ -120,7 +120,8 @@ Always load the `write-prompt` skill before launching a subagent.
 <principles>
 
 1. Do not abbreviate variable, function or class names. Use complete words. Write clean code.
-2. Write code that fails early and clearly rather than writing fallbacks to “maybe broken” inputs. Zero “Just in case my inputs are corrupted” code. Fallback-rich code explodes complexity and silently propagates bugs downstream. Good code assumes its inputs are valid and complete—it trusts upstream code to have done its job. This ties closely to separation of concerns. And if something important fails, or an assumption proves to be false, fail early and clearly. Broken code should be discovered early, loudly and fixed quickly; Consumers should not tolerate it nor work around it.
+2. Write code that fails early and clearly rather than writing fallbacks to “maybe broken” inputs. No “Just in case my inputs are corrupted” code. Fallback-rich code explodes complexity and silently propagates bugs downstream. Good code assumes its inputs are valid and complete—it trusts upstream code to have done its job. This ties closely to separation of concerns. And if something important fails, or an assumption proves to be false, fail early and clearly. Broken states should be discovered early, loudly and fixed quickly; Consumers should not tolerate it nor work around it.
+2++. Don‘t add features, refactor, or introduce abstractions beyond what the task requires. A bug fix doesn‘t need surrounding cleanup and a one-shot operation usually doesn‘t need a helper. Don‘t design for hypothetical future requirements: do the simplest thing that works well. Avoid premature abstraction and half-finished implementations. Don‘t add error handling, fallbacks, or validation for scenarios that cannot happen. Trust internal code and framework guarantees. Only validate at system boundaries (user input, external APIs). Don't use feature flags or backwards-compatibility shims when you can just change the code.
 3. Write highly cohesive, decoupled logic.
 4. Leverage existing logic when possible. Do not re-implement anything.
 5. Write flat, optimized logical branches. Avoid nested, duplicate-y code. Write DRY and elegant logic.
@@ -222,4 +223,8 @@ Write clear, succinct, rich and eye-pleasing Markdown prose. Keep it well-writte
 Prefer prose. Do not reach for a list just because information has several parts; explanations, descriptions, opinions, and reports read better as well-shaped paragraphs. Use a list only when the material naturally wants to be scanned as distinct items, such as steps, tasks, requirements, options, or examples.
 
 When a list is truly the right shape, use a numbered list by default. Use bullets only for genuinely unordered peer items, where numbers would falsely imply sequence, priority, or progression.
+
+Lead with the outcome. Your first sentence after finishing should answer "what happened" or "what did you find": the thing the user would ask for if they said "just give me the TLDR." Supporting detail and reasoning come after. Being readable and being concise are different things, and readability matters more.
+
+The way to keep output short is to be selective about what you include (drop details that don‘t change what the reader would do next), not to compress the writing into fragments.
 {% block tail %}{% endblock %}
