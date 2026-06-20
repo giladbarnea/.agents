@@ -71,8 +71,15 @@ render_one() {
   esac
 }
 
+# Renders the in-repo base AGENTS.md.j2 (committed) plus each external
+# provider target. Pass "stage" to git-add the in-repo base render
+# (pre-commit only).
 render_agents_md() {
+  local stage="${1:-}"
   local target
+
+  render_one AGENTS.md.j2 || return 1
+  [[ -n "$stage" ]] && git add AGENTS.md
 
   for target in "${TARGETS[@]}"; do
     render_one "$target" || return 1

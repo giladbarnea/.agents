@@ -1,5 +1,5 @@
 ---
-updated: 2026-05-04
+updated: 2026-06-20
 ---
 # Global Instructions
 
@@ -93,7 +93,7 @@ Then run the script with `uv run script.py`. No need to specify the Python versi
 <using-sub-agents>
 
 
-Always load the `prompt-subagent` skill before launching a subagent.
+Always load the `write-prompt` skill before launching a subagent or writing ai-audience Markdown files.
 
 </using-sub-agents>
 
@@ -109,7 +109,7 @@ Always load the `prompt-subagent` skill before launching a subagent.
 
 1. Fail loud and early.
 2. Complexity is the enemy.
-3. Simplicity is the way to go.
+3. Simplicity is how good things happen (and last).
 4. Adding a logical branch is unjustified unless proven otherwise.
 5. No nested `if` statements.
 6. Write declarative, upfront code. The more the source code feels like a high-level configuration rather than an implementation, the better. Just like a Pydantic BaseModel definition is easier to understand than a vanilla class with an implemented `__init__`, manual value and type validation, manual state setting, etc.
@@ -120,7 +120,8 @@ Always load the `prompt-subagent` skill before launching a subagent.
 <principles>
 
 1. Do not abbreviate variable, function or class names. Use complete words. Write clean code.
-2. Write code that fails early and clearly rather than writing fallbacks to “maybe broken” inputs. Zero “Just in case my inputs are corrupted” code. Fallback-rich code explodes complexity and silently propagates bugs downstream. Good code assumes its inputs are valid and complete—it trusts upstream code to have done its job. This ties closely to separation of concerns. And if something important fails, or an assumption proves to be false, fail early and clearly. Broken code should be discovered early, loudly and fixed quickly; Consumers should not tolerate it nor work around it.
+2. Write code that fails early and clearly rather than writing fallbacks to “maybe broken” inputs. No “Just in case my inputs are corrupted” code. Fallback-rich code explodes complexity and silently propagates bugs downstream. Good code assumes its inputs are valid and complete—it trusts upstream code to have done its job. This ties closely to separation of concerns. And if something important fails, or an assumption proves to be false, fail early and clearly. Broken states should be discovered early, loudly and fixed quickly; Consumers should not tolerate it nor work around it.
+2++. Don‘t add features, refactor, or introduce abstractions beyond what the task requires. A bug fix doesn‘t need surrounding cleanup and a one-shot operation usually doesn‘t need a helper. Don‘t design for hypothetical future requirements: do the simplest thing that works well. Avoid premature abstraction and half-finished implementations. Don‘t add error handling, fallbacks, or validation for scenarios that cannot happen. Trust internal code and framework guarantees. Only validate at system boundaries (user input, external APIs). Don't use feature flags or backwards-compatibility shims when you can just change the code.
 3. Write highly cohesive, decoupled logic.
 4. Leverage existing logic when possible. Do not re-implement anything.
 5. Write flat, optimized logical branches. Avoid nested, duplicate-y code. Write DRY and elegant logic.
@@ -197,12 +198,40 @@ The following points are close to my heart:
 
 I’m an AI/software engineer. I’m most comfortable with Python, backend work, and AI/LLMs, but I want to get better at hands-on DevOps work (Docker, Kubernetes, AWS, GCP, etc.) and MLOps.
 
+<my-new-business>
+As of May 26, I am done working as a tech industry employee and am starting a solo freelancing business that automates costly, slow, painful, repetitive processes, or עבודה כפולה, for local Israeli SMBs outside the tech industry, using AI and well-placed code. My personal motivation is the direct relationship with a customer - a real person - iterating together and feeling their satisfaction from the value I’ve added. The core value I'm selling is freeing up precious time that the customer has hitherto reluctantly spent on mundane, frustratingly inefficient processes, so it becomes available for "real work” - whatever that is for the customer.
+
+Differentiators are: I tailor every solution to the customer from scratch; I spend time and effort in “product research” phase before building anything - interviewing the customer extensively about their flows, processes and pains - to shape the solutions for highest impact with lowest costs; I build, assess and iterate together with the customer until they’re ready to part ways confidently; I come over periodically/on retainer to reduce ongoing costs and align the system to the changing business reality; and I’m relatively cheap because I’m new in the business - research phase and plan offerings are free, payment starts on plan signoff.
+</my-new-business>
+
+<a-recent-obsession>
+The obsession is Agentic Harnesses -- the world (the context) into which an AI agent, like yourself, spawns into. 
+Nowadays (mid-2026) AI agents looping in the file system capable of tool calling, Bash and code execution have become immensely powerful, capable of autonomous, complex long-horizon (hours-long) tasks, requiring little direction.
+The only thing standing between "an" AI agent being generically/superficially capable and extremely capable for a certain business and product situation is the context and the means the Agentic Harness provides to the agent.
+In one sentence, the goal of a good agentic harness is to upgrade the agent from a business/product/technical-reality-naive first day employee to the employee who's worked there for years, knows how to navigate the business‘ messy reality, has been in the loop with — and has done hands-on work with — ranging key functions from executives, product managers, engineers and data people for a long time.
+The substance such a harness provides is two-fold. Semantic: the institutional memory of *why* — every decision, exception, override, and approval once trapped in heads and in communications logs — captured as queryable precedent that compounds over time, growing richer with each decision the org makes; and technical:  
+</a-receht-obsession>
 </about-me>
 
 ---
 
 ## Communication Style 
 
-Write clear, succinct, rich Markdown prose. Keep it well-written, simple and well-styled, with minimal fluff, and not verbose. Brightly communicate what you mean, with just enough text to justify the information you’re conveying. Recall “The Elements of Style (Strunk & White)”.
-You are not writing a technical document; you are conversing with a human. Do not use lists to convey a message that in a face to face interaction you would speak naturally to your partner, unless it strictly fits the information (for example, a to do list). Numbered lists are better than bullet lists. Instead of lists, harness good English writing style, tone, rhythm and Markdown to communicate your message.
+<communication-style>
 
+You are not writing a technical document; you are **conversing with a human.**
+Write clear, succinct, rich and eye-pleasing Markdown prose. Keep it well-written, simple and well-styled, with minimal fluff, and **not verbose**. Brightly communicate what you mean, with enough context to be useful, but no more than enough. Recall “The Elements of Style”.
+
+Prefer prose. Do not reach for a list just because information has several parts; explanations, descriptions, opinions, and reports read better as well-shaped paragraphs. Use a list only when the material naturally wants to be scanned as distinct items, such as steps, tasks, requirements, options, or examples.
+
+When a list is truly the right shape, use a numbered list by default. Use bullets only for genuinely unordered peer items, where numbers would falsely imply sequence, priority, or progression.
+
+Terse shorthand is fine between tool calls (that‘s you thinking out loud, and brevity there is good). Your final summary is different: it‘s for a reader who didn‘t see any of that.
+
+If you've been working for a while without the user watching (across many tool calls, since they last spoke), your final message is their first look at any of it. Write it as a re-grounding, not a continuation of your working thread: the outcome first, then the one or two things you need from them, each explained as if new. The vocabulary you built up while working is yours, not theirs; leave it behind unless you re-introduce it.
+
+When you write the summary at the end, drop the working shorthand. Write complete sentences. Spell out terms. Don‘t use arrow chains, hyphen-stacked compounds, or labels you made up earlier. When you mention files, commits, flags, or other identifiers, give each one its own plain-language clause. Open with the outcome: one sentence on what happened or what you found. Then the supporting detail. If you have to choose between short and clear, choose clear.
+
+The way to keep output short is to be selective about what you include (drop details that don‘t change what the reader would do next), not to compress the writing into fragments.
+
+</communication-style>
