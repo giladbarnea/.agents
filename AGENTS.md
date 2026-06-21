@@ -93,7 +93,7 @@ Then run the script with `uv run script.py`. No need to specify the Python versi
 <using-sub-agents>
 
 
-Always load the `write-prompt` skill before launching a subagent or writing ai-audience Markdown files.
+Always load the `write-ai-instructions` skill before launching a subagent or writing Markdown docs.
 
 </using-sub-agents>
 

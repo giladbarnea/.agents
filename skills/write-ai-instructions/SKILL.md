@@ -1,5 +1,5 @@
 ---
-name: write-prompt
+name: write-ai-instructions
 description: Instructions for how to write AI prompts — both when prompting an agent directly and when writing content whose target audience is AI agents. Load this skill before doing either.
 ---
 
