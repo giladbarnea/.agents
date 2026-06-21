@@ -333,3 +333,83 @@ Requires layer 1 only. For line items, build-ups, and per-row facts with numbers
   <tr class="total"><td>Total</td><td class="num">58</td></tr>
 </table>
 ```
+
+## Semantic callouts
+
+Requires layer 1. An icon-led tinted box for a single insight, caveat, or status. The variant sets the hue and the icon; the default (no variant) keeps the gold accent. The icon is a CSS glyph — nothing to author beyond the class, and it renders offline. `good` and `bad` remain as aliases for `check` and `danger`.
+
+```html
+<div class="callout note">A neutral note worth keeping in mind.</div>
+<div class="callout tip">A helpful suggestion.</div>
+<div class="callout check">Confirmation that something holds.</div>
+<div class="callout warning">Something to watch out for.</div>
+<div class="callout danger">This will break things.</div>
+<div class="callout">Default — the gold-accented generic callout.</div>
+```
+
+## Record card
+
+Requires layer 1. The native shape for a set of structured proposals or findings — each a record with typed fields (rank, source, kind, magnitude, evidence, links) rather than a paragraph. Reach for it whenever the material is "several items, each with the same handful of attributes." Pair the leverage slot with `.meter`; mark the card `data-annotate-whole` for layer 3. Drop `hot` for a non-emphasized record, and keep only the fields a record actually has.
+
+```html
+<div class="record hot" data-annotate-whole data-annotation-id="tweak-rollup">
+  <div class="rec-head">
+    <span class="rec-rank">1</span>
+    <div class="rec-main">
+      <div class="rec-eyebrow"><span class="rec-file">orient.py</span><span class="tag blue">method</span></div>
+      <div class="rec-title">Qualify the rollup endorsement</div>
+    </div>
+    <div class="rec-lev">
+      <div class="rec-lev-lbl">Leverage</div>
+      <div class="meter"><i style="width:96%"></i></div>
+    </div>
+  </div>
+  <div class="rec-body">Coalesce across the rollup, till date, and order date; never read the rollup alone.</div>
+  <div class="rec-props">
+    <span class="rec-prop"><span class="k">Evidence</span><b>≥5 runs</b></span>
+    <span class="rec-prop"><span class="k">Cures</span><a href="#pit-rollup">rollup raggedness</a></span>
+  </div>
+</div>
+```
+
+## Meter
+
+Requires layer 1. A magnitude bar for a ranked or scored value — leverage, priority, confidence. The inner `<i>` width encodes the value. For inline use, set `display:inline-block;width:120px;vertical-align:middle` on the `.meter`.
+
+```html
+<div class="meter"><i style="width:72%"></i></div>
+```
+
+## Glossary term
+
+Requires layer 1 for the hover tooltip; touch-tap support is layer 2. An inline definition for a jargon term, shown in place without a glossary detour. The `tabindex` makes it keyboard-reachable.
+
+```html
+the <span class="term" tabindex="0">rollup<span class="tip">A pre-aggregated per-customer summary table — trustworthy in total, not row-complete.</span></span> is fast but ragged
+```
+
+## Relation / cure map
+
+Requires layer 1. A pure-CSS map of left-item → right-item relations — cause→cure, problem→owner, any A-maps-to-B set. Pure CSS rather than a diagram engine, so it survives layer 1 and iOS Quick Look; it stacks on narrow screens. Wire the reciprocal links to the records or pitfalls it connects so the relation is navigable in both directions.
+
+```html
+<div class="relmap">
+  <div class="relrow">
+    <div class="rel-from"><span class="tag red">induced</span> Rollup-alone raggedness</div>
+    <div class="rel-arrow">→</div>
+    <div class="rel-to"><span class="k">cured by</span><a href="#tweak-rollup">Tweak #1 · qualify the rollup</a></div>
+  </div>
+</div>
+```
+
+## Stat row
+
+Requires layer 1. A row of compact stat pills for a page header — counts, dates, status at a glance.
+
+```html
+<div class="stats">
+  <span class="stat"><b>8</b> runs</span>
+  <span class="stat"><b>6</b> tweaks</span>
+  <span class="stat">all pass the gate</span>
+</div>
+```

@@ -13,8 +13,18 @@
     "select",
     "[contenteditable]",
     "[data-annotation-ignore]",
+    // A glossary term's .tip popover is scaffolding for the definition, never an
+    // annotation target — hovering or clicking it must not ring a reticle.
+    ".tip",
   ].join(",");
-  const annotationWholeSelector = "[data-annotate-whole], .step, .bar";
+  // Whole-annotation units: blocks the author marked, plus the components whose
+  // meaningful unit is the whole box, not a leaf inside it — a step, a bar, a
+  // record card, a semantic callout, and a relation/cure row. Annotating any of
+  // these resolves to the box (so its internal scaffolding — a meter's <i>, a
+  // record's sub-parts — never becomes its own target), and the "Next
+  // unanswered" walk steps through them.
+  const annotationWholeSelector =
+    "[data-annotate-whole], .step, .bar, .record, .callout, .relrow";
   // On coarse-pointer screens the editor and previews render as bottom
   // sheets (annotations.css keys off the same query), which fit one at a time.
   const sheetLayoutInput = window.matchMedia(
@@ -46,7 +56,7 @@
   function normalizedElementText(element) {
     const clone = element.cloneNode(true);
     clone
-      .querySelectorAll("[data-annotation-ui]")
+      .querySelectorAll("[data-annotation-ui], .tip")
       .forEach((node) => node.remove());
     return clone.textContent.trim().replace(/\s+/g, " ");
   }

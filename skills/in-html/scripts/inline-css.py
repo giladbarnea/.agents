@@ -30,7 +30,9 @@ def inline_css(html: str, css: str, css_basename: str) -> str:
     html = link_pattern.sub("", html)
     style_block = "<style>\n" + css + "\n</style>"
     if re.search(r"</head>", html, re.IGNORECASE):
-        return re.sub(r"</head>", style_block + "</head>", html, count=1, flags=re.IGNORECASE)
+        # A function replacement is used verbatim — CSS unicode escapes like
+        # `\25C6` would otherwise be misread as `re.sub` backreferences.
+        return re.sub(r"</head>", lambda _: style_block + "</head>", html, count=1, flags=re.IGNORECASE)
     # No <head>: fail loudly rather than guess.
     sys.exit("error: no </head> found in HTML; cannot inject <style>")
 

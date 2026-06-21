@@ -1,34 +1,50 @@
-/* Warm editorial palette. Every color is a variable, and each token carries
-   its light and dark value in one light-dark() pair. The dark theme is a warm
-   espresso-and-gold counterpart to the cream paper, not a cold OLED black, so
-   the editorial character survives the flip. The inline script in the templates
-   pins data-theme (and thus color-scheme) from local time; with JS off,
+/* Calibrated palette: Mintlify's neutral gray ramp + Inter / JetBrains Mono
+   type ramp (extracted from a live `mint dev` build), worn with in-html's own
+   gold accent rather than Mintlify's indigo. Every color is a variable carrying
+   its light and dark value in one light-dark() pair; the dark theme is a true
+   near-black (#0c0c10) as in Mintlify. The inline script in the templates pins
+   data-theme (and thus color-scheme) from local time; with JS off,
    `color-scheme: light dark` resolves from the OS setting instead. */
 :root {
   color-scheme: light dark;
-  --paper: light-dark(#fffff8, #14120d);
-  --ink: light-dark(#111, #e8e2d4);
-  --faint: light-dark(#6b6b6b, #968f80);
-  --rule: light-dark(#d8d8cf, #312d26);
-  --rule-dash: light-dark(#c9c0a4, #463f33);
-  --accentbg: light-dark(#fcf3d9, #2b2113);
+  /* neutral ramp (Mintlify) */
+  --paper: light-dark(#ffffff, #0c0c10);
+  --ink: light-dark(#19191d, #f0f0f4);
+  --faint: light-dark(#727276, #a1a1a5);
+  --rule: light-dark(#e1e1e5, #28272c);
+  --rule-dash: light-dark(#d0d0d4, #3a3942);
+  --surface: light-dark(#ffffff, #131318);
+  --surface2: light-dark(#f5f5f9, #16171c);
+  --input-bg: light-dark(#ffffff, #16171c);
+  --dim-bg: light-dark(#f0f0f4, #1f1f25);
+  --chip: light-dark(#f0f0f4, #1f1f25);
+  --chip-border: light-dark(#e1e1e5, #2d313a);
+  /* gold accent (in-html identity) */
   --accent: light-dark(#9a6b00, #d8ab51);
+  --accentbg: light-dark(#fcf3d9, #2b2113);
   --on-accent: light-dark(#fff, #1a1408);
-  --good: light-dark(#1f6b3b, #74c490);
-  --goodbg: light-dark(#e6f3ea, #18271d);
-  --bad: light-dark(#9b2226, #e2807c);
-  --badbg: light-dark(#f7e7e6, #2d1817);
-  --blue: light-dark(#2a4d69, #93b6d2);
-  --bluebg: light-dark(#e7eef4, #18242e);
-  --blue-border: light-dark(#cdd9e4, #2d3b46);
-  --chip: light-dark(#efe9d6, #272016);
-  --chip-border: light-dark(#e0d8bf, #3c3528);
-  --surface: light-dark(#fffefb, #1b1812);
-  --surface2: light-dark(#fbfaf3, #201c15);
-  --input-bg: light-dark(#fff, #211d16);
-  --dim-bg: light-dark(#efefe8, #25221b);
   --sel-bg: light-dark(#f5e3a0, #5c4b1f);
   --sel-ink: light-dark(#3f3420, #f1e7d0);
+  /* semantic callout hues (Mintlify) */
+  --good: light-dark(#16a34a, #34d399);
+  --goodbg: light-dark(#e8f8f0, #0b2019);
+  --bad: light-dark(#dc2626, #f87171);
+  --badbg: light-dark(#fdedef, #271213);
+  --blue: light-dark(#2563eb, #74a8fb);
+  --bluebg: light-dark(#eff5ff, #0d1a2e);
+  --blue-border: light-dark(#d0e1fd, #1d3a60);
+  --amber: light-dark(#ca8a04, #e0a64b);
+  --amberbg: light-dark(#fdf5e7, #231a0b);
+  /* type ramp (Inter / JetBrains Mono) */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace;
+  --fs-h1: 1.875rem; --fw-h1: 700; --lh-h1: 1.2; --ls-h1: -0.025em;
+  --fs-h2: 1.5rem; --fw-h2: 600; --lh-h2: 1.333; --ls-h2: -0.025em;
+  --fs-h3: 1rem; --fw-h3: 600; --lh-h3: 1.375;
+  --fs-lead: 1.25rem;
+  --fs-body: 1rem; --lh-body: 1.5;
+  --fs-sm: 0.875rem;
+  --radius: 12px; --radius-sm: 8px;
 }
 :root[data-theme="light"] {
   color-scheme: light;
@@ -45,6 +61,11 @@ html {
 }
 [id] {
   scroll-margin-top: 1.5rem;
+}
+/* With the fixed top bar present, cross-reference and TOC jumps must clear it
+   so the target doesn't land hidden underneath. */
+.has-chrome [id] {
+  scroll-margin-top: calc(var(--topbar-h) + 1rem);
 }
 a[href^="#"] {
   color: var(--accent);
@@ -130,9 +151,8 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: Palatino, "Palatino Linotype", "Book Antiqua", Georgia,
-    "Frank Ruhl Libre", FrankRuehl, serif;
-  line-height: 1.5;
+  font-family: var(--font-sans);
+  line-height: var(--lh-body);
   -webkit-font-smoothing: antialiased;
 }
 .wrap {
@@ -144,9 +164,10 @@ body {
   max-width: 680px;
 }
 h1 {
-  font-weight: 400;
-  font-size: 2.5rem;
-  line-height: 1.1;
+  font-weight: var(--fw-h1);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  letter-spacing: var(--ls-h1);
   margin: 0 0 0.3rem;
 }
 .sub {
@@ -157,10 +178,11 @@ h1 {
   max-width: 620px;
 }
 h2 {
-  font-weight: 400;
-  font-size: 1.7rem;
+  font-weight: var(--fw-h2);
+  font-size: var(--fs-h2);
   margin: 3.5rem 0 0.2rem;
-  line-height: 1.15;
+  line-height: var(--lh-h2);
+  letter-spacing: var(--ls-h2);
 }
 h2 .n {
   font-style: italic;
@@ -171,8 +193,8 @@ h2 .n {
   letter-spacing: 0.03em;
 }
 h3 {
-  font-weight: 600;
-  font-size: 1.05rem;
+  font-weight: var(--fw-h3);
+  font-size: var(--fs-h3);
   margin: 1.6rem 0 0.4rem;
   letter-spacing: 0.02em;
 }
@@ -196,7 +218,7 @@ hr {
 }
 code,
 .mono {
-  font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.82em;
 }
 .sans {
@@ -223,27 +245,94 @@ aside.note {
 }
 .card {
   border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--surface);
   padding: 1.1rem 1.2rem;
   margin: 1.2rem 0;
 }
+/* Mintlify-style semantic callout family. The icon is a CSS ::before glyph
+   (text-presentation forced with U+FE0E) positioned in the inline-start pad,
+   so any block or inline content works and RTL flips correctly. Default keeps
+   the gold accent (in-html identity); variants carry the semantic hue + glyph. */
 .callout {
+  position: relative;
+  border: 1px solid var(--rule);
   border-inline-start: 3px solid var(--accent);
   background: var(--accentbg);
-  padding: 0.8rem 1rem;
-  border-start-end-radius: 6px;
-  border-end-end-radius: 6px;
+  padding: 0.85rem 1rem;
+  padding-inline-start: 2.4rem;
+  border-radius: var(--radius-sm);
   margin: 1.2rem 0;
-  font-size: 0.96rem;
+  font-size: 0.95rem;
 }
+.callout::before {
+  content: "\25C6";
+  position: absolute;
+  inset-inline-start: 0.85rem;
+  top: 0.8rem;
+  font-size: 1em;
+  line-height: 1.5;
+  color: var(--accent);
+}
+.callout > :first-child {
+  margin-top: 0;
+}
+.callout > :last-child {
+  margin-bottom: 0;
+}
+.callout.note {
+  border-inline-start-color: var(--blue);
+  background: var(--bluebg);
+}
+.callout.note::before {
+  content: "\270E";
+  color: var(--blue);
+}
+.callout.info {
+  border-inline-start-color: var(--faint);
+  background: var(--surface2);
+}
+.callout.info::before {
+  content: "\2139\FE0E";
+  color: var(--faint);
+}
+.callout.tip {
+  border-inline-start-color: var(--good);
+  background: var(--goodbg);
+}
+.callout.tip::before {
+  content: "\2726";
+  color: var(--good);
+}
+.callout.check,
+.callout.good {
+  border-inline-start-color: var(--good);
+  background: var(--goodbg);
+}
+.callout.check::before,
+.callout.good::before {
+  content: "\2713";
+  color: var(--good);
+}
+.callout.warning,
+.callout.warn {
+  border-inline-start-color: var(--amber);
+  background: var(--amberbg);
+}
+.callout.warning::before,
+.callout.warn::before {
+  content: "\26A0\FE0E";
+  color: var(--amber);
+}
+.callout.danger,
 .callout.bad {
-  border-color: var(--bad);
+  border-inline-start-color: var(--bad);
   background: var(--badbg);
 }
-.callout.good {
-  border-color: var(--good);
-  background: var(--goodbg);
+.callout.danger::before,
+.callout.bad::before {
+  content: "\2715";
+  color: var(--bad);
 }
 .stance {
   font-size: 1.12rem;
@@ -320,8 +409,8 @@ aside.note {
 }
 .chip.q {
   cursor: pointer;
-  background: var(--input-bg);
-  border: 1px dashed var(--rule-dash);
+  background: var(--surface2);
+  border: 1px solid var(--rule);
 }
 .chip.q.active {
   background: var(--accentbg);
@@ -332,20 +421,23 @@ aside.note {
 
 .seg {
   display: inline-flex;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-sans);
   font-size: 0.9rem;
   margin: 0.4rem 0 1rem;
 }
 .seg label {
   display: inline-flex;
   align-items: center;
-  background: var(--surface2);
-  padding: 0.45rem 1.1rem;
+  padding: 0.5rem 0.9rem;
   color: var(--faint);
   cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 .seg input {
   position: absolute;
@@ -355,8 +447,8 @@ aside.note {
   margin: 0;
 }
 .seg label:has(input:checked) {
-  background: var(--ink);
-  color: var(--paper);
+  color: var(--ink);
+  border-bottom-color: var(--accent);
 }
 .panels > * {
   display: none;
@@ -540,12 +632,13 @@ aside.note {
   cursor: pointer;
   user-select: none;
   list-style: none;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   font-size: 0.95rem;
-  color: var(--blue);
+  font-weight: 500;
+  color: var(--ink);
   padding: 0.55rem 0.8rem;
   border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface2);
 }
 .disclose > .head::-webkit-details-marker {
@@ -553,7 +646,7 @@ aside.note {
 }
 @media (hover: hover) {
   .disclose > .head:hover {
-    background: var(--bluebg);
+    background: var(--dim-bg);
   }
 }
 .disclose > .head .tri {
@@ -1372,5 +1465,677 @@ table.data tr.total td {
   .diff .dc.add::before {
     content: "+  ";
     color: var(--good);
+  }
+}
+
+/* ── .record — a labeled metadata card (rank · file · tag · meter · props) ──
+   The native shape for a set of structured proposals/findings: each is a record
+   with typed fields, not a paragraph. Layer 1 (pure CSS). Pair the leverage
+   slot with .meter; mark the card data-annotate-whole for layer 3. */
+.record {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 1.1rem 1.2rem;
+  margin: 1rem 0;
+  font-family: var(--font-sans);
+}
+.record.hot {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--rule));
+}
+.record .rec-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+.record .rec-rank {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--dim-bg);
+  color: var(--faint);
+  border: 1px solid var(--rule);
+}
+.record.hot .rec-rank {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: transparent;
+}
+.record .rec-main {
+  flex: 1;
+  min-width: 0;
+}
+.record .rec-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: var(--faint);
+  margin-bottom: 0.1rem;
+}
+.record .rec-file {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--faint);
+  background: var(--chip);
+  border: 1px solid var(--chip-border);
+  border-radius: 5px;
+  padding: 0.08rem 0.4rem;
+}
+.record .rec-title {
+  margin: 0.1rem 0 0;
+  font-size: 1.02rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.record .rec-lev {
+  flex: none;
+  width: 86px;
+}
+.record .rec-lev-lbl {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+  text-align: end;
+  margin-bottom: 0.25rem;
+}
+.record .rec-body {
+  font-size: 0.93rem;
+  color: var(--ink);
+  line-height: 1.55;
+  margin-top: 0.6rem;
+}
+.record .rec-props {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 1rem;
+  margin-top: 0.8rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--rule);
+}
+.record .rec-prop {
+  font-size: 0.8rem;
+  color: var(--faint);
+}
+.record .rec-prop b {
+  color: var(--ink);
+  font-weight: 500;
+}
+.record .rec-prop .k {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-inline-end: 0.3rem;
+}
+
+/* ── .meter — a magnitude bar (leverage, priority, confidence). Width on the
+   inner <i> encodes the value. Block by default; inline-block for inline use. */
+.meter {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--dim-bg);
+  border: 1px solid var(--rule);
+  overflow: hidden;
+}
+.meter > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+/* ── .term — inline glossary tooltip (CSS-only hover; tabindex for keyboard).
+   Defuses jargon without a glossary detour. Touch handling is layer 2. */
+.term {
+  border-bottom: 1px dashed var(--faint);
+  cursor: help;
+  position: relative;
+}
+.term > .tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  inset-inline-start: 50%;
+  transform: translateX(-50%) translateY(4px);
+  width: max-content;
+  max-width: 260px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1.5;
+  text-align: start;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  visibility: hidden;
+  transition: 0.15s;
+  z-index: 40;
+  pointer-events: none;
+}
+.term > .tip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--ink);
+}
+.term:hover > .tip,
+.term:focus-visible > .tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%);
+}
+
+/* ── .relmap — a relation / cause→cure map (pure CSS, no Mermaid, so layer 1
+   survives). Each .relrow links a left item to a right item via an arrow. */
+.relmap {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1.2rem 0;
+  font-family: var(--font-sans);
+}
+.relrow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 0.6rem 0.85rem;
+}
+.relrow .rel-from {
+  font-size: 0.88rem;
+}
+.relrow .rel-arrow {
+  color: var(--faint);
+  font-size: 1.1rem;
+  text-align: center;
+}
+.relrow .rel-to {
+  font-size: 0.88rem;
+  text-align: end;
+}
+.relrow .rel-to .k {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--faint);
+}
+
+/* ── .stats — a row of compact stat pills for a page header. */
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.8rem 0 1.2rem;
+  font-family: var(--font-sans);
+}
+.stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--faint);
+  background: var(--surface2);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+}
+.stat b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+@media (max-width: 680px) {
+  .relrow {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+  .relrow .rel-to {
+    text-align: start;
+  }
+  .relrow .rel-arrow {
+    text-align: start;
+    transform: rotate(90deg);
+    width: max-content;
+  }
+}
+
+/* ══ Docs chrome (layer 2+) ══════════════════════════════════════════════════
+   A Mintlify-style three-pane frame — slim top bar, left section-nav, right
+   "On this page" TOC — built by interactions.js from the page's own <h1>/<h2>s,
+   so authors add no markup. The whole frame is fixed furniture in the margins
+   around the reading column: .col#content keeps its place and width, which is
+   what the annotation engine measures to park its side panel. With JS off the
+   frame is never built and the page is the plain single column of layer 1; the
+   `.has-chrome` class (set on <html> by the builder) gates every layout shift
+   below, so its absence means zero footprint.
+
+   On wide screens the nav and TOC sit in the page gutters; below the device
+   breakpoint they collapse — the nav goes off-canvas behind the top-bar toggle,
+   the TOC hides entirely. The right TOC shares the right gutter with the
+   annotation side panel, so it yields (fades, goes inert) whenever a panel is
+   open — the same `body.annotation-panel-open` handoff the "Next unanswered"
+   pill already uses, keeping the two from ever fighting for the corridor. */
+:root {
+  --topbar-h: 3.25rem;
+  --nav-w: 16rem;
+  --toc-w: 15rem;
+  --gutter: 1.25rem;
+}
+.has-chrome body {
+  padding-top: var(--topbar-h);
+}
+
+.page-bar {
+  position: fixed;
+  top: 0;
+  inset-inline: 0;
+  z-index: 9990;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  height: var(--topbar-h);
+  padding: 0 var(--gutter);
+  background: color-mix(in srgb, var(--paper) 86%, transparent);
+  backdrop-filter: saturate(1.1) blur(8px);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--font-sans);
+}
+.page-bar .page-bar-toggle {
+  display: none;
+  flex: none;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1;
+}
+.page-bar .page-bar-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.page-bar .page-bar-title .page-bar-dot {
+  color: var(--accent);
+  margin-inline-end: 0.5rem;
+}
+.page-bar .page-bar-progress {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.1s linear;
+}
+
+/* Left section-nav: a fixed rail in the left gutter. Each entry links to an
+   h2; the entry tracking the reader's scroll gets .current. */
+.page-nav {
+  position: fixed;
+  top: var(--topbar-h);
+  inset-inline-start: 0;
+  width: var(--nav-w);
+  height: calc(100vh - var(--topbar-h));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.4rem 0.9rem 2rem 1.25rem;
+  border-inline-end: 1px solid var(--rule);
+  background: var(--paper);
+  font-family: var(--font-sans);
+  z-index: 9985;
+}
+.page-nav .page-nav-eyebrow {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0 0 0.55rem 0.55rem;
+}
+.page-nav a {
+  display: block;
+  padding: 0.34rem 0.55rem;
+  border-radius: var(--radius-sm);
+  border: 0;
+  color: var(--faint);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  text-decoration: none;
+  transition:
+    color 0.14s ease,
+    background-color 0.14s ease;
+}
+.page-nav a .page-nav-n {
+  color: color-mix(in srgb, var(--accent) 75%, var(--faint));
+  font-variant-numeric: tabular-nums;
+  margin-inline-end: 0.4rem;
+}
+@media (hover: hover) {
+  .page-nav a:hover {
+    color: var(--ink);
+    background: var(--surface2);
+  }
+}
+.page-nav a.current {
+  color: var(--accent);
+  background: var(--accentbg);
+  font-weight: 600;
+}
+.page-nav a.current .page-nav-n {
+  color: var(--accent);
+}
+
+/* Right "On this page" TOC: a fixed rail in the right gutter that tracks the
+   reader's scroll position, plus the controlled-tag legend beneath it. */
+.page-toc {
+  position: fixed;
+  top: var(--topbar-h);
+  inset-inline-end: 0;
+  width: var(--toc-w);
+  height: calc(100vh - var(--topbar-h));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.4rem 1.25rem 2rem 0.9rem;
+  font-family: var(--font-sans);
+  z-index: 9985;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+.page-toc .page-toc-eyebrow {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0 0 0.55rem 0.4rem;
+}
+.page-toc a {
+  display: block;
+  padding: 0.22rem 0.6rem;
+  border: 0;
+  border-inline-start: 2px solid var(--rule);
+  color: var(--faint);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  text-decoration: none;
+  transition:
+    color 0.14s ease,
+    border-color 0.14s ease;
+}
+@media (hover: hover) {
+  .page-toc a:hover {
+    color: var(--ink);
+  }
+}
+.page-toc a.current {
+  color: var(--accent);
+  border-inline-start-color: var(--accent);
+}
+/* The TOC and the annotation side panel both want the right gutter. When a
+   panel opens, the TOC defers — fades out and goes inert — so they never
+   overlap. (annotations.js toggles body.annotation-panel-open.) */
+body.annotation-panel-open .page-toc {
+  opacity: 0;
+  transform: translateX(0.6rem);
+  pointer-events: none;
+}
+
+/* Controlled-tag legend: one chip per distinct .tag hue present on the page.
+   Clicking a chip lights every matching .tag and dims the rest of the content
+   — the chip-toggle engine's "highlight the relevant, mute the noise" spirit,
+   applied across the whole page instead of one scoped pair. */
+.page-legend {
+  margin-top: 1.6rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--rule);
+}
+.page-legend .page-legend-eyebrow {
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0 0 0.6rem 0.4rem;
+}
+.page-legend .page-legend-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin: 0.15rem 0;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--faint);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  text-align: start;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+.page-legend .page-legend-chip .page-legend-swatch {
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 3px;
+}
+.page-legend .page-legend-chip .page-legend-count {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  color: var(--faint);
+}
+@media (hover: hover) {
+  .page-legend .page-legend-chip:hover {
+    background: var(--surface2);
+    color: var(--ink);
+  }
+}
+.page-legend .page-legend-chip.active {
+  border-color: var(--rule);
+  background: var(--surface2);
+  color: var(--ink);
+  font-weight: 600;
+}
+.page-legend-swatch.blue {
+  background: var(--blue);
+}
+.page-legend-swatch.amber {
+  background: var(--accent);
+}
+.page-legend-swatch.green {
+  background: var(--good);
+}
+.page-legend-swatch.red {
+  background: var(--bad);
+}
+/* While a legend chip is engaged, the content column dims and the matching
+   tags (and their carrying line) pop back to full strength with a soft ring. */
+body.legend-active #content {
+  --legend-dim: 0.32;
+}
+body.legend-active #content :is(p, li, h2, h3, .card, .pane, .record, .relrow, .cnode, .tnode, .step, .qa) {
+  opacity: var(--legend-dim, 1);
+  transition: opacity 0.18s ease;
+}
+body.legend-active #content .tag.legend-lit {
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 55%, transparent);
+}
+body.legend-active #content .legend-lit-host {
+  opacity: 1;
+}
+
+/* Copyable code blocks: every <pre> gets a hover-revealed Copy button in its
+   top-inline-end corner. The button confirms in place on success. */
+.code-copyable {
+  position: relative;
+}
+.code-copy {
+  position: absolute;
+  top: 0.5rem;
+  inset-inline-end: 0.5rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.28em 0.6em;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface2);
+  color: var(--faint);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0;
+  transition:
+    opacity 0.14s ease,
+    color 0.14s ease,
+    border-color 0.14s ease,
+    background-color 0.14s ease;
+}
+.code-copyable:hover .code-copy,
+.code-copy:focus-visible {
+  opacity: 1;
+}
+@media (hover: hover) {
+  .code-copy:hover {
+    color: var(--ink);
+    border-color: var(--rule-dash);
+  }
+}
+.code-copy.copied {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--good) 50%, transparent);
+  background: var(--goodbg);
+  color: var(--good);
+}
+
+/* Off-canvas nav backdrop, only meaningful at narrow widths. */
+.page-nav-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9984;
+  background: color-mix(in srgb, var(--ink) 30%, transparent);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    visibility 0.2s;
+}
+
+/* Wide layout: reserve the gutters so the reading column never slides under the
+   fixed rails. The column itself (max-width 680) stays centered in the space
+   that remains, preserving the annotation corridor on its right. */
+@media (min-width: 1024px) {
+  .has-chrome .wrap {
+    padding-inline-start: calc(var(--nav-w) + var(--gutter));
+    padding-inline-end: calc(var(--toc-w) + var(--gutter));
+  }
+}
+
+/* Narrow layout: the rails fold away. The nav becomes an off-canvas drawer the
+   top-bar toggle slides in; the TOC and its legend are dropped entirely (the
+   reader scrolls the short page directly). */
+@media (max-width: 1023px) {
+  .has-chrome .page-bar .page-bar-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .page-toc {
+    display: none;
+  }
+  .page-nav {
+    transform: translateX(-100%);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22);
+    transition:
+      transform 0.24s cubic-bezier(0.32, 0.72, 0, 1),
+      visibility 0.24s;
+    visibility: hidden;
+  }
+  body.page-nav-open .page-nav {
+    transform: none;
+    visibility: visible;
+  }
+  body.page-nav-open .page-nav-backdrop {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+@media (max-width: 680px) {
+  :root {
+    --topbar-h: 3rem;
+    --nav-w: min(82vw, 18rem);
+  }
+}
+
+/* RTL: the off-canvas nav slides in from the inline-start edge correctly under
+   logical properties; only the translate sign is physical, so mirror it. */
+:dir(rtl) .page-nav {
+  transform: translateX(100%);
+}
+:dir(rtl) body.page-nav-open .page-nav {
+  transform: none;
+}
+
+/* Touch: the glossary term has no hover, so a tap toggles the tip open; the
+   same .tip surface is revealed by a .term-open class the touch binding sets.
+   Copy buttons stay visible (no hover to reveal them) and grow to finger size. */
+@media (hover: none) and (pointer: coarse) {
+  .term.term-open > .tip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%);
+  }
+  .code-copy {
+    opacity: 1;
+    min-height: 2.1rem;
+    padding-inline: 0.85em;
+  }
+  .page-legend .page-legend-chip {
+    min-height: 2.4rem;
+  }
+}
+
+/* Reduced motion: keep the chrome's fades, drop the slides and progress glide. */
+@media (prefers-reduced-motion: reduce) {
+  .page-nav,
+  .page-toc,
+  .page-bar-progress {
+    transition: opacity 0.18s ease;
   }
 }
