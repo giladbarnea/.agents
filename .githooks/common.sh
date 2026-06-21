@@ -9,8 +9,9 @@ TARGETS=(
 
 # Per-provider skills root and its allowed SKILL.md frontmatter fields,
 # as "<skills-dir>|<space-separated whitelist>". `name` and `description`
-# are always kept; an empty whitelist means a plain whole-dir symlink to the
-# in-repo source, while a non-empty one renders a real per-provider SKILL.md.
+# are always kept. A non-empty whitelist materializes a real per-provider
+# SKILL.md, but only for templated skills (those with a SKILL.md.j2); plain
+# skills and empty-whitelist providers get a whole-dir symlink to the source.
 SKILL_PROVIDERS=(
   "$HOME/.claude/skills|hidden disable-model-invocation"
   "$HOME/.codex/skills|"
@@ -107,16 +108,28 @@ filter_frontmatter() {
   '
 }
 
-# Renders <j2> through filter_frontmatter(<whitelist>) and writes it to
-# <output>, using the same Y/N/R dialog as render_one. No-op when unchanged.
+# Emits a skill's raw markdown: the rendered SKILL.md.j2 if present, else the
+# plain committed SKILL.md.
+emit_skill_source() {
+  local skill_dir="$1"
+
+  if [[ -f "$skill_dir/SKILL.md.j2" ]]; then
+    ./render.py --stdout "$skill_dir/SKILL.md.j2"
+  else
+    cat "$skill_dir/SKILL.md"
+  fi
+}
+
+# Pipes <skill_dir>'s source through filter_frontmatter(<whitelist>) and writes
+# it to <output>, using the same Y/N/R dialog as render_one. No-op when unchanged.
 render_skill_one() {
-  local j2="$1"
+  local skill_dir="$1"
   local output="$2"
   local whitelist="$3"
   local rendered_tmp cmp_base reply
 
   rendered_tmp="$(mktemp)"
-  ./render.py --stdout "$j2" | filter_frontmatter "$whitelist" > "$rendered_tmp"
+  emit_skill_source "$skill_dir" | filter_frontmatter "$whitelist" > "$rendered_tmp"
 
   cmp_base="$output"
   [[ -f "$output" ]] || cmp_base=/dev/null
@@ -185,7 +198,7 @@ ensure_dir_symlink() {
 # symlink to every source top-level entry except SKILL.md / SKILL.md.j2.
 materialize_real_skill() {
   local abs_src="$1"
-  local j2="$2"
+  local skill_dir="$2"
   local target_dir="$3"
   local whitelist="$4"
   local entry
@@ -197,34 +210,39 @@ materialize_real_skill() {
     ensure_symlink "$entry" "$target_dir/$(basename "$entry")"
   done < <(find "$abs_src" -maxdepth 1 -mindepth 1 ! -name 'SKILL.md' ! -name 'SKILL.md.j2' -print0)
 
-  render_skill_one "$j2" "$target_dir/SKILL.md" "$whitelist"
+  render_skill_one "$skill_dir" "$target_dir/SKILL.md" "$whitelist"
 }
 
-# Renders every templated skill: the in-repo base SKILL.md (empty whitelist,
-# committed) plus each provider's materialization. Pass "stage" to git-add the
-# in-repo base renders (pre-commit only).
+# Syncs every skill (those with a SKILL.md.j2 template and those with a plain
+# SKILL.md) out to each provider. Templated skills also get their in-repo base
+# SKILL.md rendered; plain skills are their own source. Pass "stage" to git-add
+# rendered base SKILL.md files (pre-commit only).
 render_skills() {
   local stage="${1:-}"
-  local j2 skill_dir skill_name abs_src base_output entry provider whitelist target_dir
+  local skill_dir skill_name abs_src base_output entry provider whitelist target_dir
 
-  for j2 in skills/*/SKILL.md.j2; do
-    [[ -e "$j2" ]] || continue
-    skill_dir="$(dirname "$j2")"
+  for skill_dir in skills/*/; do
+    skill_dir="${skill_dir%/}"
+    [[ -f "$skill_dir/SKILL.md.j2" || -f "$skill_dir/SKILL.md" ]] || continue
     skill_name="$(basename "$skill_dir")"
     abs_src="$PWD/$skill_dir"
     base_output="$skill_dir/SKILL.md"
 
-    render_skill_one "$j2" "$base_output" "" || return 1
-    [[ -n "$stage" ]] && git add "$base_output"
+    if [[ -f "$skill_dir/SKILL.md.j2" ]]; then
+      render_skill_one "$skill_dir" "$base_output" "" || return 1
+      [[ -n "$stage" ]] && git add "$base_output"
+    fi
 
     for entry in "${SKILL_PROVIDERS[@]}"; do
       provider="${entry%%|*}"
       whitelist="${entry#*|}"
       target_dir="$provider/$skill_name"
-      if [[ -z "$whitelist" ]]; then
-        ensure_dir_symlink "$abs_src" "$target_dir"
+      if [[ -n "$whitelist" && -f "$skill_dir/SKILL.md.j2" ]]; then
+        materialize_real_skill "$abs_src" "$skill_dir" "$target_dir" "$whitelist" || return 1
+        printf '✓ Materialized %s → %s\n' "$skill_name" "$target_dir" >&2
       else
-        materialize_real_skill "$abs_src" "$j2" "$target_dir" "$whitelist" || return 1
+        ensure_dir_symlink "$abs_src" "$target_dir"
+        printf '✓ Linked %s → %s\n' "$skill_name" "$target_dir" >&2
       fi
     done
   done
