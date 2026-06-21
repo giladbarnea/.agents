@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
 source "$(dirname "$0")/common.sh"
-render_agents_md stage
-render_skills stage
+render_agents_md stage || exit 1
+render_skills stage || exit 1

@@ -174,24 +174,35 @@ render_skill_one() {
   rm -f "$rendered_tmp"
 }
 
-# Idempotently point <link> at <target> (an absolute path).
+# Joins provider short-names into a brace-expansion summary rooted at $HOME,
+# e.g. (claude codex) -> "$HOME/.{claude,codex}", (claude) -> "$HOME/.claude".
+join_braced() {
+  local IFS=,
+  if (( $# == 1 )); then
+    printf '%s/.%s' "$HOME" "$1"
+  else
+    printf '%s/.{%s}' "$HOME" "$*"
+  fi
+}
+
+# Idempotently point <link> at <target> (an absolute path). Fails loud.
 ensure_symlink() {
   local target="$1"
   local link="$2"
 
   [[ -L "$link" && "$(readlink "$link")" == "$target" ]] && return 0
-  ln -sfn "$target" "$link"
+  ln -sfn "$target" "$link" || { printf '✗ Failed to link %s → %s\n' "$target" "$link" >&2; return 1; }
 }
 
 # Idempotently make <link> a whole-dir symlink to <abs_src>, replacing any
-# stale symlink or previously-materialized real dir.
+# stale symlink or previously-materialized real dir. Fails loud.
 ensure_dir_symlink() {
   local abs_src="$1"
   local link="$2"
 
   [[ -L "$link" && "$(readlink "$link")" == "$abs_src" ]] && return 0
   rm -rf "$link"
-  ln -sfn "$abs_src" "$link"
+  ln -sfn "$abs_src" "$link" || { printf '✗ Failed to link %s → %s\n' "$abs_src" "$link" >&2; return 1; }
 }
 
 # Materialize <target_dir> as a real directory: a rendered SKILL.md plus a
@@ -219,7 +230,8 @@ materialize_real_skill() {
 # rendered base SKILL.md files (pre-commit only).
 render_skills() {
   local stage="${1:-}"
-  local skill_dir skill_name abs_src base_output entry provider whitelist target_dir
+  local skill_dir skill_name abs_src base_output entry provider whitelist target_dir short
+  local -a linked materialized
 
   for skill_dir in skills/*/; do
     skill_dir="${skill_dir%/}"
@@ -233,17 +245,29 @@ render_skills() {
       [[ -n "$stage" ]] && git add "$base_output"
     fi
 
+    linked=()
+    materialized=()
     for entry in "${SKILL_PROVIDERS[@]}"; do
       provider="${entry%%|*}"
       whitelist="${entry#*|}"
       target_dir="$provider/$skill_name"
+      short="${provider#"$HOME"/}"; short="${short%%/*}"; short="${short#.}"
       if [[ -n "$whitelist" && -f "$skill_dir/SKILL.md.j2" ]]; then
         materialize_real_skill "$abs_src" "$skill_dir" "$target_dir" "$whitelist" || return 1
-        printf '✓ Materialized %s → %s\n' "$skill_name" "$target_dir" >&2
+        materialized+=("$short")
       else
-        ensure_dir_symlink "$abs_src" "$target_dir"
-        printf '✓ Linked %s → %s\n' "$skill_name" "$target_dir" >&2
+        ensure_dir_symlink "$abs_src" "$target_dir" || return 1
+        linked+=("$short")
       fi
     done
+
+    if (( ${#linked[@]} && ${#materialized[@]} )); then
+      printf '✓ Synced %s → linked %s, materialized %s\n' \
+        "$skill_name" "$(join_braced "${linked[@]}")" "$(join_braced "${materialized[@]}")" >&2
+    elif (( ${#materialized[@]} )); then
+      printf '✓ Materialized %s → %s\n' "$skill_name" "$(join_braced "${materialized[@]}")" >&2
+    else
+      printf '✓ Linked %s → %s\n' "$skill_name" "$(join_braced "${linked[@]}")" >&2
+    fi
   done
 }
