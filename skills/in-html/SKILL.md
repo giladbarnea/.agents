@@ -1,7 +1,7 @@
 ---
 name: in-html
 description: Build a reusable local HTML page for a CLI-agent review loop, with selectable boilerplate layers — styling, browser interactions, and optional Shift+click annotations persisted to JSON.
-last_updated: 2026-06-21
+last_updated: 2026-06-22
 ---
 
 # in-html
@@ -9,6 +9,22 @@ last_updated: 2026-06-21
 Use this skill when the user wants an answer or artifact as a local HTML page. Choose only the layers the current environment can support.
 
 Native HTML can import CSS and JavaScript, but not useful HTML partials. The old HTML Imports feature is dead; iframes import whole pages; `fetch()`-based partials require JavaScript. So this skill keeps small HTML shells and modularizes the CSS/JS around them. If the delivery channel truly supports only one physical HTML file, inline the chosen CSS/JS into `<style>` / `<script>` tags instead of linking external files.
+
+## Fast path: builder command
+
+When local writes are available, prefer the builder over hand-copying templates. Author only the page body as an HTML fragment, then run:
+
+```bash
+/Users/giladbarnea/.agents/skills/in-html/scripts/inhtml build content.html \
+  --title "Brief title" \
+  --layer 3 \
+  --out /tmp/domainful-page \
+  --also-layer1-icloud domainful-page.html
+```
+
+The builder copies the right template/assets, injects the fragment, mirrors each `data-annotation-id` into an `id` when missing, validates internal `#links`, creates `annotations.json`, starts the layer-3 annotation server, and writes any requested self-contained layer-1 copies. Use `--no-serve` when you only need files. Use `--allow-missing-links` only while drafting; final pages should validate cleanly.
+
+The content file is an HTML body fragment. A full HTML file also works — only its `<body>` is injected. Markdown conversion is intentionally not part of this command; use the component vocabulary below when shaping the content.
 
 ## Layer choice
 
@@ -108,7 +124,7 @@ Use normal HTML first: `h1`, `.sub`, `.lead`, `h2`, `p`, `aside.note`, `.card`, 
 
 For ready-made components, read `/Users/giladbarnea/.agents/skills/in-html/scripts/components.md`. For a rendered reference, open `/Users/giladbarnea/.agents/skills/in-html/scripts/component-gallery.html` with the full layer set. To show exactly what changed between two versions of a text, don't hand-build it — generate the `.diff` component with `/Users/giladbarnea/.agents/skills/in-html/scripts/diff_to_html.py` (see the "Line / word-level diff" section of `components.md`).
 
-Cross-references: never write a bare "§7", "Draft 2", or "the table above" — you know what it points to; the reader doesn't share your mental map of the page. Make every such mention a link: `<a href="#stable-name">§7</a>`. Every `data-annotation-id` doubles as a link target (`interactions.js` mirrors it into `id`), so important elements are already addressable; in layer 1 (no JS) write the `id` attribute on the target yourself. Internal links are styled automatically (no class needed), scroll smoothly, and flash the target on arrival; a "↩ Back to where you were" pill then returns the reader to their departure point (chained jumps unwind in order). A link whose target doesn't exist renders red with a console warning — fix it before shipping.
+Cross-references: never write a bare "§7", "Draft 2", or "the table above" — you know what it points to; the reader doesn't share your mental map of the page. Make every such mention a link: `<a href="#stable-name">§7</a>`. Every `data-annotation-id` doubles as a link target: the builder mirrors it into `id`, and at layers 2–3 `interactions.js` also mirrors it in the browser. If building manually for layer 1, write the `id` attribute on the target yourself. Internal links are styled automatically (no class needed), scroll smoothly, and flash the target on arrival; a "↩ Back to where you were" pill then returns the reader to their departure point (chained jumps unwind in order). A link whose target doesn't exist renders red with a console warning — fix it before shipping.
 
 Multi-round loops: when a previous round's questions were answered via annotations, regenerate the page with the answered items as `.qa` dialogue blocks (question → reviewer's answer → your reply) and give new asks fresh `data-annotation-id`s — old JSON keys then stay harmlessly orphaned instead of colliding with new content.
 

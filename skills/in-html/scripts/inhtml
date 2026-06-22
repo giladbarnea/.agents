@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+command="${1:-}"
+
+case "$command" in
+  build)
+    shift
+    exec node "$script_dir/build.mjs" "$@"
+    ;;
+  -h|--help|"")
+    exec node "$script_dir/build.mjs" --help
+    ;;
+  *)
+    printf 'error: unknown inhtml command: %s\n\n' "$command" >&2
+    exec node "$script_dir/build.mjs" --help
+    ;;
+esac
