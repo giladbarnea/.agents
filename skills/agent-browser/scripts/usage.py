@@ -524,7 +524,7 @@ def _parse_positive_int(raw_value: str | None) -> int | None:
 
 
 def _parse_picasso_width(raw_width: str | None, raw_columns: str | None) -> int:
-    """Parse the meter width, shrinking to fit the terminal when COLUMNS is usable.
+    """Parse the meter width, shrinking to fit the terminal when its width is known.
 
     The resolved width is capped by the configured/default width and by the
     available terminal space after reserving 42 columns for non-meter content.
@@ -551,14 +551,20 @@ def _parse_picasso_width(raw_width: str | None, raw_columns: str | None) -> int:
     return max(1, min(configured_width, columns - PICASSO_RESERVED_COLUMNS))
 
 
-PICASSO_WIDTH = _parse_picasso_width(os.environ.get("PICASSO_WIDTH"), os.environ.get("COLUMNS"))
-
-
-def _picasso_line(label: str, limit: Limit, now: datetime, *, track, slack: str, over: str) -> Text:
+def _picasso_line(
+    label: str,
+    limit: Limit,
+    now: datetime,
+    *,
+    track,
+    slack: str,
+    over: str,
+    picasso_width: int,
+) -> Text:
     """One track line: name, bar, optional ↻ countdown (omitted when the window never resets), legend."""
     elapsed = limit.elapsed_pct(now)
-    bar = track(limit.used_pct, elapsed, width=PICASSO_WIDTH)
-    legend = _label(limit.used_pct, elapsed, width=PICASSO_WIDTH, used_style_slack=slack, used_style_over=over)
+    bar = track(limit.used_pct, elapsed, width=picasso_width)
+    legend = _label(limit.used_pct, elapsed, width=picasso_width, used_style_slack=slack, used_style_over=over)
 
     text = Text(f" {label:<7}  ", style="bold") + bar + Text("  ")
     if limit.resets:
@@ -567,15 +573,15 @@ def _picasso_line(label: str, limit: Limit, now: datetime, *, track, slack: str,
     return text + legend
 
 
-def print_picasso(usages: list[Usage], now: datetime, *, console: Console) -> None:
+def print_picasso(usages: list[Usage], now: datetime, *, console: Console, picasso_width: int) -> None:
     for idx, usage in enumerate(usages):
         if idx > 0:
             console.print()
         console.print(_picasso_line(usage.name, usage.weekly, now,
-                                    track=_track, slack="cyan", over="bright_red"))
+                                    track=_track, slack="cyan", over="bright_red", picasso_width=picasso_width))
         if usage.session is not None:
             console.print(_picasso_line("", usage.session, now,
-                                        track=_session_track, slack="magenta", over="bright_magenta"))
+                                        track=_session_track, slack="magenta", over="bright_magenta", picasso_width=picasso_width))
 
 
 # ── Option 1: direct API via decrypted Chrome cookies ─────────────────
@@ -741,6 +747,7 @@ def _openrouter_usage(now: datetime) -> Usage:
 def main() -> None:
     now = datetime.now(tz=IDT)
     console = Console()
+    picasso_width = _parse_picasso_width(os.environ.get("PICASSO_WIDTH"), str(console.size.width))
 
     try:
         usages = fetch_via_cookies(now)
@@ -758,7 +765,7 @@ def main() -> None:
         print(f"WARNING: OpenRouter fetch failed ({type(error).__name__}: {error})", file=sys.stderr)
 
     console.print()
-    print_picasso(usages, now, console=console)
+    print_picasso(usages, now, console=console, picasso_width=picasso_width)
 
 
 if __name__ == "__main__":
