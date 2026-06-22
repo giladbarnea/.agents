@@ -3105,51 +3105,51 @@ h3 {
   line-height: 1.2;
 }
 .record {
-  margin: 0.9rem 0;
-  padding: 1.05rem 1.1rem;
+  margin: 1.1rem 0 1.25rem;
+  padding: 1.3rem 1.45rem;
   border-radius: 13px;
 }
 .record .rec-head {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 108px;
-  gap: 0.8rem;
+  grid-template-columns: 34px minmax(0, 1fr) 116px;
+  gap: 1rem;
   align-items: start;
 }
 .record .rec-rank {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  font-size: 0.9rem;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 0.92rem;
 }
 .record .rec-eyebrow {
-  gap: 0.4rem;
-  margin-bottom: 0.12rem;
+  gap: 0.45rem;
+  margin-bottom: 0.25rem;
 }
 .record .rec-title {
   max-width: 34rem;
-  font-size: 1.03rem;
-  line-height: 1.32;
+  font-size: 1.05rem;
+  line-height: 1.34;
 }
 .record .rec-lev {
   width: auto;
 }
 .record .rec-body,
 .record .rec-props {
-  margin-inline-start: 2.8rem;
+  margin-inline-start: 3.1rem;
 }
 .record .rec-body {
-  margin-top: 0.65rem;
+  margin-top: 0.95rem;
   color: var(--faint);
-  font-size: 0.92rem;
-  line-height: 1.58;
+  font-size: 0.94rem;
+  line-height: 1.68;
 }
 .record .rec-props {
-  gap: 0.35rem 0.8rem;
-  margin-top: 0.7rem;
-  padding-top: 0.65rem;
+  gap: 0.45rem 1rem;
+  margin-top: 1rem;
+  padding-top: 0.82rem;
 }
 .record .rec-prop {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
 }
 table.data th,
 table.data td {
