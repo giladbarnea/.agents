@@ -2844,3 +2844,123 @@ pre code {
     font-size: clamp(1.85rem, 8vw, 2.1rem);
   }
 }
+
+/* Mintlify badge calibration: metadata should read as Badge(shape="pill"), not
+   as a button group. Solid badges are quiet; stroke/active states are reserved
+   for things the reader can interact with. */
+:root {
+  --badge-gray-bg: light-dark(#f4f4f5, #46413e);
+  --badge-gray-fg: light-dark(#71717a, #c5bfba);
+  --badge-blue-bg: light-dark(#eff6ff, #10264a);
+  --badge-blue-fg: light-dark(#2563eb, #93c5fd);
+  --badge-green-bg: light-dark(#ecfdf5, #12351f);
+  --badge-green-fg: light-dark(#16a34a, #86efac);
+  --badge-amber-bg: light-dark(#fffbeb, #452907);
+  --badge-amber-fg: light-dark(#ca8a04, #fbbf24);
+  --badge-red-bg: light-dark(#fef2f2, #451a1a);
+  --badge-red-fg: light-dark(#dc2626, #fca5a5);
+  --badge-purple-bg: light-dark(#f3f0ff, #2b1648);
+  --badge-purple-fg: light-dark(#7c3aed, #d8b4fe);
+}
+.stats,
+.metarow {
+  gap: 0.45rem;
+  margin: 0.9rem 0 1.05rem;
+}
+.stat,
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+  min-height: 1.55rem;
+  margin: 0;
+  padding: 0.18rem 0.58rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--badge-gray-bg);
+  box-shadow: none;
+  color: var(--badge-gray-fg);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.stat b {
+  color: inherit;
+  font-weight: 700;
+}
+.chip.field {
+  border: 0;
+  background: var(--badge-blue-bg);
+  color: var(--badge-blue-fg);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+}
+.chip.q {
+  border: 1px solid var(--rule-dash);
+  background: transparent;
+  color: var(--faint);
+}
+.chip.q.active {
+  border-color: var(--accent-border);
+  background: var(--accentbg);
+  color: var(--accent);
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.45rem;
+  padding: 0.14rem 0.5rem;
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+.tag.blue {
+  background: var(--badge-blue-bg);
+  color: var(--badge-blue-fg);
+}
+.tag.amber {
+  background: var(--badge-amber-bg);
+  color: var(--badge-amber-fg);
+}
+.tag.green {
+  background: var(--badge-green-bg);
+  color: var(--badge-green-fg);
+}
+.tag.red {
+  background: var(--badge-red-bg);
+  color: var(--badge-red-fg);
+}
+.state {
+  min-height: 1.45rem;
+  padding: 0.14rem 0.5rem;
+  border: 0;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  letter-spacing: 0;
+}
+.state.wait {
+  background: var(--badge-blue-bg);
+  color: var(--badge-blue-fg);
+}
+.state.act {
+  background: var(--badge-purple-bg);
+  color: var(--badge-purple-fg);
+}
+.state.flag {
+  background: var(--badge-red-bg);
+  color: var(--badge-red-fg);
+}
+.state.done {
+  background: var(--badge-green-bg);
+  color: var(--badge-green-fg);
+}
+.state.dim {
+  background: var(--badge-gray-bg);
+  color: var(--badge-gray-fg);
+}

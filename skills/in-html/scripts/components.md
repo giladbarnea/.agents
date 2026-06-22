@@ -443,7 +443,7 @@ Requires layer 1. A pure-CSS map of left-item → right-item relations — cause
 
 ## Stat row
 
-Requires layer 1. A row of compact stat pills for a page header — counts, dates, status at a glance.
+Requires layer 1. A row of compact Mintlify-style `Badge shape="pill"` metadata — counts, dates, status at a glance. Use it for facts, not controls; interactive switches belong in segmented tabs or `.chip.q` toggles.
 
 ```html
 <div class="stats">
