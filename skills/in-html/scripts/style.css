@@ -2964,3 +2964,272 @@ pre code {
   background: var(--badge-gray-bg);
   color: var(--badge-gray-fg);
 }
+
+/* Optical placement pass: tighten the docs factory so components sit on clear
+   internal grids instead of reading as oversized slabs. */
+html {
+  font-size: 16px;
+}
+.col,
+.has-chrome .col {
+  max-width: 720px;
+}
+#content > p {
+  margin: 0.8rem 0;
+}
+h2 {
+  margin: 3rem 0 0.45rem;
+}
+h3 {
+  margin: 2rem 0 0.7rem;
+}
+.ba,
+.cardgroup {
+  gap: 0.85rem;
+  margin: 1.05rem 0 1.35rem;
+}
+.card,
+.pane,
+.qbox,
+.qa {
+  border-radius: 11px;
+}
+.card {
+  padding: 1rem 1.05rem;
+}
+.card h3 {
+  margin: 0.65rem 0 0.35rem;
+}
+.card p {
+  color: var(--faint);
+  font-size: 0.93rem;
+  line-height: 1.55;
+}
+.card-ic,
+.card .card-ic {
+  width: 30px;
+  height: 30px;
+  margin-bottom: 0.6rem;
+  border-radius: 8px;
+  font-size: 0.96rem;
+}
+.pane {
+  min-width: 0;
+  padding: 0.9rem 1rem;
+}
+.pane h4 {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 0.35rem 0.6rem;
+  margin-bottom: 0.65rem;
+  line-height: 1.35;
+}
+.pane h4 span {
+  min-width: 0;
+}
+.pane h4 span:last-child {
+  color: var(--muted);
+  text-align: start;
+}
+.pane p,
+.qbox p,
+.qa p {
+  color: var(--faint);
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+.pipe {
+  gap: 0.7rem;
+  margin: 1rem 0 1.45rem;
+}
+.step {
+  flex-basis: 10.5rem;
+  min-width: 0;
+  padding: 0.85rem 0.9rem;
+  border-radius: 11px;
+}
+.step .k {
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.step .t {
+  margin-top: 0.22rem;
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+.step .d {
+  font-size: 0.83rem;
+  line-height: 1.5;
+}
+.callout {
+  margin: 1.15rem 0 1.4rem;
+  padding: 0.9rem 1rem;
+  padding-inline-start: 2.65rem;
+  line-height: 1.55;
+}
+.callout::before {
+  inset-inline-start: 0.95rem;
+  top: 0.9rem;
+}
+.relmap {
+  gap: 0.55rem;
+  margin: 1.05rem 0 1.35rem;
+}
+.relrow {
+  grid-template-columns: minmax(0, 1fr) 1.6rem minmax(0, 1fr);
+  gap: 0.7rem;
+  padding: 0.72rem 0.9rem;
+  border-radius: 11px;
+}
+.relrow .rel-from,
+.relrow .rel-to {
+  min-width: 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.relrow .rel-arrow {
+  font-size: 1rem;
+}
+.relrow .rel-to {
+  text-align: start;
+}
+.relrow .rel-to .k {
+  display: inline-flex;
+  margin-inline-end: 0.35rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.2;
+}
+.record {
+  margin: 0.9rem 0;
+  padding: 1.05rem 1.1rem;
+  border-radius: 13px;
+}
+.record .rec-head {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 108px;
+  gap: 0.8rem;
+  align-items: start;
+}
+.record .rec-rank {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  font-size: 0.9rem;
+}
+.record .rec-eyebrow {
+  gap: 0.4rem;
+  margin-bottom: 0.12rem;
+}
+.record .rec-title {
+  max-width: 34rem;
+  font-size: 1.03rem;
+  line-height: 1.32;
+}
+.record .rec-lev {
+  width: auto;
+}
+.record .rec-body,
+.record .rec-props {
+  margin-inline-start: 2.8rem;
+}
+.record .rec-body {
+  margin-top: 0.65rem;
+  color: var(--faint);
+  font-size: 0.92rem;
+  line-height: 1.58;
+}
+.record .rec-props {
+  gap: 0.35rem 0.8rem;
+  margin-top: 0.7rem;
+  padding-top: 0.65rem;
+}
+.record .rec-prop {
+  font-size: 0.78rem;
+}
+table.data th,
+table.data td {
+  padding: 0.62rem 0.85rem;
+}
+@media (max-width: 680px) {
+  html {
+    font-size: 16px;
+  }
+  .wrap,
+  .has-chrome .wrap,
+  html:not(.has-chrome) .wrap {
+    padding-inline: 1.05rem;
+  }
+  .ba,
+  .cardgroup {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pipe {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .step {
+    width: 100%;
+  }
+  .relrow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.35rem;
+  }
+  .relrow .rel-arrow {
+    display: none;
+  }
+  .record .rec-head {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+  .record .rec-lev {
+    grid-column: 2;
+    width: min(9rem, 100%);
+  }
+  .record .rec-lev-lbl {
+    text-align: start;
+  }
+  .record .rec-body,
+  .record .rec-props {
+    margin-inline-start: 0;
+  }
+}
+
+/* Mobile containment after the optical pass. */
+html,
+body {
+  overflow-x: hidden;
+}
+@media (max-width: 900px) {
+  .wrap,
+  .has-chrome .wrap,
+  html:not(.has-chrome) .wrap {
+    width: 100vw;
+    max-width: 100vw;
+  }
+  .page-bar {
+    width: 100vw;
+    max-width: 100vw;
+    overflow: hidden;
+  }
+}
+@media (max-width: 680px) {
+  #content,
+  #content > * {
+    max-width: 100%;
+  }
+  h1,
+  h2,
+  h3,
+  p,
+  .callout,
+  .pane,
+  .record,
+  .relrow,
+  .step {
+    overflow-wrap: anywhere;
+  }
+}

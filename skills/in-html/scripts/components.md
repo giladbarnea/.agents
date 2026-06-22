@@ -164,22 +164,22 @@ Requires layer 1. Native `<details>`/`<summary>` — collapses and expands with 
 
 ## Step pipeline
 
-Requires layer 1. Each step is a native `<details>`; the always-visible label goes in `<summary>`, the detail in `.d`. Add `open` to a step to start it expanded.
+Requires layer 1. Each step is a native `<details>`; the always-visible label goes in `<summary>`, the detail in `.d`. Add `open` to a step to start it expanded. Prefer short semantic labels (`Build`, `Run`, `Ship`) over generic `Step 1` labels.
 
 ```html
 <div class="pipe">
   <details class="step" data-annotate-whole>
     <summary>
-      <div class="k">STEP 1</div>
-      <div class="t">Parse intent</div>
+      <div class="k">Parse</div>
+      <div class="t">Read the user's intent</div>
     </summary>
     <div class="d">Long detail shown only after click.</div>
   </details>
   <details class="step hot" data-annotate-whole>
     <summary>
       <div class="badge">key</div>
-      <div class="k">STEP 2</div>
-      <div class="t">Judge candidates</div>
+      <div class="k">Judge</div>
+      <div class="t">Select the best candidate</div>
     </summary>
     <div class="d">The important step.</div>
   </details>
@@ -383,7 +383,7 @@ Requires layer 1. An icon-led tinted box for a single insight, caveat, or status
 <div class="callout check">Confirmation that something holds.</div>
 <div class="callout warning">Something to watch out for.</div>
 <div class="callout danger">This will break things.</div>
-<div class="callout">Default — the gold-accented generic callout.</div>
+<div class="callout">Default: the page-accent generic callout.</div>
 ```
 
 ## Record card
