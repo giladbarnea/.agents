@@ -15,6 +15,45 @@ Layer guide:
 
 All layers work with plain taps on touch screens; annotation gestures surface as a tap-summoned ✎ action bar and bottom sheets. Markup is identical.
 
+## Mintlify opening screen
+
+Requires layer 1. Use this shape for the first viewport of a docs-like page: short title, useful metadata, and two orientation cards. The layer-2/3 shell supplies the top bar, side nav, right TOC, theme toggle, and tag legend from headings and tags — do not author that chrome yourself.
+
+```html
+<span class="eyebrow">Harness review</span>
+<h1>Meta-harness tuning</h1>
+<p class="sub">What the run-set teaches about improving future runs without leaking answers.</p>
+<div class="stats">
+  <span class="stat"><b>8</b> runs</span>
+  <span class="stat"><b>6</b> proposals</span>
+  <span class="stat">all pass the gate</span>
+</div>
+<p class="lead">Two findings reframe the exercise.</p>
+<div class="cardgroup">
+  <div class="card lift">
+    <div class="card-ic">◎</div>
+    <h3>The harness teaches its own pitfalls</h3>
+    <p>The repeated stumbles show where the map is teaching a bad habit.</p>
+  </div>
+  <div class="card lift">
+    <div class="card-ic">✦</div>
+    <h3>The best moves were mindsets</h3>
+    <p>The behavior can be induced by better framing, not a bigger model.</p>
+  </div>
+</div>
+```
+
+## Gate / governing rule
+
+Requires layer 1. Use for the one test that governs a page or a section.
+
+```html
+<div class="gate" data-annotate-whole data-annotation-id="overfit-gate">
+  <div class="gate-head">Would this help an agent answering a different question? <span class="lbl">The test</span></div>
+  <p>Yes means durable terrain or skill. Only helping this exact question means overfit.</p>
+</div>
+```
+
 ## Segmented toggle + content panels
 
 Requires layer 1. Pure CSS via hidden radios + `:has()` (any 2022+ browser).
@@ -336,7 +375,7 @@ Requires layer 1 only. For line items, build-ups, and per-row facts with numbers
 
 ## Semantic callouts
 
-Requires layer 1. An icon-led tinted box for a single insight, caveat, or status. The variant sets the hue and the icon; the default (no variant) keeps the gold accent. The icon is a CSS glyph — nothing to author beyond the class, and it renders offline. `good` and `bad` remain as aliases for `check` and `danger`.
+Requires layer 1. An icon-led tinted box for a single insight, caveat, or status. The variant sets the hue and the icon; the default (no variant) uses the page accent. The icon is a CSS glyph — nothing to author beyond the class, and it renders offline. `good` and `bad` remain as aliases for `check` and `danger`.
 
 ```html
 <div class="callout note">A neutral note worth keeping in mind.</div>

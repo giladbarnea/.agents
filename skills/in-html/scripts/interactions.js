@@ -198,6 +198,20 @@
     return id;
   }
 
+  function escapeHtml(text) {
+    return text.replace(
+      /[&<>"']/g,
+      (character) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[character],
+    );
+  }
+
   function buildChromeFrame(content, headings) {
     const root = document.documentElement;
     root.classList.add("has-chrome");
@@ -206,6 +220,9 @@
       content.querySelector("h1")?.textContent.trim() ||
       document.title ||
       "Contents";
+    if (document.title === "Interactive Brief") {
+      document.title = titleText;
+    }
 
     const bar = document.createElement("header");
     bar.className = "page-bar";
@@ -217,18 +234,32 @@
     toggle.setAttribute("aria-label", "Toggle navigation");
     toggle.textContent = "☰";
 
-    const title = document.createElement("div");
-    title.className = "page-bar-title";
-    title.innerHTML = `<span class="page-bar-dot">◆</span>${titleText.replace(
-      /</g,
-      "&lt;",
-    )}`;
+    const brand = document.createElement("div");
+    brand.className = "page-brand";
+    brand.innerHTML = `<span class="page-brand-logo">◈</span><span class="page-brand-home">Brief</span><span class="page-brand-sep">/</span><span class="page-brand-crumb">${escapeHtml(titleText)}</span>`;
+
+    const spacer = document.createElement("span");
+    spacer.className = "page-bar-spacer";
+
+    const search = document.createElement("div");
+    search.className = "page-search";
+    search.setAttribute("aria-hidden", "true");
+    search.innerHTML = '<span class="page-search-icon">⌕</span><span>Search</span><span class="page-search-kbd">⌘K</span>';
+
+    const theme = document.createElement("button");
+    theme.type = "button";
+    theme.className = "page-theme-toggle";
+    theme.setAttribute("aria-label", "Toggle theme");
+    theme.innerHTML = '<span class="page-theme-sun">☼</span><span class="page-theme-moon">☾</span>';
+    theme.addEventListener("click", () => {
+      root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+    });
 
     const progress = document.createElement("div");
     progress.className = "page-bar-progress";
     progress.dataset.annotationIgnore = "";
 
-    bar.append(toggle, title, progress);
+    bar.append(toggle, brand, spacer, search, theme, progress);
 
     const nav = document.createElement("nav");
     nav.className = "page-nav";
@@ -258,7 +289,7 @@
       navLink.href = `#${heading.id}`;
       navLink.innerHTML = `${
         eyebrow ? `<span class="page-nav-n">${String(index + 1).padStart(2, "0")}</span>` : ""
-      }${label.replace(/</g, "&lt;")}`;
+      }<span class="page-nav-label">${escapeHtml(label)}</span>`;
       nav.append(navLink);
 
       const tocLink = document.createElement("a");
@@ -271,8 +302,6 @@
 
     document.body.append(bar, nav, toc, backdrop);
 
-    // Nav drawer (narrow widths): the toggle opens it, the backdrop or any nav
-    // link closes it.
     const closeNav = () => document.body.classList.remove("page-nav-open");
     toggle.addEventListener("click", () =>
       document.body.classList.toggle("page-nav-open"),
@@ -295,7 +324,7 @@
     const topbar = parseFloat(
       getComputedStyle(document.documentElement).getPropertyValue("--topbar-h"),
     );
-    const triggerLine = (Number.isFinite(topbar) ? topbar * 17 : 56) + 24;
+    const triggerLine = (Number.isFinite(topbar) ? topbar : 56) + 24;
 
     function update() {
       queued = false;
