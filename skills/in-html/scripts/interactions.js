@@ -148,19 +148,10 @@
   }
 
   // ── Docs chrome ─────────────────────────────────────────────────────────
-  // A Mintlify-style three-pane frame — top bar, left section-nav, right "On
-  // this page" TOC — built from the page's own headings so authors add no
-  // markup. Pure layer-2 enhancement: with JS off none of this exists and the
-  // page is the plain single column. Everything keys off the `.has-chrome`
-  // class set on <html>, and the right TOC defers to the annotation side panel
-  // via the body.annotation-panel-open class annotations.js already toggles.
-
-  const tagHues = [
-    ["blue", "Blue"],
-    ["amber", "Amber"],
-    ["green", "Green"],
-    ["red", "Red"],
-  ];
+  // A Mintlify-style frame — top bar with a collapsible left section-nav —
+  // built from the page's own headings so authors add no markup. Pure layer-2
+  // enhancement: with JS off none of this exists and the page is the plain
+  // single column. Everything keys off the `.has-chrome` class set on <html>.
 
   function slugify(text) {
     return text
@@ -270,15 +261,6 @@
     navEyebrow.textContent = "Sections";
     nav.append(navEyebrow);
 
-    const toc = document.createElement("aside");
-    toc.className = "page-toc";
-    toc.dataset.annotationIgnore = "";
-    toc.setAttribute("aria-label", "On this page");
-    const tocEyebrow = document.createElement("div");
-    tocEyebrow.className = "page-toc-eyebrow";
-    tocEyebrow.textContent = "On this page";
-    toc.append(tocEyebrow);
-
     const backdrop = document.createElement("div");
     backdrop.className = "page-nav-backdrop";
     backdrop.dataset.annotationIgnore = "";
@@ -292,20 +274,26 @@
       }<span class="page-nav-label">${escapeHtml(label)}</span>`;
       nav.append(navLink);
 
-      const tocLink = document.createElement("a");
-      tocLink.href = `#${heading.id}`;
-      tocLink.textContent = label;
-      toc.append(tocLink);
-
-      return { heading, navLink, tocLink };
+      return { heading, navLink };
     });
 
-    document.body.append(bar, nav, toc, backdrop);
+    document.body.append(bar, nav, backdrop);
 
+    // The same top-bar toggle does the right thing per width: on desktop it
+    // collapses/expands the fixed left rail (the column reclaims the space); on
+    // mobile it slides the off-canvas drawer in and out.
+    const desktopNav = window.matchMedia("(min-width: 901px)");
     const closeNav = () => document.body.classList.remove("page-nav-open");
-    toggle.addEventListener("click", () =>
-      document.body.classList.toggle("page-nav-open"),
-    );
+    toggle.setAttribute("aria-expanded", "true");
+    toggle.addEventListener("click", () => {
+      if (desktopNav.matches) {
+        const collapsed = document.body.classList.toggle("page-nav-collapsed");
+        toggle.setAttribute("aria-expanded", String(!collapsed));
+      } else {
+        const open = document.body.classList.toggle("page-nav-open");
+        toggle.setAttribute("aria-expanded", String(open));
+      }
+    });
     backdrop.addEventListener("click", closeNav);
     nav.addEventListener("click", (event) => {
       if (event.target.closest("a")) {
@@ -313,7 +301,7 @@
       }
     });
 
-    return { progress, entries, legendHost: toc };
+    return { progress, entries };
   }
 
   // Scroll-spy: the section whose heading most recently crossed below the top
@@ -335,9 +323,7 @@
         }
       });
       entries.forEach((entry, index) => {
-        const isCurrent = index === currentIndex;
-        entry.navLink.classList.toggle("current", isCurrent);
-        entry.tocLink.classList.toggle("current", isCurrent);
+        entry.navLink.classList.toggle("current", index === currentIndex);
       });
       const scrollable = document.documentElement.scrollHeight - window.innerHeight;
       progress.style.width = `${
@@ -358,83 +344,6 @@
     update();
   }
 
-  // Controlled-tag legend: one chip per distinct .tag hue on the page. Clicking
-  // a chip dims the content column and lights every matching .tag (and the line
-  // that carries it) — the chip-toggle engine's idea, scoped to the whole page.
-  function setupLegend(content, legendHost) {
-    const present = tagHues.filter(
-      ([hue]) => content.querySelector(`.tag.${hue}`),
-    );
-    if (present.length < 2) {
-      return;
-    }
-
-    const legend = document.createElement("div");
-    legend.className = "page-legend";
-    legend.dataset.annotationIgnore = "";
-    const eyebrow = document.createElement("div");
-    eyebrow.className = "page-legend-eyebrow";
-    eyebrow.textContent = "Tags";
-    legend.append(eyebrow);
-
-    let activeHue = null;
-
-    function clearLegend() {
-      activeHue = null;
-      document.body.classList.remove("legend-active");
-      content
-        .querySelectorAll(".legend-lit")
-        .forEach((node) => node.classList.remove("legend-lit"));
-      content
-        .querySelectorAll(".legend-lit-host")
-        .forEach((node) => node.classList.remove("legend-lit-host"));
-      legend
-        .querySelectorAll(".page-legend-chip")
-        .forEach((chip) => chip.classList.remove("active"));
-    }
-
-    function lightHue(hue, chip) {
-      clearLegend();
-      activeHue = hue;
-      document.body.classList.add("legend-active");
-      chip.classList.add("active");
-      content.querySelectorAll(`.tag.${hue}`).forEach((tag) => {
-        tag.classList.add("legend-lit");
-        // Pop the whole line/box the tag sits in, not just the pill.
-        const host = tag.closest(
-          "p, li, h2, h3, h4, .card, .pane, .record, .relrow, .cnode, .tnode, .step, .qa, .rec-eyebrow",
-        );
-        if (host) {
-          host.classList.add("legend-lit-host");
-        }
-      });
-    }
-
-    present.forEach(([hue, name]) => {
-      const count = content.querySelectorAll(`.tag.${hue}`).length;
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "page-legend-chip";
-      chip.innerHTML = `<span class="page-legend-swatch ${hue}"></span>${name}<span class="page-legend-count">${count}</span>`;
-      chip.addEventListener("click", () => {
-        if (activeHue === hue) {
-          clearLegend();
-        } else {
-          lightHue(hue, chip);
-        }
-      });
-      legend.append(chip);
-    });
-
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && activeHue) {
-        clearLegend();
-      }
-    });
-
-    legendHost.append(legend);
-  }
-
   function setupChrome() {
     const content = document.getElementById("content");
     if (!content) {
@@ -447,9 +356,8 @@
     const used = new Set();
     headings.forEach((heading) => ensureHeadingId(heading, used));
 
-    const { progress, entries, legendHost } = buildChromeFrame(content, headings);
+    const { progress, entries } = buildChromeFrame(content, headings);
     setupScrollSpy(entries, progress);
-    setupLegend(content, legendHost);
   }
 
   // Copyable code blocks: every <pre> gets a Copy button revealed on hover

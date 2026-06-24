@@ -42,11 +42,6 @@
   let activeChoiceMenu = null;
   let highlightedAnnotationElement = null;
 
-  const hoverOverlay = document.createElement("div");
-  hoverOverlay.className = "annotation-hover-overlay";
-  hoverOverlay.dataset.annotationUi = "hover";
-  document.body.appendChild(hoverOverlay);
-
   function elementHasOwnText(element) {
     return Array.from(element.childNodes).some(
       (node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim(),
@@ -90,28 +85,10 @@
     return element;
   }
 
-  // The reticle breathes wide on the horizontal axis, where the column has
-  // room, and stays tight vertically so it never bleeds into stacked neighbors.
-  const hoverOverlayOffsetX = 14;
-  const hoverOverlayOffsetY = 4;
-
-  // `instant` snaps the ring into place (first reveal, scroll, resize); without
-  // it the ring glides and resizes between adjacent elements.
-  function positionHoverOverlay(element, instant) {
-    const rect = element.getBoundingClientRect();
-    if (instant) {
-      hoverOverlay.style.transition = "none";
-    }
-    hoverOverlay.style.left = `${rect.left - hoverOverlayOffsetX}px`;
-    hoverOverlay.style.top = `${rect.top - hoverOverlayOffsetY}px`;
-    hoverOverlay.style.width = `${rect.width + hoverOverlayOffsetX * 2}px`;
-    hoverOverlay.style.height = `${rect.height + hoverOverlayOffsetY * 2}px`;
-    if (instant) {
-      hoverOverlay.getBoundingClientRect();
-      hoverOverlay.style.transition = "";
-    }
-  }
-
+  // The reticle is the element itself: this just toggles the .annotation-hover
+  // class, which annotations.css renders as a ring + wash + lift. The ring
+  // travels with the element on scroll/resize for free, so there is no overlay
+  // to position.
   function setHighlightedAnnotationElement(element) {
     if (highlightedAnnotationElement === element) {
       return;
@@ -122,10 +99,6 @@
     highlightedAnnotationElement = element;
     if (element) {
       element.classList.add("annotation-hover");
-      positionHoverOverlay(element, !hoverOverlay.classList.contains("show"));
-      hoverOverlay.classList.add("show");
-    } else {
-      hoverOverlay.classList.remove("show");
     }
   }
 
@@ -801,9 +774,6 @@
 
   window.addEventListener("resize", () => {
     closeChoiceMenu();
-    if (highlightedAnnotationElement) {
-      positionHoverOverlay(highlightedAnnotationElement, true);
-    }
     if (panelOpen() && !isSheet()) {
       positionDesktopPanel();
     }
@@ -813,9 +783,6 @@
     "scroll",
     () => {
       closeChoiceMenu();
-      if (highlightedAnnotationElement) {
-        positionHoverOverlay(highlightedAnnotationElement, true);
-      }
     },
     { passive: true },
   );

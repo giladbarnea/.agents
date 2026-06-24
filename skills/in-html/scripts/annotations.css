@@ -1,38 +1,16 @@
+/* The block under the pointer — and any element the annotation engine targets,
+   like the "Next unanswered" walk — lights up in place: a solid accent ring
+   hugs its real silhouette with no gap, a faint accent wash floods it, and a
+   soft tinted shadow lifts it off the page. The ring follows each element's own
+   radius, so cards stay rounded and bare text blocks stay square. !important so
+   the reticle wins over each component's own :hover shadow. */
 .annotation-hover {
   cursor: crosshair;
-}
-/* The hovered element "lights up" like an interactable object in a modern game:
-   a soft warm rim hugs its silhouette and a gentle glow blooms around it. The
-   glow is soft and low-contrast, so it reads as the element reacting rather than
-   a frame drawn around it, and dissipates into the paper instead of hard-edging
-   into the elements stacked above and below. */
-.annotation-hover-overlay {
-  position: fixed;
-  z-index: 9995;
-  pointer-events: none;
-  border-radius: 8px;
-  opacity: 0;
-  visibility: hidden;
-  transform: scale(0.98);
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent),
-    0 0 14px 1px color-mix(in srgb, var(--accent) 18%, transparent);
-  transition:
-    opacity 0.2s cubic-bezier(0.32, 0.72, 0, 1),
-    visibility 0.2s,
-    transform 0.2s cubic-bezier(0.32, 0.72, 0, 1),
-    left 0.18s cubic-bezier(0.32, 0.72, 0, 1),
-    top 0.18s cubic-bezier(0.32, 0.72, 0, 1),
-    width 0.18s cubic-bezier(0.32, 0.72, 0, 1),
-    height 0.18s cubic-bezier(0.32, 0.72, 0, 1);
-  will-change: opacity, transform;
-}
-/* Blooming from a slightly smaller scale makes the rim grow outward as it lights
-   up, like an object powering on under the cursor. */
-.annotation-hover-overlay.show {
-  opacity: 1;
-  visibility: visible;
-  transform: scale(1);
+    0 0 0 2px var(--accent),
+    inset 0 0 0 100vmax color-mix(in srgb, var(--accent) 7%, transparent),
+    0 12px 32px -14px color-mix(in srgb, var(--accent) 55%, transparent) !important;
+  transition: box-shadow 0.18s cubic-bezier(0.32, 0.72, 0, 1);
 }
 /* The unified annotation panel — one surface for the verdict, the notes, and
    the composer, on both pointer types. On a fine pointer it is a static side
@@ -609,18 +587,9 @@ body.annotation-panel-open .annotation-next-unannotated {
   }
 }
 
-/* Under reduced motion, keep the gentle opacity fades (vestibular-safe) but
-   drop the transform lift, scale, and positional glide. */
+/* Under reduced motion, drop the panel's slide; the reticle is a shadow fade,
+   already motion-free. */
 @media (prefers-reduced-motion: reduce) {
-  .annotation-hover-overlay {
-    transform: none;
-    transition:
-      opacity 0.18s ease,
-      visibility 0.18s;
-  }
-  .annotation-hover-overlay.show {
-    transform: none;
-  }
   .annotation-panel {
     transition: none;
   }

@@ -1745,25 +1745,21 @@ table.data tr.total td {
 }
 
 /* ══ Docs chrome (layer 2+) ══════════════════════════════════════════════════
-   A Mintlify-style three-pane frame — slim top bar, left section-nav, right
-   "On this page" TOC — built by interactions.js from the page's own <h1>/<h2>s,
-   so authors add no markup. The whole frame is fixed furniture in the margins
-   around the reading column: .col#content keeps its place and width, which is
-   what the annotation engine measures to park its side panel. With JS off the
-   frame is never built and the page is the plain single column of layer 1; the
+   A Mintlify-style frame — slim top bar with a left section-nav — built by
+   interactions.js from the page's own <h1>/<h2>s, so authors add no markup. The
+   frame is fixed furniture in the left margin around the reading column:
+   .col#content keeps its place and width, which is what the annotation engine
+   measures to park its side panel in the right corridor. With JS off the frame
+   is never built and the page is the plain single column of layer 1; the
    `.has-chrome` class (set on <html> by the builder) gates every layout shift
    below, so its absence means zero footprint.
 
-   On wide screens the nav and TOC sit in the page gutters; below the device
-   breakpoint they collapse — the nav goes off-canvas behind the top-bar toggle,
-   the TOC hides entirely. The right TOC shares the right gutter with the
-   annotation side panel, so it yields (fades, goes inert) whenever a panel is
-   open — the same `body.annotation-panel-open` handoff the "Next unanswered"
-   pill already uses, keeping the two from ever fighting for the corridor. */
+   On wide screens the nav sits in the left gutter and the top-bar toggle
+   collapses it; below the device breakpoint it goes off-canvas behind the same
+   toggle. */
 :root {
   --topbar-h: 56px;
   --nav-w: 16rem;
-  --toc-w: 15rem;
   --gutter: 1.25rem;
 }
 .has-chrome body {
@@ -1880,150 +1876,6 @@ table.data tr.total td {
   color: var(--accent);
 }
 
-/* Right "On this page" TOC: a fixed rail in the right gutter that tracks the
-   reader's scroll position, plus the controlled-tag legend beneath it. */
-.page-toc {
-  position: fixed;
-  top: var(--topbar-h);
-  inset-inline-end: 0;
-  width: var(--toc-w);
-  height: calc(100vh - var(--topbar-h));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 1.4rem 1.25rem 2rem 0.9rem;
-  font-family: var(--font-sans);
-  z-index: 9985;
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
-}
-.page-toc .page-toc-eyebrow {
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--faint);
-  margin: 0 0 0.55rem 0.4rem;
-}
-.page-toc a {
-  display: block;
-  padding: 0.22rem 0.6rem;
-  border: 0;
-  border-inline-start: 2px solid var(--rule);
-  color: var(--faint);
-  font-size: 0.82rem;
-  line-height: 1.4;
-  text-decoration: none;
-  transition:
-    color 0.14s ease,
-    border-color 0.14s ease;
-}
-@media (hover: hover) {
-  .page-toc a:hover {
-    color: var(--ink);
-  }
-}
-.page-toc a.current {
-  color: var(--accent);
-  border-inline-start-color: var(--accent);
-}
-/* The TOC and the annotation side panel both want the right gutter. When a
-   panel opens, the TOC defers — fades out and goes inert — so they never
-   overlap. (annotations.js toggles body.annotation-panel-open.) */
-body.annotation-panel-open .page-toc {
-  opacity: 0;
-  transform: translateX(0.6rem);
-  pointer-events: none;
-}
-
-/* Controlled-tag legend: one chip per distinct .tag hue present on the page.
-   Clicking a chip lights every matching .tag and dims the rest of the content
-   — the chip-toggle engine's "highlight the relevant, mute the noise" spirit,
-   applied across the whole page instead of one scoped pair. */
-.page-legend {
-  margin-top: 1.6rem;
-  padding-top: 1.1rem;
-  border-top: 1px solid var(--rule);
-}
-.page-legend .page-legend-eyebrow {
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--faint);
-  margin: 0 0 0.6rem 0.4rem;
-}
-.page-legend .page-legend-chip {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  margin: 0.15rem 0;
-  padding: 0.3rem 0.5rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--faint);
-  font-family: var(--font-sans);
-  font-size: 0.78rem;
-  text-align: start;
-  transition:
-    background-color 0.14s ease,
-    border-color 0.14s ease,
-    color 0.14s ease;
-}
-.page-legend .page-legend-chip .page-legend-swatch {
-  flex: none;
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 3px;
-}
-.page-legend .page-legend-chip .page-legend-count {
-  margin-inline-start: auto;
-  font-variant-numeric: tabular-nums;
-  font-size: 0.72rem;
-  color: var(--faint);
-}
-@media (hover: hover) {
-  .page-legend .page-legend-chip:hover {
-    background: var(--surface2);
-    color: var(--ink);
-  }
-}
-.page-legend .page-legend-chip.active {
-  border-color: var(--rule);
-  background: var(--surface2);
-  color: var(--ink);
-  font-weight: 600;
-}
-.page-legend-swatch.blue {
-  background: var(--blue);
-}
-.page-legend-swatch.amber {
-  background: var(--accent);
-}
-.page-legend-swatch.green {
-  background: var(--good);
-}
-.page-legend-swatch.red {
-  background: var(--bad);
-}
-/* While a legend chip is engaged, the content column dims and the matching
-   tags (and their carrying line) pop back to full strength with a soft ring. */
-body.legend-active #content {
-  --legend-dim: 0.32;
-}
-body.legend-active #content :is(p, li, h2, h3, .card, .pane, .record, .relrow, .cnode, .tnode, .step, .qa) {
-  opacity: var(--legend-dim, 1);
-  transition: opacity 0.18s ease;
-}
-body.legend-active #content .tag.legend-lit {
-  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 55%, transparent);
-}
-body.legend-active #content .legend-lit-host {
-  opacity: 1;
-}
-
 /* Copyable code blocks: every <pre> gets a hover-revealed Copy button in its
    top-inline-end corner. The button confirms in place on success. */
 .code-copyable {
@@ -2089,21 +1941,17 @@ body.legend-active #content .legend-lit-host {
 @media (min-width: 1024px) {
   .has-chrome .wrap {
     padding-inline-start: calc(var(--nav-w) + var(--gutter));
-    padding-inline-end: calc(var(--toc-w) + var(--gutter));
+    padding-inline-end: var(--gutter);
   }
 }
 
-/* Narrow layout: the rails fold away. The nav becomes an off-canvas drawer the
-   top-bar toggle slides in; the TOC and its legend are dropped entirely (the
-   reader scrolls the short page directly). */
+/* Narrow layout: the nav folds away into an off-canvas drawer the top-bar
+   toggle slides in. */
 @media (max-width: 1023px) {
   .has-chrome .page-bar .page-bar-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-  }
-  .page-toc {
-    display: none;
   }
   .page-nav {
     transform: translateX(-100%);
@@ -2152,15 +2000,11 @@ body.legend-active #content .legend-lit-host {
     min-height: 2.1rem;
     padding-inline: 0.85em;
   }
-  .page-legend .page-legend-chip {
-    min-height: 2.4rem;
-  }
 }
 
 /* Reduced motion: keep the chrome's fades, drop the slides and progress glide. */
 @media (prefers-reduced-motion: reduce) {
   .page-nav,
-  .page-toc,
   .page-bar-progress {
     transition: opacity 0.18s ease;
   }
@@ -2271,7 +2115,6 @@ h3 {
 :root {
   --topbar-h: 56px;
   --nav-w: 256px;
-  --toc-w: 236px;
   --content-gutter: clamp(2.4rem, 4vw, 3.6rem);
 }
 .has-chrome body {
@@ -2280,7 +2123,7 @@ h3 {
 .has-chrome .wrap {
   max-width: 1480px;
   margin: 0 auto;
-  padding: 3rem calc(var(--toc-w) + var(--content-gutter)) 9rem calc(var(--nav-w) + var(--content-gutter));
+  padding: 3rem var(--content-gutter) 9rem calc(var(--nav-w) + var(--content-gutter));
 }
 .has-chrome .col {
   max-width: 744px;
@@ -2386,9 +2229,7 @@ h3 {
   border-inline-end: 1px solid var(--rule);
   background: var(--paper);
 }
-.page-nav .page-nav-eyebrow,
-.page-toc .page-toc-eyebrow,
-.page-legend .page-legend-eyebrow {
+.page-nav .page-nav-eyebrow {
   margin: 1.4rem 0 0.5rem 0.6rem;
   color: var(--muted);
   font-size: 0.7rem;
@@ -2429,34 +2270,6 @@ h3 {
 .page-nav a.current .page-nav-n {
   color: var(--accent);
 }
-.page-toc {
-  width: var(--toc-w);
-  padding: 3rem 1.4rem 3rem 0.4rem;
-}
-.page-toc a {
-  padding: 0.24rem 0.75rem;
-  border-inline-start: 2px solid var(--rule);
-  color: var(--faint);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-.page-toc a:hover {
-  border-inline-start-color: var(--rule-dash);
-  color: var(--ink);
-}
-.page-toc a.current {
-  border-inline-start-color: var(--accent);
-  color: var(--accent);
-  font-weight: 550;
-}
-.page-legend {
-  margin-top: 1.6rem;
-}
-.page-legend .page-legend-chip {
-  min-height: 2rem;
-  border-radius: 8px;
-}
-
 .stats,
 .metarow {
   display: flex;
@@ -2747,14 +2560,6 @@ pre code {
   color: var(--ink);
 }
 
-@media (max-width: 1180px) {
-  .page-toc {
-    display: none;
-  }
-  .has-chrome .wrap {
-    padding-inline-end: var(--content-gutter);
-  }
-}
 @media (max-width: 900px) {
   .has-chrome .wrap {
     padding: 2.2rem 1.2rem 6rem;
@@ -2779,14 +2584,10 @@ pre code {
   }
 }
 
-/* Desktop docs pages already show the left rail; the hamburger is mobile-only. */
+/* The sidebar toggle lives in the top bar at every width: on desktop it
+   collapses/expands the left rail, on mobile it opens the off-canvas drawer. */
 .page-bar .page-bar-toggle {
-  display: none;
-}
-@media (max-width: 900px) {
-  .page-bar .page-bar-toggle {
-    display: grid;
-  }
+  display: grid;
 }
 @media (min-width: 901px) and (max-width: 1023px) {
   .page-nav {
@@ -2994,7 +2795,7 @@ html {
 }
 .col,
 .has-chrome .col {
-  max-width: 720px;
+  max-width: 780px;
 }
 #content > p {
   margin: 0.8rem 0;
@@ -3435,5 +3236,31 @@ table.data td:first-child {
 @media (hover: hover) {
   .step > summary:hover .t {
     color: var(--accent);
+  }
+}
+
+/* Desktop sidebar collapse: the top-bar toggle adds body.page-nav-collapsed,
+   which slides the fixed left rail away and lets the reading column reclaim its
+   width. (At ≤900px the same toggle drives the off-canvas drawer instead — see
+   the narrow-layout block above.) The selectors outrank the rail's "shown"
+   rules, so this wins regardless of source order. */
+@media (min-width: 901px) {
+  .page-nav {
+    transition:
+      transform 0.24s cubic-bezier(0.32, 0.72, 0, 1),
+      visibility 0.24s;
+  }
+  .has-chrome .wrap {
+    transition: padding 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  body.page-nav-collapsed .page-nav {
+    transform: translateX(-100%);
+    visibility: hidden;
+  }
+  :dir(rtl) body.page-nav-collapsed .page-nav {
+    transform: translateX(100%);
+  }
+  .has-chrome body.page-nav-collapsed .wrap {
+    padding-inline-start: var(--content-gutter);
   }
 }
