@@ -6,16 +6,27 @@ last_updated: 2026-06-22
 
 # in-html
 
-Use this skill when the user wants an answer or artifact as a local HTML page. Choose only the layers the current environment can support.
+Use this skill when the user wants an answer or artifact as a local HTML page. Choose only the (highest) layer the current environment can support, or based on the user's needs:
+- Layer 1: a single HTML & CSS page. No JS at all. Never go for that unless the user explicitly asks. The use case is a delivery channel that can only render one static, self-contained HTML file with no JavaScript.
+- Layer 2: If they only need you to convey information to them in a rich HTML page, and do NOT intend to annotate the content on the page interactively persisting their comments to disk and telling you to read them after you are done. It's as rich and pretty, just read-only.
+- Layer 3: Same as Layer 2 + interactive annotations feature. Use can click elements, write free text which is saved to a JSON file on this file system, which you are supposed to read after they user is done.  
 
-Native HTML can import CSS and JavaScript, but not useful HTML partials. The old HTML Imports feature is dead; iframes import whole pages; `fetch()`-based partials require JavaScript. So this skill keeps small HTML shells and modularizes the CSS/JS around them. If the delivery channel truly supports only one physical HTML file, inline the chosen CSS/JS into `<style>` / `<script>` tags instead of linking external files.
+Don't always ask the user which layer they are interested in. Read the room — Layer 3 is almost always the right choice. It provides all the richness and there is no real price to also empower the user to annotate your content. You can add a “...I've enabled user annotations for the page so you are welcome to comment and tell me when you are done and I will read them." 
+
+This skill keeps small HTML shells and modularizes the CSS/JS around them. If the delivery channel truly supports only one physical HTML file, inline the chosen CSS/JS into `<style>` / `<script>` tags instead of linking external files.
+
+Asset paths below are written against `${CLAUDE_SKILL_DIR}` — the directory containing this `SKILL.md`, not your current working directory (which is almost certainly elsewhere). On Claude Code this token is substituted with the skill's absolute path before you read it, so the commands just work. On any other harness that does not substitute it, export it yourself once to the absolute path you loaded this skill from, and every command below resolves the same way:
+
+```bash
+export CLAUDE_SKILL_DIR=/absolute/path/to/this/skill   # only if not already substituted for you
+```
 
 ## Fast path: builder command
 
 When local writes are available, prefer the builder over hand-copying templates. Author only the page body as an HTML fragment, then run:
 
 ```bash
-/Users/giladbarnea/.agents/skills/in-html/scripts/inhtml build content.html \
+"${CLAUDE_SKILL_DIR}/scripts/inhtml" build content.html \
   --title "Brief title" \
   --layer 3 \
   --out /tmp/domainful-page \
@@ -38,12 +49,12 @@ Use when the page must render without JavaScript. Disclosure, step expansion, an
 
 ```bash
 workdir=$(mktemp -d)
-cp /Users/giladbarnea/.agents/skills/in-html/templates/template-style.html "$workdir/index.html"
-cp /Users/giladbarnea/.agents/skills/in-html/scripts/style.css "$workdir/"
+cp "${CLAUDE_SKILL_DIR}/templates/template-style.html" "$workdir/index.html"
+cp "${CLAUDE_SKILL_DIR}/scripts/style.css" "$workdir/"
 cd "$workdir"
 ```
 
-The result must be a single self-contained HTML file — inline the CSS with `/Users/giladbarnea/.agents/skills/in-html/scripts/inline-css.py index.html style.css -o page.html`. Usually the user requests layer 1 to view the page on their iPhone; ask, and if yes, cp the output to `/Users/giladbarnea/Library/Mobile Documents/com~apple~CloudDocs/<domainful-name>.html` (iCloud-synced to the phone).
+The result must be a single self-contained HTML file — inline the CSS with `"${CLAUDE_SKILL_DIR}/scripts/inline-css.py" index.html style.css -o page.html`. Then copy the output wherever the delivery channel can pick it up.
 
 ### Layers 1+2: style plus interactions
 
@@ -51,9 +62,9 @@ Use when JavaScript works, but filesystem writes / Node server are unavailable.
 
 ```bash
 workdir=$(mktemp -d)
-cp /Users/giladbarnea/.agents/skills/in-html/templates/template-interactive.html "$workdir/index.html"
-cp /Users/giladbarnea/.agents/skills/in-html/scripts/style.css "$workdir/"
-cp /Users/giladbarnea/.agents/skills/in-html/scripts/interactions.js "$workdir/"
+cp "${CLAUDE_SKILL_DIR}/templates/template-interactive.html" "$workdir/index.html"
+cp "${CLAUDE_SKILL_DIR}/scripts/style.css" "$workdir/"
+cp "${CLAUDE_SKILL_DIR}/scripts/interactions.js" "$workdir/"
 cd "$workdir"
 ```
 
@@ -63,17 +74,17 @@ Use when a local Node process can run.
 
 ```bash
 workdir=$(mktemp -d)
-cp /Users/giladbarnea/.agents/skills/in-html/templates/template.html "$workdir/index.html"
-cp /Users/giladbarnea/.agents/skills/in-html/scripts/style.css "$workdir/"
-cp /Users/giladbarnea/.agents/skills/in-html/scripts/interactions.js "$workdir/"
-cp /Users/giladbarnea/.agents/skills/in-html/scripts/annotations.css "$workdir/"
-cp /Users/giladbarnea/.agents/skills/in-html/scripts/annotations.js "$workdir/"
-cp /Users/giladbarnea/.agents/skills/in-html/scripts/annotation-writer.mjs "$workdir/"
+cp "${CLAUDE_SKILL_DIR}/templates/template.html" "$workdir/index.html"
+cp "${CLAUDE_SKILL_DIR}/scripts/style.css" "$workdir/"
+cp "${CLAUDE_SKILL_DIR}/scripts/interactions.js" "$workdir/"
+cp "${CLAUDE_SKILL_DIR}/scripts/annotations.css" "$workdir/"
+cp "${CLAUDE_SKILL_DIR}/scripts/annotations.js" "$workdir/"
+cp "${CLAUDE_SKILL_DIR}/scripts/annotation-writer.mjs" "$workdir/"
 cd "$workdir"
 node annotation-writer.mjs
 ```
 
-Then open `http://127.0.0.1:8765/index.html`. The server binds `0.0.0.0`, so the page also works from other devices on the same LAN/tailnet (e.g. `http://gilads-macbook-pro.taila610c4.ts.net:8765/` from the user's iPhone over Tailscale) — annotation saves included, since the template's `annotation-endpoint` meta is the relative `/annotations` and CORS accepts same-origin requests. If serving the page from a *separate* static server instead, run `node annotation-writer.mjs` too and set the meta to the absolute `http://127.0.0.1:8765/annotations` — the relative default would post to the wrong server.
+Then open `http://127.0.0.1:8765/index.html`. Annotation saves work out of the box, since the template's `annotation-endpoint` meta is the relative `/annotations` and CORS accepts same-origin requests. If serving the page from a *separate* static server instead, run `node annotation-writer.mjs` too and set the meta to the absolute `http://127.0.0.1:8765/annotations` — the relative default would post to the wrong server.
 
 ## Design principles
 
@@ -122,7 +133,7 @@ At layers 2 and 3 the page is automatically wrapped in a three-pane docs frame �
 
 Use normal HTML first: `h1`, `.sub`, `.lead`, `h2`, `p`, `aside.note`, `.card`, `.callout`, `.grid`, `.pane`, `.row`, `.chip`, `.btn`, `.kbd`.
 
-For ready-made components, read `/Users/giladbarnea/.agents/skills/in-html/scripts/components.md`. For a rendered reference, open `/Users/giladbarnea/.agents/skills/in-html/scripts/component-gallery.html` with the full layer set. To show exactly what changed between two versions of a text, don't hand-build it — generate the `.diff` component with `/Users/giladbarnea/.agents/skills/in-html/scripts/diff_to_html.py` (see the "Line / word-level diff" section of `components.md`).
+For ready-made components, read `${CLAUDE_SKILL_DIR}/scripts/components.md`. For a rendered reference, open `${CLAUDE_SKILL_DIR}/scripts/component-gallery.html` with the full layer set. To show exactly what changed between two versions of a text, don't hand-build it — generate the `.diff` component with `${CLAUDE_SKILL_DIR}/scripts/diff_to_html.py` (see the "Line / word-level diff" section of `components.md`).
 
 Cross-references: never write a bare "§7", "Draft 2", or "the table above" — you know what it points to; the reader doesn't share your mental map of the page. Make every such mention a link: `<a href="#stable-name">§7</a>`. Every `data-annotation-id` doubles as a link target: the builder mirrors it into `id`, and at layers 2–3 `interactions.js` also mirrors it in the browser. If building manually for layer 1, write the `id` attribute on the target yourself. Internal links are styled automatically (no class needed), scroll smoothly, and flash the target on arrival; a "↩ Back to where you were" pill then returns the reader to their departure point (chained jumps unwind in order). A link whose target doesn't exist renders red with a console warning — fix it before shipping.
 

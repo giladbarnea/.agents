@@ -3228,3 +3228,212 @@ body {
     overflow-wrap: anywhere;
   }
 }
+
+/* ══ Mintlify parity pass ════════════════════════════════════════════════════
+   Generalizes the component tuning measured against a live Mintlify (`mint dev`)
+   render: violet accent, Mintlify type scale, flat airy tables, near-black inline
+   code, 16px-radius callouts, and .pipe rendered as a vertical Steps timeline.
+   Last layer, so it wins the cascade. Two deliberate departures from the one-off
+   page this came from: .gate keeps its green "governing rule" meaning (only the
+   geometry is refreshed), and .step stays collapsible — the timeline is purely
+   visual, the .d body still opens on click and `open` shows it from the start. */
+:root {
+  --accent: light-dark(#8b7cf6, #a79bff);
+  --accent-strong: light-dark(#7c6cf0, #b9aeff);
+  --accentbg: light-dark(#f3f0ff, #221a3a);
+  --accent-border: light-dark(#e4ddfc, #3a2f63);
+  --fs-h1: clamp(1.75rem, 2.4vw, 1.95rem);
+  --lh-h1: 1.2;
+  --fs-h2: 1.5rem;
+  --fw-h2: 600;
+  --lh-body: 1.6;
+  --body-ink: light-dark(#3d4046, #b9bdc7);
+}
+
+#content :is(p, li, td) {
+  color: var(--body-ink);
+}
+.sub,
+.subtitle {
+  font-size: 1.05rem;
+}
+
+/* inline code → near-black, medium weight (drop the magenta) */
+p code,
+li code,
+td code,
+.card code,
+.record code,
+h3 code,
+.step .d code {
+  color: var(--ink);
+  font-weight: 500;
+  font-size: 0.875em;
+}
+
+/* table → flat, airier rows, sentence-case 14px header */
+table.data {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+table.data th {
+  background: transparent;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  border-bottom: 1px solid var(--rule);
+}
+table.data th,
+table.data td {
+  padding: 0.78rem 0.95rem;
+}
+table.data td {
+  color: var(--body-ink);
+  line-height: 1.5;
+}
+table.data th:first-child,
+table.data td:first-child {
+  padding-inline-start: 0.25rem;
+}
+
+/* callouts → 16px radius, roomier */
+.callout {
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  padding-inline-start: 3rem;
+  font-size: 1rem;
+}
+.callout::before {
+  inset-inline-start: 1.1rem;
+  top: 1.05rem;
+}
+
+/* gate → flat green tint + 16px radius (keeps its governing-rule semantic) */
+.gate {
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
+  background: var(--goodbg);
+}
+.gate p {
+  color: var(--body-ink);
+}
+
+/* badges → a touch larger, Mintlify pill */
+.tag {
+  font-size: 0.8125rem;
+  border-radius: 7px;
+  padding: 0.2rem 0.55rem;
+}
+
+/* .pipe → vertical Steps timeline (numbered node + connector rail). Visual only:
+   steps stay collapsible — .d opens on click, `open` shows it from the start. */
+.pipe {
+  display: block;
+  counter-reset: stepc;
+  margin: 1.7rem 0 1.6rem;
+  padding-inline-start: 0.2rem;
+}
+.step {
+  display: block;
+  width: auto;
+  flex: none;
+  position: relative;
+  margin: 0;
+  padding: 0 0 1.9rem 3rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.step:hover,
+.step.hot {
+  background: transparent;
+  border: 0;
+}
+.step::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0.86rem;
+  top: 1.85rem;
+  bottom: -0.15rem;
+  width: 2px;
+  background: var(--rule);
+}
+.pipe .step:last-child::before {
+  display: none;
+}
+.step > summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  position: relative;
+  padding-inline-end: 0;
+  cursor: pointer;
+  list-style: none;
+}
+.step > summary::before {
+  counter-increment: stepc;
+  content: counter(stepc);
+  position: absolute;
+  inset-inline-start: -3rem;
+  top: -0.1rem;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  color: var(--faint);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.step.hot > summary::before {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: #fff;
+}
+.step .k {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.step .t {
+  margin-top: 0.15rem;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.step .d {
+  margin-top: 0.5rem;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--body-ink);
+}
+.step .badge {
+  order: 2;
+  position: static;
+  display: inline-block;
+  margin-top: 0.55rem;
+  padding: 0.16rem 0.5rem;
+  border-radius: 7px;
+  background: var(--badge-purple-bg);
+  color: var(--badge-purple-fg);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+@media (hover: hover) {
+  .step > summary:hover .t {
+    color: var(--accent);
+  }
+}
