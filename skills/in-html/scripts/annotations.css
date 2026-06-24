@@ -1,16 +1,34 @@
-/* The block under the pointer — and any element the annotation engine targets,
-   like the "Next unanswered" walk — lights up in place: a solid accent ring
-   hugs its real silhouette with no gap, a faint accent wash floods it, and a
-   soft tinted shadow lifts it off the page. The ring follows each element's own
-   radius, so cards stay rounded and bare text blocks stay square. !important so
-   the reticle wins over each component's own :hover shadow. */
+/* The block under the pointer — and any element the engine targets, like the
+   "Next unanswered" walk — comes alive the way an interactable object does in a
+   game, without moving or reshaping: a soft light-rim blooms around its
+   silhouette. The rim is built from --ink, which flips per theme, so it reads as
+   a glowing white halo on the dark page and as a soft elevation shadow on the
+   light one — low chroma, all falloff, so the element lights up instead of
+   wearing a neon frame. It keeps its own surface, position, and radius; only its
+   look changes. A faint brightness boost makes dark-mode blocks feel emissive.
+   !important so the rim wins over each component's own :hover shadow. */
 .annotation-hover {
   cursor: crosshair;
   box-shadow:
-    0 0 0 2px var(--accent),
-    inset 0 0 0 100vmax color-mix(in srgb, var(--accent) 7%, transparent),
-    0 12px 32px -14px color-mix(in srgb, var(--accent) 55%, transparent) !important;
-  transition: box-shadow 0.18s cubic-bezier(0.32, 0.72, 0, 1);
+    0 0 0 1px color-mix(in srgb, var(--ink) 28%, transparent),
+    0 0 18px -1px color-mix(in srgb, var(--ink) 32%, transparent),
+    0 0 38px 2px color-mix(in srgb, var(--ink) 16%, transparent),
+    var(--shadow-lg) !important;
+  transition:
+    box-shadow 0.18s cubic-bezier(0.32, 0.72, 0, 1),
+    filter 0.18s ease;
+}
+/* Dark mode: lay a faint light wash and brighten the block so it reads as lit
+   from within. The wash is a gradient layer (background-image), so it sits over
+   a card's own background instead of replacing it — cards keep their colour, a
+   bare line of text gains a surface to light up. Light mode needs no fill: there
+   the rim resolves to a soft elevation shadow that reads as raised on its own. */
+:root[data-theme="dark"] .annotation-hover {
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--ink) 7%, transparent),
+    color-mix(in srgb, var(--ink) 7%, transparent)
+  );
+  filter: brightness(1.06);
 }
 /* The unified annotation panel — one surface for the verdict, the notes, and
    the composer, on both pointer types. On a fine pointer it is a static side

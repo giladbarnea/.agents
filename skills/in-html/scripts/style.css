@@ -2584,10 +2584,15 @@ pre code {
   }
 }
 
-/* The sidebar toggle lives in the top bar at every width: on desktop it
-   collapses/expands the left rail, on mobile it opens the off-canvas drawer. */
+/* Top-bar hamburger is the mobile drawer control only; on desktop the collapse
+   affordance is the chevron on the nav's edge (.page-nav-rail-toggle). */
 .page-bar .page-bar-toggle {
-  display: grid;
+  display: none;
+}
+@media (max-width: 900px) {
+  .page-bar .page-bar-toggle {
+    display: grid;
+  }
 }
 @media (min-width: 901px) and (max-width: 1023px) {
   .page-nav {
@@ -3239,11 +3244,16 @@ table.data td:first-child {
   }
 }
 
-/* Desktop sidebar collapse: the top-bar toggle adds body.page-nav-collapsed,
-   which slides the fixed left rail away and lets the reading column reclaim its
-   width. (At ≤900px the same toggle drives the off-canvas drawer instead — see
-   the narrow-layout block above.) The selectors outrank the rail's "shown"
-   rules, so this wins regardless of source order. */
+/* Desktop sidebar collapse: a chevron pinned to the nav's right edge (the
+   separator), vertically centered, adds body.page-nav-collapsed — which slides
+   the fixed left rail away and lets the reading column reclaim its width. The
+   chevron is body-mounted, so it stays on screen (and flips) when the rail
+   leaves, to pull it back. (At ≤900px the off-canvas drawer + top-bar hamburger
+   handle this instead — see the narrow-layout block above.) The selectors
+   outrank the rail's "shown" rules, so this wins regardless of source order. */
+.page-nav-rail-toggle {
+  display: none;
+}
 @media (min-width: 901px) {
   .page-nav {
     transition:
@@ -3262,5 +3272,50 @@ table.data td:first-child {
   }
   .has-chrome body.page-nav-collapsed .wrap {
     padding-inline-start: var(--content-gutter);
+  }
+  .page-nav-rail-toggle {
+    position: fixed;
+    top: 50%;
+    inset-inline-start: var(--nav-w);
+    z-index: 9986;
+    display: grid;
+    place-items: center;
+    width: 1.55rem;
+    height: 1.55rem;
+    padding: 0;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--faint);
+    box-shadow: var(--shadow);
+    transform: translate(-50%, -50%);
+    transition:
+      inset-inline-start 0.24s cubic-bezier(0.32, 0.72, 0, 1),
+      transform 0.24s cubic-bezier(0.32, 0.72, 0, 1),
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .page-nav-rail-toggle:hover {
+    color: var(--ink);
+    border-color: var(--rule-dash);
+  }
+  body.page-nav-collapsed .page-nav-rail-toggle {
+    inset-inline-start: 0.45rem;
+    transform: translate(0, -50%);
+  }
+  .page-nav-rail-chevron {
+    font-size: 0.95rem;
+    line-height: 1;
+    transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  body.page-nav-collapsed .page-nav-rail-chevron {
+    transform: rotate(180deg);
+  }
+  /* RTL: nav sits on the right, so the chevron's physical direction inverts. */
+  :dir(rtl) .page-nav-rail-chevron {
+    transform: rotate(180deg);
+  }
+  :dir(rtl) body.page-nav-collapsed .page-nav-rail-chevron {
+    transform: rotate(0deg);
   }
 }

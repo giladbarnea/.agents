@@ -277,22 +277,34 @@
       return { heading, navLink };
     });
 
-    document.body.append(bar, nav, backdrop);
+    // Desktop collapse lives on a chevron pinned to the nav's right edge (the
+    // separator); it is body-mounted, not a nav child, so it stays on screen
+    // when the rail slides away and can pull it back. The top-bar hamburger is
+    // the mobile drawer control only.
+    const railToggle = document.createElement("button");
+    railToggle.type = "button";
+    railToggle.className = "page-nav-rail-toggle";
+    railToggle.dataset.annotationIgnore = "";
+    railToggle.setAttribute("aria-label", "Collapse navigation");
+    railToggle.setAttribute("aria-expanded", "true");
+    railToggle.innerHTML =
+      '<span class="page-nav-rail-chevron" aria-hidden="true">‹</span>';
+    railToggle.addEventListener("click", () => {
+      const collapsed = document.body.classList.toggle("page-nav-collapsed");
+      railToggle.setAttribute("aria-expanded", String(!collapsed));
+      railToggle.setAttribute(
+        "aria-label",
+        collapsed ? "Expand navigation" : "Collapse navigation",
+      );
+    });
 
-    // The same top-bar toggle does the right thing per width: on desktop it
-    // collapses/expands the fixed left rail (the column reclaims the space); on
-    // mobile it slides the off-canvas drawer in and out.
-    const desktopNav = window.matchMedia("(min-width: 901px)");
+    document.body.append(bar, nav, backdrop, railToggle);
+
     const closeNav = () => document.body.classList.remove("page-nav-open");
-    toggle.setAttribute("aria-expanded", "true");
+    toggle.setAttribute("aria-expanded", "false");
     toggle.addEventListener("click", () => {
-      if (desktopNav.matches) {
-        const collapsed = document.body.classList.toggle("page-nav-collapsed");
-        toggle.setAttribute("aria-expanded", String(!collapsed));
-      } else {
-        const open = document.body.classList.toggle("page-nav-open");
-        toggle.setAttribute("aria-expanded", String(open));
-      }
+      const open = document.body.classList.toggle("page-nav-open");
+      toggle.setAttribute("aria-expanded", String(open));
     });
     backdrop.addEventListener("click", closeNav);
     nav.addEventListener("click", (event) => {
