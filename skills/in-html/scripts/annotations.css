@@ -1,14 +1,20 @@
 /* The block under the pointer — and any element the engine targets, like the
    "Next unanswered" walk — comes alive the way an interactable object does in a
-   game, without moving or reshaping: a soft light-rim blooms around its
-   silhouette. The rim is built from --ink, which flips per theme, so it reads as
-   a glowing white halo on the dark page and as a soft elevation shadow on the
-   light one — low chroma, all falloff, so the element lights up instead of
-   wearing a neon frame. It keeps its own surface, position, and radius; only its
-   look changes. A faint brightness boost makes dark-mode blocks feel emissive.
-   !important so the rim wins over each component's own :hover shadow. */
+   game, without moving or reshaping: a faint wash gives it a surface and a soft
+   rim blooms around its silhouette. Both are built from --ink, which flips per
+   theme, so in dark mode the wash is a pale glow and the rim a white halo, while
+   in light mode the wash is a soft gray fill and the rim a quiet elevation
+   shadow — low chroma, all falloff, never a neon frame. The wash is a gradient
+   layer (background-image) so it sits over a card's own background instead of
+   replacing it: cards keep their colour, a bare line of text gains a surface.
+   Position and radius are untouched; only the look changes. !important on the
+   rim so it wins over each component's own :hover shadow. */
 .annotation-hover {
   cursor: crosshair;
+  background-image: linear-gradient(
+    color-mix(in srgb, var(--ink) 7%, transparent),
+    color-mix(in srgb, var(--ink) 7%, transparent)
+  );
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--ink) 28%, transparent),
     0 0 18px -1px color-mix(in srgb, var(--ink) 32%, transparent),
@@ -18,16 +24,10 @@
     box-shadow 0.18s cubic-bezier(0.32, 0.72, 0, 1),
     filter 0.18s ease;
 }
-/* Dark mode: lay a faint light wash and brighten the block so it reads as lit
-   from within. The wash is a gradient layer (background-image), so it sits over
-   a card's own background instead of replacing it — cards keep their colour, a
-   bare line of text gains a surface to light up. Light mode needs no fill: there
-   the rim resolves to a soft elevation shadow that reads as raised on its own. */
+/* Dark mode only: a brightness boost on top of the wash makes blocks feel
+   emissive, lit from within. Light mode skips it — brightening a light surface
+   just flattens its text contrast. */
 :root[data-theme="dark"] .annotation-hover {
-  background-image: linear-gradient(
-    color-mix(in srgb, var(--ink) 7%, transparent),
-    color-mix(in srgb, var(--ink) 7%, transparent)
-  );
   filter: brightness(1.06);
 }
 /* The unified annotation panel — one surface for the verdict, the notes, and
