@@ -1,0 +1,3 @@
+[submodule "skills/in-html"]
+	path = skills/in-html
+	url = git@github.com:giladbarnea/in-html.git
