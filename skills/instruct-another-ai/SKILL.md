@@ -45,4 +45,16 @@ Classic use cases — *generalize* the principles, this isn't a comprehensive li
 
 4. Since teammates talk to each other, tell each of them to load the this skill (`instruct-other-ai`) on top of the context-gathering skill. If you are spawning an adversary among them, tell it to load the `peer-review` skill too.
 
+    Example 3 settings: the main session loaded `load-context`, explored the code, and the user approved a plan to add rate limiting to the public REST API.
+    <negative-example-3 why-bad="main agent burns its own context shuttling the diff and the feedback back and forth — dives into the sub-agent’s work סותם את חלון הקונטקסט שלו יותר מאשר אם היה עושה לבד, acts as a reviewer when biased">
+    User to main agent: "Great, go ahead and build it."
+    Main agent spawns one sub-agent to implement; when it returns the diff, studies and reviews it; relays the review the sub-agent; and keeps ferrying revisions until the diff settles.
+    </negative-example-3>
+    <positive-example-3 why-good="main agent picks a team because the adversarial iteration is synergistic, replicates the user’s context levers, has the reviewer also load `peer-review`, declares only the bottom line it wants, and stays out of the loop while they converge">
+    User to main agent: "Great, go ahead and implement the plan."
+    Main agent spawns an implementer–reviewer team and prompts them: "/skill:load-context, then load `instruct-another-ai`. You are in a implementer–reviewer team. Here is the initial task the user has sent me, verbatim, so you understand the bigger picture: <the-user-message-describing-the-task>. [to the implementer] You implement the plan. Ping your teammate when you think you are done writing. [to the reviewer] You review your teammate’s work when it pings you. Also load `peer-review`. [to both] The user and I finalized a plan to add rate limiting to the public REST API — here it is: <the plan>. Build it and tear it apart amongst yourselves until you are confident it is the simplest working, correct solution faithful to the plan."
+    [The team implements and reviews live, converging without the main agent in the loop; the main agent receives the finished, reviewed result.]
+    Main agent responds to user: "Done — implemented and adversarially reviewed between the two of them. Here’s what landed: …"
+    </positive-example-3>
+
 5. Subagents can take a long time to run - use a 20-minute timeout.
