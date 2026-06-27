@@ -5,7 +5,7 @@ description: Best practices for getting a step-function leap in performance from
 
 ## Why delegate at all?
 
-The main agent already holds all the context — so why not just do the work directly and be done? Context management. Sub-agents and teams alike spin up a *fresh* context window and hand you back only the bottom line of their work, sparing you the token-heavy process that manufactured it. Two payoffs: (1) you reach the crux of the problem with plenty of headroom left in your own context window, rather than arriving running on fumes; and (2) you sidestep the bias you've accrued over the session.
+The main agent already holds all the context — so why not just do the work directly and be done? Context management. Sub-agents and teams alike spin up a *fresh* context window and hand you back only the bottom line of their work, sparing you the token-heavy process that manufactured it. Two payoffs: (1) you reach the crux of the problem with plenty of headroom left in your own context window, rather than arriving running on fumes; and (2) you escape your own accrued bias.
 
 The two differ technically: sub-agents are isolated from each other and report only to you; teammates can talk amongst themselves live, without routing through you. (When to reach for which, see point 3.)
 
