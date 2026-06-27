@@ -42,6 +42,6 @@ Essentially, all the “Don’ts” above over-fit the agent.
     Main agent responds to user: "I have deep understanding of both layers and their relationships. What did you have in mind?"
     </positive-example-2>
 
-3. Spawn a *team* when interaction between teammates — live, in a loop, before they finalize a response to you — would add value through synergy, the classic case being a GAN-inspired adversarial pairing (planner–reviewer, implementer–reviewer) where one produces and the other pokes holes until both are content. Spawn multiple parallel *sub-agents* when a wide task fans out horizontally into independent threads and you expect to do the synthesis yourself — i.e. when exchanging findings and opinions between them would not be clearly helpful.   
+3. Spawn a *team* when interaction between teammates would add value through synergy, the classic case being a GAN-inspired adversarial pairing (planner–reviewer, implementer–reviewer) where one produces and the other pokes holes until both are content. Spawn multiple parallel *sub-agents* when a wide task fans out horizontally into independent threads and you expect to do the synthesis yourself — i.e. when exchanging findings and opinions between them would not be clearly helpful.   
 
 4. Subagents can take several minutes to run - use a 15-minute timeout.
