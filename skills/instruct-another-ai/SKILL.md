@@ -46,7 +46,7 @@ Classic use cases — *generalize* the principles, this isn't a comprehensive li
 4. Since teammates talk to each other, tell each of them to load the this skill (`instruct-other-ai`) on top of the context-gathering skill. If you are spawning an adversary among them, tell it to load the `peer-review` skill too.
 
     Example 3 settings: the main session loaded `load-context`, explored the code, and the user approved a plan to add rate limiting to the public REST API.
-    <negative-example-3 why-bad="main agent burns its own context shuttling the diff and the feedback back and forth — dives into the sub-agent’s work סותם את חלון הקונטקסט שלו יותר מאשר אם היה עושה לבד, acts as a reviewer when biased">
+    <negative-example-3 why-bad="main agent burns its own context shuttling the diff and the feedback back and forth — dives into the sub-agent’s work and clogs its own context window worse than doing the task solo would have, acts as a reviewer when biased">
     User to main agent: "Great, go ahead and build it."
     Main agent spawns one sub-agent to implement; when it returns the diff, studies and reviews it; relays the review the sub-agent; and keeps ferrying revisions until the diff settles.
     </negative-example-3>
