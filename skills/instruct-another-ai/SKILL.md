@@ -5,14 +5,12 @@ description: Best practices for getting a step-function leap in performance from
 
 ## Why delegate at all?
 
-The main agent already holds all the context — so why not just do the work directly and be done? Context management. Sub-agents and teams alike spin up a *fresh* context window and hand you back only the bottom line of their work, sparing you the token-heavy process that manufactured it. Two payoffs: (1) you reach the crux of the problem with plenty of headroom left in your own context window, rather than arriving running on fumes; and (2) you escape your own accrued bias.
+The main agent already holds all the context, so why not just do the work directly? Context management. Both sub-agents and teams spin up a *fresh* context window and hand back only the bottom line, sparing you the token-heavy process that produced it. Two payoffs: (1) you reach the crux of the problem with plenty of headroom left in your own context window, instead of arriving running on fumes; and (2) you escape your own accrued bias.
 
-The two differ technically: sub-agents are isolated from each other and report only to you; teammates can talk amongst themselves live, without routing through you. (When to reach for which, see point 3.)
+The flip side: if none of these payoffs apply, don't delegate. The anti-pattern is the user asking for something straightforward and the main agent handing the *whole* task to another agent, ending the session: no context-window hygiene, no synergy, no parallelism, no bias mitigation, just duplicated tokens and a game of broken telephone.
 
-The flip side: if none of these payoffs apply, don't delegate. The anti-pattern is the user asking for something straightforward and the main agent handing the *whole* task to another agent, ending the session — no context-window hygiene gain, no synergy, no parallelism, no bias mitigation, just duplicated tokens and a game of broken telephone.
-
-Classic use cases — generalize the principles, this isn't a comprehensive list:
-- **Exploration** — one sub-agent for a single domain, or parallel sub-agents when the scope fans out. Keeps your own context light, and parallel agents save wall-clock time too.
+Classic use cases — *generalize* the principles, this isn't a comprehensive list:
+- **Exploration** — one sub-agent for a single domain, or parallel sub-agents when your can fan the scope out. Keeps your own context light, and parallel agents save wall-clock time too.
 - **Debating the best plan** — an adversarial team handed the user's goal at large plus the exploration results. Synergistic judgement, and it mitigates any single teammate's bias.
 - **Reviewing an implementation** — a sub-agent handed the user's goal at large, the exploration results, the finalized plan, and the implementation's commit SHA. Mitigates the main agent's bias toward its own work.
 
@@ -20,8 +18,8 @@ Classic use cases — generalize the principles, this isn't a comprehensive list
 
 1. Orient the agent to the project: the user has mostly likely told you to load a context-gathering skill first thing in the session. Tell the AI agent to load the same skill, with the same arguments the user has specified. On top of that, if throughout the session, you have created, read or edited additional files that are not referenced by the skill, reference them too.  
 
-2. Be generous in giving the agent wider context—understanding *why* it's performing the task will boost its performance. Don't micromanage or over-instruct it. The agent already has the same system prompt (e.g. `CLAUDE.md` or `AGENTS.md`) as you do out of the box. It is essentially an equivalent instanciation of yourself. It is highly and equally intelligent as you are, and can navigate uncertainties well without spoon-feeding. Avoid prescribing instructions, giving "how-to" examples, providing examples as to what to think about, or dictating which files, symbols, or paths to look at; avoid any form of providing hints for possible answers for your own queries — this is circular and useless. Just *declare* what kind of *understanding* YOU are seeking for *yourself*. Instead of specifying which steps to take (dictating the "how" is bad), share only why it was dispatched and what you hope to achieve. This directly frees the agent to find the best way to reach *your* goal, unbiased and unconstrained by your own limited knowledge and assumptions.
-Essentially, all the “Don’ts” above over-fit the agent.
+2. Be generous in giving the agent wider context—understanding *why* it's performing the task will boost its performance. Don't micromanage or over-instruct it. The agent already has the same system prompt as you do out of the box (e.g. `CLAUDE.md` or `AGENTS.md`). It is essentially an equivalent instantiation of yourself. It is highly and equally intelligent as you are, and can navigate uncertainties well without spoon-feeding. Avoid prescribing instructions, giving "how-to" examples, providing examples as to what to think about, or dictating which files, symbols, or paths to look at; avoid any form of providing hints for possible answers for your own queries — this is circular and useless. Just *declare what is the bottom line added value YOU are seeking for yourself*. Instead of specifying which steps to take (dictating the "how" is bad), share only why it was dispatched with it and what you hope to gain. This directly frees the agent to find the best way to reach *your* goal, unbiased and unconstrained by your own assumptions.
+    Essentially, all the “Don’ts” above over-fit the agent.
     <negative-example-1 why-bad="main agent shoots its own foot by limiting the sub-agent’s research scope">
     User to main agent: "Why does Vercel claims their integrated version is beneficial?"
     Main agent spawns a sub-agent and prompts it: "Research why Vercel claims their integrated version is beneficial (edge runtime, seamless DX, zero-config, billing, monitoring, tight coupling to `vercel` CLI / dashboard / functions)."
@@ -42,6 +40,6 @@ Essentially, all the “Don’ts” above over-fit the agent.
     Main agent responds to user: "I have deep understanding of both layers and their relationships. What did you have in mind?"
     </positive-example-2>
 
-3. Spawn a *team* when interaction between teammates would add value through synergy, the classic case being a GAN-inspired adversarial pairing (planner–reviewer, implementer–reviewer) where one produces and the other pokes holes until both are content. Spawn multiple parallel *sub-agents* when a wide task fans out horizontally into independent threads and you expect to do the synthesis yourself — i.e. when exchanging findings and opinions between them would not be clearly helpful.   
+3. Sub-agents are isolated from each other and report only to you; teammates can talk amongst themselves live, without routing through you. So spawn a *team* when that live interaction would add value through synergy, the classic case being a GAN-inspired adversarial pairing (planner–reviewer, implementer–reviewer) where one produces and the other pokes holes until both are content. Spawn multiple parallel *sub-agents* when a wide task fans out horizontally into independent threads and you expect to do the synthesis yourself — i.e. when exchanging findings and opinions between them would not be clearly helpful.   
 
 4. Subagents can take several minutes to run - use a 15-minute timeout.
