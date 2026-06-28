@@ -67,5 +67,6 @@ Techniques worth reusing:
 - For Maccabi Online medication-renewal requests, read `references/maccabi.md`.
 - For scraping `claude.ai/code` (Claude Code web) session transcripts, read `references/claude-code-web.md`.
 - For GitHub repo changelogs, use `scripts/scrape_changelogs.py`.
+- For searching Polymarket prediction markets with high recall and precision, read `references/polymarket.md`.
 
 For these tailored cases, lightly skim the core docs and then follow the dedicated reference.
