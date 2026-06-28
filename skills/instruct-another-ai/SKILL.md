@@ -1,6 +1,6 @@
 ---
 name: instruct-another-ai
-description: Best practices for getting a step-function leap in performance from other AI agents when instructing or communicating with them. Note that Markdown docs are AI agents’ bread-and-butter, not only humans’. Load `instruct-another-ai` autonomously before spawning a sub-agent, creating a team of sub-agents, talking to a teammate agent, or writing documentation.
+description: Best practices for getting a step-function leap in performance from other AI agents when instructing or communicating with them. Note that Markdown docs are AI agents’ bread-and-butter, not only humans’. Load `instruct-another-ai` autonomously before spawning a sub-agent, creating a team of sub-agents, talking to a teammate agent, or writing documentation. Trigger words are “dispatch an agent”, “spawn a team”, etc.
 ---
 
 ## Why delegate at all?
