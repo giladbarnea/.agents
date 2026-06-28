@@ -30,6 +30,7 @@ budget model instead, chosen deliberately:
   self-imposed cap. No reset concept — the window only opens, so OpenRouter shows no ↻.
 """
 
+import argparse
 import dataclasses
 import json
 import os
@@ -417,6 +418,77 @@ def fmt_dh(td: timedelta) -> str:
     return f"{minutes}m"
 
 
+def _isoformat_seconds(value: datetime) -> str:
+    """Return a timezone-aware ISO timestamp at second precision.
+
+    >>> _isoformat_seconds(datetime(2026, 1, 1, 1, 2, 3, 456789, tzinfo=IDT))
+    '2026-01-01T01:02:03+02:00'
+    """
+    return value.isoformat(timespec="seconds")
+
+
+def _duration_json(value: timedelta) -> dict[str, object]:
+    return {
+        "seconds": round(value.total_seconds()),
+        "human": fmt_dh(value),
+    }
+
+
+def _limit_json(limit: Limit, now: datetime) -> dict[str, object]:
+    elapsed_percent = limit.elapsed_pct(now)
+    burn_rate = limit.used_pct / elapsed_percent if elapsed_percent > 0 else None
+    reset_at = _isoformat_seconds(limit.next_reset) if limit.resets else None
+    remaining = limit.next_reset - now
+    remaining_json = {
+        "seconds": round(remaining.total_seconds()),
+        "human": fmt_dh(remaining),
+    } if limit.resets else None
+
+    return {
+        "used_percent": round(limit.used_pct, 2),
+        "elapsed_percent": round(elapsed_percent, 2),
+        "burn_rate": round(burn_rate, 4) if burn_rate is not None else None,
+        "over_elapsed_pace": limit.used_pct > elapsed_percent,
+        "resets": limit.resets,
+        "started_at": _isoformat_seconds(limit.window_start),
+        "ends_at": reset_at,
+        "reset_at": reset_at,
+        "elapsed_reference_end_at": _isoformat_seconds(limit.next_reset),
+        "duration": _duration_json(limit.window_duration),
+        "remaining": remaining_json,
+    }
+
+
+def _usage_json(usage: Usage, now: datetime) -> dict[str, object]:
+    return {
+        "name": usage.name,
+        "windows": {
+            "weekly": _limit_json(usage.weekly, now),
+            "session": _limit_json(usage.session, now) if usage.session is not None else None,
+        },
+    }
+
+
+def _usage_report_json(
+    usages: list[Usage],
+    now: datetime,
+    *,
+    warnings: list[str],
+    claude_codex_source: str,
+    openrouter_source: str,
+) -> dict[str, object]:
+    return {
+        "generated_at": _isoformat_seconds(now),
+        "timezone": "Asia/Jerusalem",
+        "sources": {
+            "claude_codex": claude_codex_source,
+            "openrouter": openrouter_source,
+        },
+        "warnings": warnings,
+        "providers": [_usage_json(usage, now) for usage in usages],
+    }
+
+
 # ── Picasso rendering ─────────────────────────────────────────────────
 
 def _track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text:
@@ -744,26 +816,62 @@ def _openrouter_usage(now: datetime) -> Usage:
 
 # ── Main ──────────────────────────────────────────────────────────────
 
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Read and render AI usage limits.")
+    parser.add_argument(
+        "-f",
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Output format. Use json for structured non-visual output.",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
+    args = parse_arguments()
     now = datetime.now(tz=IDT)
-    console = Console()
-    picasso_width = _parse_picasso_width(os.environ.get("PICASSO_WIDTH"), str(console.size.width))
+    warnings: list[str] = []
+    claude_codex_source = "direct_cookie_api"
+    openrouter_source = "api"
 
     try:
         usages = fetch_via_cookies(now)
     except Exception as error:
-        print(
-            f"WARNING: Direct cookie-based fetch failed ({type(error).__name__}: {error}); "
-            "falling back to browser scraping.",
-            file=sys.stderr,
+        warning = (
+            f"Direct cookie-based fetch failed ({type(error).__name__}: {error}); "
+            "falling back to browser scraping."
         )
+        warnings.append(warning)
+        print(f"WARNING: {warning}", file=sys.stderr)
+        claude_codex_source = "browser_scrape"
         usages = scrape_via_browser(now)
 
     try:
         usages.append(_openrouter_usage(now))
     except Exception as error:
-        print(f"WARNING: OpenRouter fetch failed ({type(error).__name__}: {error})", file=sys.stderr)
+        warning = f"OpenRouter fetch failed ({type(error).__name__}: {error})"
+        warnings.append(warning)
+        print(f"WARNING: {warning}", file=sys.stderr)
+        openrouter_source = "unavailable"
 
+    if args.format == "json":
+        json.dump(
+            _usage_report_json(
+                usages,
+                now,
+                warnings=warnings,
+                claude_codex_source=claude_codex_source,
+                openrouter_source=openrouter_source,
+            ),
+            sys.stdout,
+            indent=2,
+        )
+        print()
+        return
+
+    console = Console()
+    picasso_width = _parse_picasso_width(os.environ.get("PICASSO_WIDTH"), str(console.size.width))
     console.print()
     print_picasso(usages, now, console=console, picasso_width=picasso_width)
 
