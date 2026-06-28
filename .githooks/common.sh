@@ -271,3 +271,47 @@ render_skills() {
     fi
   done
 }
+
+# Detects and removes orphaned symlinks in provider skill directories.
+# Orphaned links are symlinks pointing to source skills that no longer exist.
+# Concrete (materialized) skill directories are left alone. Prompts for each removal.
+clean_orphaned_skill_links() {
+  local provider entry whitelist skills_dir link target link_name
+  local found_orphans=0
+
+  for entry in "${SKILL_PROVIDERS[@]}"; do
+    provider="${entry%%|*}"
+    skills_dir="$provider"
+
+    [[ -d "$skills_dir" ]] || continue
+
+    while IFS= read -r link; do
+      [[ -L "$link" ]] || continue
+
+      target="$(readlink "$link")"
+      if [[ ! -d "$target" ]]; then
+        found_orphans=$((found_orphans + 1))
+        link_name="$(basename "$link")"
+        printf 'Found orphaned link: %s\n' "$link" >&2
+        printf '  → points to (missing): %s\n' "$target" >&2
+
+        if can_prompt_for_render; then
+          printf 'Remove orphaned link %s? Y/N ' "$link_name" > /dev/tty
+          local reply
+          read -r reply < /dev/tty || continue
+          if [[ "$reply" == "Y" || "$reply" == "y" ]]; then
+            rm -f "$link" && printf '✓ Removed %s\n' "$link" >&2
+          else
+            printf '⊘ Kept %s\n' "$link" >&2
+          fi
+        else
+          printf '⊘ (no TTY; skipping) %s\n' "$link" >&2
+        fi
+      fi
+    done < <(find "$skills_dir" -maxdepth 1 -mindepth 1 -type l -print)
+  done
+
+  if (( found_orphans == 0 )); then
+    printf '✓ No orphaned skill links found\n' >&2
+  fi
+}

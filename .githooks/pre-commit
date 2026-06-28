@@ -3,3 +3,4 @@
 source "$(dirname "$0")/common.sh"
 render_agents_md stage || exit 1
 render_skills stage || exit 1
+clean_orphaned_skill_links
