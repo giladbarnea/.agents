@@ -1,5 +1,5 @@
 ---
-updated: 2026-06-20
+updated: 2026-06-29
 ---
 # Global Instructions
 
@@ -121,7 +121,7 @@ Always load the `instruct-another-ai` skill before launching a subagent or writi
 
 1. Do not abbreviate variable, function or class names. Use complete words. Write clean code.
 2. Write code that fails early and clearly rather than writing fallbacks to “maybe broken” inputs. No “Just in case my inputs are corrupted” code. Fallback-rich code explodes complexity and silently propagates bugs downstream. Good code assumes its inputs are valid and complete—it trusts upstream code to have done its job. This ties closely to separation of concerns. And if something important fails, or an assumption proves to be false, fail early and clearly. Broken states should be discovered early, loudly and fixed quickly; Consumers should not tolerate it nor work around it.
-2++. Don‘t add features, refactor, or introduce abstractions beyond what the task requires. A bug fix doesn‘t need surrounding cleanup and a one-shot operation usually doesn‘t need a helper. Don‘t design for hypothetical future requirements: do the simplest thing that works well. Avoid premature abstraction and half-finished implementations. Don‘t add error handling, fallbacks, or validation for scenarios that cannot happen. Trust internal code and framework guarantees. Only validate at system boundaries (user input, external APIs). Don't use feature flags or backwards-compatibility shims when you can just change the code.
+2++. Write the minimum code that solves the problem in front of you now, not the minimum that could solve every future version of it. Don‘t add features, refactor, or introduce abstractions beyond what the task requires. A bug fix doesn‘t need surrounding cleanup and a one-shot operation usually doesn‘t need a helper. Avoid premature abstraction and half-finished implementations. The test: if the only reason something is abstracted is “in case we need to,” you have over-built it. Don‘t add error handling, fallbacks, or validation for scenarios that cannot happen. Trust internal code and framework guarantees. Only validate at system boundaries (user input, external APIs). Don't use feature flags or backwards-compatibility shims when you can just change the code.
 3. Write highly cohesive, decoupled logic.
 4. Leverage existing logic when possible. Do not re-implement anything.
 5. Write flat, optimized logical branches. Avoid nested, duplicate-y code. Write DRY and elegant logic.
@@ -172,10 +172,11 @@ If your task includes writing tests, load the `tdd` and `write-tests` skills.
 <how-to-approach-a-task>
 
 The following points are close to my heart:
-1. Before starting your task, you must understand all the affected code downstream and all the affecting code upstream. Not only the blast radius, but also whether we’re going to transfer a power plant that a town nearby relies on. Are we going to redirect a water pipe that an adjacent city consumes? How far along the stack does this go? Map out the moving parts and coupling instances before thinking and planning. Use the appropriate agents for that.
-2. If you are fixing a bug, nail down the root cause before thinking of a solution.
-3. When making changes, be absolutely SURGICAL. Every line of code you add incurs a small debt; this debt compounds over time through increased complexity, maintenance, bugs, and cognitive load. Therefore, make only laser-focused changes.
-4. No band-aid fixes. When encountering a problem, first brainstorm what possible root causes may explain it. Band-aid fixes are bad because they increase complexity significantly. Root-cause solutions are good because they reduce complexity.
+1. Every task needs a success criterion before code is written. "Add validation" becomes "reject a missing or malformed email, return 400 with a clear message, and test both cases." For anything multi-step, state the plan first so the user can catch a wrong approach before you spend an hour building it.
+2. Figure out what you are doing before you type. State your assumptions and name the tradeoffs when they matter to the approach. If something is unequivocally unclear, stop and ask rather than filling the gap with plausible-looking code; that is exactly the code that passes a casual review and fails when it matters.
+3. Before starting your task, you must understand all the affected code downstream and all the affecting code upstream. Not only the blast radius, but also whether we’re going to transfer a power plant that a town nearby relies on. Are we going to redirect a water pipe that an adjacent city consumes? How far along the stack does this go? Map out the moving parts and coupling instances before thinking and planning. Use the appropriate agents for that.
+4. When something breaks, investigate; do not guess. Read the whole error and the stack trace, reproduce the problem before you change anything, and change one thing at a time. If you are fixing a bug, nail down the root cause before thinking of a solution. Do not paper over an unexpected `null` with a null check; find out why it is null, or the bug just moves somewhere quieter.
+5. When making changes, be absolutely SURGICAL. Every changed line must be justified by the task. If a line is there because "while I was in there," revert it. Every line of code you add incurs a small debt; this debt compounds over time through increased complexity, maintenance, bugs, and cognitive load. Therefore, make only laser-focused changes.
 
 </how-to-approach-a-task>
 
@@ -221,6 +222,8 @@ The substance such a harness provides is two-fold. Semantic: the institutional m
 
 You are not writing a technical document; you are **conversing with a human.**
 Write clear, succinct, rich and eye-pleasing Markdown prose. Keep it well-written, simple and well-styled, with minimal fluff, and **not verbose**. Brightly communicate what you mean, with enough context to be useful, but no more than enough. Recall “The Elements of Style”.
+
+Say what you did and why, not just a block of code. Flag only concerns that materially affect correctness, risk, user decisions, or next steps; otherwise do not spend the user’s attention on caveats. Be precise about uncertainty: "I am not sure this library supports streaming" tells the user what to verify; "I think this should work" does not.
 
 Prefer prose. Do not reach for a list just because information has several parts; explanations, descriptions, opinions, and reports read better as well-shaped paragraphs. Use a list only when the material naturally wants to be scanned as distinct items, such as steps, tasks, requirements, options, or examples.
 
