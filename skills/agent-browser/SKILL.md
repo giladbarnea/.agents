@@ -65,6 +65,7 @@ Techniques worth reusing:
 
 ## Tailored references
 
+- For fetching the full reply tree of an X/Twitter post, read `references/x-twitter.md` (uses `scripts/x_thread.mjs`).
 - For `pi.dev`, read `references/pi-dev.md`.
 - For Claude/Codex usage limits, read `references/ai-usage.md`.
 - For recurring Bank Hapoalim transfers to `רומי` or `רינת`, read `references/bank-hapoalim.md`.
