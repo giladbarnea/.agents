@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run
+# /// script
+# requires-python = "==3.12.*"
+# dependencies = ["pyyaml"]
+# ///
 """
 Create .agents/skills/simplify-code/SKILL.md by combining the current skill
 with a Gemini-tersified version of Addy Osmani's code-simplification skill.
@@ -14,13 +18,10 @@ Early-returns if Addy's upstream file has not changed since the pinned commit.
 import json
 import os
 import re
-import sys
 import urllib.request
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(PROJECT_ROOT / 'scripts' / 'ops'))
-import markdown_frontmatter
+import yaml
 
 CREATE_DIR = Path(__file__).resolve().parent
 SKILL_MD = CREATE_DIR.parent / 'SKILL.md'
@@ -32,8 +33,27 @@ ADIS_URL = f"https://github.com/{ADIS_REPO}/blob/main/{ADIS_FILE_PATH}"
 ADIS_RAW_URL = f"https://raw.githubusercontent.com/{ADIS_REPO}/main/{ADIS_FILE_PATH}"
 ADIS_RELEASE = "0.5.0"
 
-TERSE_OUTPUT_RAW_URL = "https://raw.githubusercontent.com/giladbarnea/llm-templates/main/skills/terse-output/SKILL.md"
-RUN_AGENT = PROJECT_ROOT / 'scripts' / 'run-agent.sh'
+
+_FRONTMATTER_RE = re.compile(r'^---[ \t]*\n(.*?)\n---[ \t]*(?:\n|$)', re.DOTALL)
+
+
+def read_frontmatter(path: Path) -> dict:
+    """Parse a markdown file's leading YAML frontmatter into a dict."""
+    match = _FRONTMATTER_RE.match(path.read_text(encoding='utf-8'))
+    return yaml.safe_load(match.group(1)) if match else {}
+
+
+def read_body(path: Path) -> str:
+    """Return a markdown file's content with leading YAML frontmatter removed."""
+    content = path.read_text(encoding='utf-8')
+    match = _FRONTMATTER_RE.match(content)
+    return content[match.end():] if match else content
+
+
+def render_frontmatter(frontmatter: dict, body: str) -> str:
+    """Serialize a dict to a YAML frontmatter block prepended to body."""
+    dumped = yaml.safe_dump(frontmatter, sort_keys=False, default_flow_style=False).strip()
+    return f"---\n{dumped}\n---\n{body}"
 
 
 def fetch(url: str) -> str:
@@ -72,7 +92,7 @@ def should_recreate() -> tuple[bool, str]:
     if not SKILL_MD.exists():
         return True, latest_commit
 
-    adis_origin = markdown_frontmatter.read(SKILL_MD).get('adis_origin')
+    adis_origin = read_frontmatter(SKILL_MD).get('adis_origin')
     if not isinstance(adis_origin, dict):
         return True, latest_commit
 
@@ -117,8 +137,8 @@ def create() -> None:
     adis_body = strip_inspired_by(strip_frontmatter(fetch(ADIS_RAW_URL)))
     terse_adis_body = run_gemini_terser(adis_body)
 
-    current_frontmatter = markdown_frontmatter.read(ANTHROPICS_VERSION)
-    current_body = markdown_frontmatter.body(ANTHROPICS_VERSION)
+    current_frontmatter = read_frontmatter(ANTHROPICS_VERSION)
+    current_body = read_body(ANTHROPICS_VERSION)
 
     output_frontmatter = {
         **current_frontmatter,
@@ -130,7 +150,7 @@ def create() -> None:
     }
 
     SKILL_MD.write_text(
-        markdown_frontmatter.render(output_frontmatter, f"{terse_adis_body}\n---\n{current_body}"),
+        render_frontmatter(output_frontmatter, f"{terse_adis_body}\n---\n{current_body}"),
         encoding='utf-8',
     )
     print(f"Created {SKILL_MD}")

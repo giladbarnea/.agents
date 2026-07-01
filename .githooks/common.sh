@@ -233,6 +233,9 @@ render_skills() {
   local skill_dir skill_name abs_src base_output entry provider whitelist target_dir short
   local -a linked materialized
 
+  ./skills/simplify-code/create/create.py || return 1
+  [[ -n "$stage" ]] && git add skills/simplify-code/SKILL.md
+
   for skill_dir in skills/*/; do
     skill_dir="${skill_dir%/}"
     [[ -f "$skill_dir/SKILL.md.j2" || -f "$skill_dir/SKILL.md" ]] || continue
