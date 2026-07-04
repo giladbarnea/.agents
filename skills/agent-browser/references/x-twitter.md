@@ -14,6 +14,30 @@ node scripts/x_thread.mjs <url> --from-chrome        # default port 9222
 
 Output is a JSON array of `{id, username, name, text, likes, created}` on stdout; progress (`pages=… replies=…`) goes to stderr. Element `[0]` is the focal post; the rest are replies.
 
+## X Articles are not threads
+
+A post whose only text is a `t.co` link may be an X Article (`https://x.com/i/article/<articleId>`), not a normal tweet/thread. `x_thread.mjs` will correctly fetch the focal post and replies, but it will not return the article body.
+
+For an Article, drive a logged-in browser once and inspect the site's own GraphQL calls:
+
+```bash
+agent-browser connect 9222
+agent-browser tab new
+agent-browser open 'https://x.com/i/article/<articleId>'
+agent-browser wait --load networkidle
+agent-browser network requests --filter 'TweetResultByRestId'
+```
+
+Fetch that `TweetResultByRestId` URL with the normal X bearer token plus `auth_token`/`ct0` cookies. The Article body is structured Draft.js-like JSON at:
+
+```text
+data.tweetResult.result.article.article_results.result.content_state
+```
+
+Use `content_state.blocks` for text, headings, lists and blockquotes; `inlineStyleRanges` for bold/italic spans; `entityRanges` + `entityMap` for links, embedded tweets and media. Image URLs live under `article_results.result.media_entities[*].media_info.original_img_url`. Embedded tweets often need the `TweetResultsByRestIds` request the page also emits; prefer `note_tweet.note_tweet_results.result.text` over `legacy.full_text` because `legacy.full_text` can be truncated.
+
+Fast fallback: `agent-browser get text 'body'` after opening the Article captures the visible article text, but it includes UI chrome and loses reliable links, embeds, image URLs and formatting. Use it only to confirm that the article loaded or when rough text is enough.
+
 ## Getting cookies
 
 Two `x.com` cookies authorize everything: `auth_token` and `ct0`. Either paste them as env vars (browser devtools → Application → Cookies → x.com), or, if you're logged into x.com in a debug Chrome (`--remote-debugging-port=9222`), let `--from-chrome` read them via CDP `Storage.getCookies` (decrypted, no disk decryption). The cookies belong to a real account — treat them as secrets and don't commit them.

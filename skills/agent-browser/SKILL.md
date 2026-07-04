@@ -38,11 +38,28 @@ Run `agent-browser skills list` to see what is available on this install.
 
 ## Driving a real logged-in Chrome over CDP
 
-Some sites trip bot checks in headless runs. The workaround is a real, logged-in Chrome with remote debugging enabled, driven directly over CDP:
+Some sites trip bot checks in headless runs. The workaround is a real, logged-in Chrome with remote debugging enabled, driven directly over CDP.
+
+You need a Chrome process running with these args:
 
 ```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.agent-browser/custom-debug-profile"
 ```
+
+Check first whether it already exists and CDP is reachable:
+
+```bash
+pgrep -falo 'Google Chrome.*remote-debugging-port=9222'
+curl -fsS http://localhost:9222/json/version | jq .
+```
+
+If it does not exist or CDP is not reachable, launch it:
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.agent-browser/custom-debug-profile"
+```
+
+Note that an existing process is probably the user's actual Chrome window, so don't kill it.
 
 Building blocks:
 
