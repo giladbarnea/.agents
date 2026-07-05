@@ -529,7 +529,11 @@ def _label(
     used_style_slack: str = "cyan",
     used_style_over: str = "bright_red",
 ) -> Text:
-    """Glyph-tagged atoms (●used% ┊elapsed%) + burn rate, mirroring the track's legend."""
+    """Glyph-tagged atoms (●used% ┊elapsed%) + burn rate, mirroring the track's legend.
+
+    >>> _label(164.53, 141.08, width=36).plain
+    '●165% ┊141% · 1.17×'
+    """
     used_pos = round(max(0.0, min(100.0, used_pct)) / 100 * (width - 1))
     elapsed_pos = round(max(0.0, min(100.0, elapsed_pct)) / 100 * (width - 1))
     over = used_pct > elapsed_pct
@@ -538,7 +542,7 @@ def _label(
     elapsed_label = f"{round(elapsed_pct)}%"
 
     text = Text()
-    if used_pos == elapsed_pos:
+    if used_pos == elapsed_pos and used_label == elapsed_label:
         text.append("◆", style="yellow")
         text.append(f"{used_label:>3}", style="dim")
     else:
