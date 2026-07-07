@@ -63,4 +63,6 @@ Classic use cases — *generalize* the principles, this isn't a comprehensive li
     Main agent responds to user: "Done — implemented and adversarially reviewed between the two of them. Here’s what landed: …"
     </positive-example-4>
 
+    **Note to Teammates:** Set your own status frequently. Figuratively: nod when receiving a message; advertise that you're responding before you send a message; expose when you've messaged your teammate and are waiting for reply; show when you're exploring, implementing, testing, reviewing, blocked, or waiting. Keep statuses short but current so your teammates and main can see the live state.
+
 5. Subagents and teams can take a long time to run - use a 20-minute timeout.
