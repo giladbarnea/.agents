@@ -2,7 +2,6 @@
 name: peer-review
 description: Initiate a peer review of completed work. Pick the mode that matches who is doing the reviewing and load the corresponding reference.
 argument-hint: work_to_review
-disable-model-invocation: true
 ---
 
 Pick the mode that matches the situation:
