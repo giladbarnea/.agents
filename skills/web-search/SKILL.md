@@ -1,10 +1,10 @@
 ---
-name: perplexity-search
+name: web-search
 description: Web search and content extraction via Perplexity AI
 argument-hint: query
 ---
 
-# Perplexity Search
+# Web Search
 
 Search using Perplexity AI via OpenRouter.
 
@@ -16,3 +16,5 @@ Search using Perplexity AI via OpenRouter.
 ```
 
 Requires `OPENROUTER_API_KEY` in environment or `~/.openrouter-api-key-personal`.
+
+If Perplexity has no funds left on the API key, fall back to using `~/.brave-search-api-key`.
