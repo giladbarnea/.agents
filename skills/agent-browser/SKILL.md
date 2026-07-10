@@ -84,7 +84,6 @@ Techniques worth reusing:
 
 - For fetching the full reply tree of an X/Twitter post, read `references/x-twitter.md` (uses `scripts/x_thread.mjs`).
 - For `pi.dev`, read `references/pi-dev.md`.
-- For Claude/Codex usage limits, read `references/ai-usage.md`.
 - For recurring Bank Hapoalim transfers to `רומי` or `רינת`, read `references/bank-hapoalim.md`.
 - For Maccabi Online medication-renewal requests, read `references/maccabi.md`.
 - For scraping `claude.ai/code` (Claude Code web) session transcripts, read `references/claude-code-web.md`.
