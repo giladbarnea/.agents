@@ -28,11 +28,19 @@ budget model instead, chosen deliberately:
   "start of discipline"; OPENROUTER_ANCHOR_TOTAL_USAGE is total_usage as it stood that day,
   back-computed once from activity while still in range; OPENROUTER_BUDGET is the $20/month
   self-imposed cap. No reset concept — the window only opens, so OpenRouter shows no ↻.
+
+Burn-rate smoothing: each displayed burn rate carries a Bayesian-shrinkage companion
+(the ×B value), (used + m) / (elapsed + m), which shrinks toward a 1.0× prior so a
+fresh window doesn't scream 5× after one burst. The pseudo-elapsed weight m is derived
+per provider at every invocation from the last four weeks of local transcripts
+(Claude Code, Codex CLI, and Pi sessions — Pi activity is attributed per assistant
+message, so mid-session model switches don't leak across providers).
 """
 
 import argparse
 import dataclasses
 import json
+import math
 import os
 import re
 import shutil
@@ -44,7 +52,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Iterable, Iterator, Sequence
 from dateutil import tz
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA1
@@ -55,6 +65,7 @@ from rich.text import Text
 import websocket
 
 IDT = tz.gettz("Asia/Jerusalem")
+UTC = timezone.utc
 # Direct CDP lets us scrape the real logged-in Chrome tabs without headless bot checks.
 CDP_PORT = 9222
 CDP_BASE_URL = f"http://localhost:{CDP_PORT}"
@@ -62,10 +73,6 @@ PAGE_LOAD_DELAY_SECONDS = 3
 CLAUDE_URL = "https://claude.ai/new#settings/usage"
 CODEX_URL = "https://chatgpt.com/codex/cloud/settings/analytics"
 SESSION_DURATION = timedelta(hours=5)
-# Bayesian burn-rate smoothing: pseudo-elapsed percent of window worth of a 1.0× prior.
-# At elapsed == m the prior and observed data weigh equally. 15 ≈ one day-night cycle of
-# a 7-day window; empirically p99 of real usage gaps is ~8% of the window (nightly sleep).
-BURN_SMOOTHING_PSEUDO_ELAPSED_PCT = 15.0
 BODY_TEXT_EXPRESSION = "document.body.innerText"
 SCRAPE_READY_TIMEOUT_SECONDS = 30
 SCRAPE_POLL_SECONDS = 1
@@ -81,6 +88,31 @@ OPENROUTER_ANCHOR_TOTAL_USAGE = 139.897
 BROWSER_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
+)
+
+# Bayesian burn-rate smoothing: m is the pseudo-elapsed percent of window carrying a 1.0×
+# prior — at elapsed == m the prior and observed data weigh equally. m is derived per
+# provider at each invocation from the last BURN_SMOOTHING_LOOKBACK of transcripts: the
+# weekly m rides BURN_SMOOTHING_GAP_MARGIN above the p95 routine inter-burst gap (so a
+# normal night away doesn't spike the ratio), the session m sits at
+# BURN_SMOOTHING_LULL_FRACTION of the median largest intra-window lull (so it absorbs the
+# front-load burst yet releases before genuine signal takes over). Clamp bands come from
+# the June–July 2026 empirical analysis: one day-night cycle ≈ 15% of a week; sparse
+# marathon-and-dry-spell regimes justify at most 25.
+BURN_SMOOTHING_DEFAULT_PCT = 15.0
+BURN_SMOOTHING_WEEKLY_BAND = (15.0, 25.0)
+BURN_SMOOTHING_SESSION_BAND = (15.0, 20.0)
+BURN_SMOOTHING_SANITY_BAND = (10.0, 20.0)  # a derived m at or beyond either edge smells like broken derivation
+BURN_SMOOTHING_GAP_MARGIN = 1.25
+BURN_SMOOTHING_LULL_FRACTION = 0.75
+BURN_SMOOTHING_LOOKBACK = timedelta(weeks=4)
+BURST_GAP = timedelta(minutes=20)
+CLAUDE_TRANSCRIPT_ROOTS = (Path("~/.claude/projects"),)
+CODEX_TRANSCRIPT_ROOTS = (Path("~/.codex/sessions"), Path("~/.codex/.tmp"))
+PI_TRANSCRIPT_ROOTS = (Path("~/.pi/agent/sessions"),)
+
+UUID_RE = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 )
 
 
@@ -104,6 +136,7 @@ class Limit:
     window_start: datetime
     window_duration: timedelta = timedelta(weeks=1)
     resets: bool = True
+    smoothing_m: float = BURN_SMOOTHING_DEFAULT_PCT
 
     @classmethod
     def until(cls, used_pct: float, next_reset: datetime,
@@ -438,13 +471,13 @@ def _duration_json(value: timedelta) -> dict[str, object]:
     }
 
 
-def smoothed_burn_rate(used_pct: float, elapsed_pct: float) -> float:
+def smoothed_burn_rate(used_pct: float, elapsed_pct: float, smoothing_m: float) -> float:
     """Burn rate shrunk toward a 1.0× prior; converges to used/elapsed as the window fills.
 
-    >>> smoothed_burn_rate(6.0, 1.2)
+    >>> smoothed_burn_rate(6.0, 1.2, 15.0)
     1.2962962962962963
     """
-    return (used_pct + BURN_SMOOTHING_PSEUDO_ELAPSED_PCT) / (elapsed_pct + BURN_SMOOTHING_PSEUDO_ELAPSED_PCT)
+    return (used_pct + smoothing_m) / (elapsed_pct + smoothing_m)
 
 
 def _limit_json(limit: Limit, now: datetime) -> dict[str, object]:
@@ -461,7 +494,10 @@ def _limit_json(limit: Limit, now: datetime) -> dict[str, object]:
         "used_percent": round(limit.used_pct, 2),
         "elapsed_percent": round(elapsed_percent, 2),
         "burn_rate": round(burn_rate, 4) if burn_rate is not None else None,
-        "burn_rate_smoothed": round(smoothed_burn_rate(limit.used_pct, elapsed_percent), 4),
+        "burn_rate_smoothed": round(
+            smoothed_burn_rate(limit.used_pct, elapsed_percent, limit.smoothing_m), 4
+        ),
+        "burn_smoothing_m": round(limit.smoothing_m, 2),
         "over_elapsed_pace": limit.used_pct > elapsed_percent,
         "resets": limit.resets,
         "started_at": _isoformat_seconds(limit.window_start),
@@ -542,6 +578,7 @@ def _label(
     width: int = 50,
     used_style_slack: str = "cyan",
     used_style_over: str = "bright_red",
+    smoothing_m: float = BURN_SMOOTHING_DEFAULT_PCT,
 ) -> Text:
     """Glyph-tagged atoms (●used% ┊elapsed%) + raw and B-smoothed burn rates.
 
@@ -569,7 +606,7 @@ def _label(
         text.append(" · ", style="black")
         text.append(f"{burn:.2f}×", style="dim")
     text.append(" · ", style="black")
-    text.append(f"{smoothed_burn_rate(used_pct, elapsed_pct):.2f}×", style="dim")
+    text.append(f"{smoothed_burn_rate(used_pct, elapsed_pct, smoothing_m):.2f}×", style="dim")
     text.append("B", style="dim")
     return text
 
@@ -657,7 +694,9 @@ def _picasso_line(
     """One track line: name, bar, optional ↻ countdown (omitted when the window never resets), legend."""
     elapsed = limit.elapsed_pct(now)
     bar = track(limit.used_pct, elapsed, width=picasso_width)
-    legend = _label(limit.used_pct, elapsed, width=picasso_width, used_style_slack=slack, used_style_over=over)
+    legend = _label(limit.used_pct, elapsed, width=picasso_width,
+                    used_style_slack=slack, used_style_over=over,
+                    smoothing_m=limit.smoothing_m)
 
     text = Text(f" {label:<7}  ", style="bold") + bar + Text("  ")
     if limit.resets:
@@ -835,6 +874,586 @@ def _openrouter_usage(now: datetime) -> Usage:
     )
 
 
+# ── Transcript scanning (feeds burn-smoothing m) ──────────────────────
+# One Event = one assistant/model response, the comparable activity unit across
+# Claude Code, Codex CLI, and Pi logs. Pi events are attributed per assistant
+# message (each self-tags provider/model), so mid-session model switches don't
+# leak across providers.
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Event:
+    timestamp: datetime
+    provider: str
+    source: str
+    model: str
+    tokens: int
+    session_id: str
+    event_id: str
+
+
+@dataclasses.dataclass(slots=True)
+class ScanStats:
+    roots: list[str] = dataclasses.field(default_factory=list)
+    roots_missing: list[str] = dataclasses.field(default_factory=list)
+    files_considered: int = 0
+    files_read: int = 0
+    files_skipped_by_mtime: int = 0
+    files_with_events: int = 0
+    lines_read: int = 0
+    candidate_lines: int = 0
+    parse_errors: int = 0
+    events_before_dedup: int = 0
+    events_after_dedup: int = 0
+    fallback_events: int = 0
+
+
+def parse_timestamp(value: Any) -> datetime | None:
+    """Parse ISO-8601 strings or epoch seconds/milliseconds/microseconds."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+        magnitude = abs(number)
+        if magnitude > 1e14:  # microseconds
+            number /= 1_000_000
+        elif magnitude > 1e11:  # milliseconds
+            number /= 1_000
+        try:
+            return datetime.fromtimestamp(number, tz=UTC)
+        except (OverflowError, OSError, ValueError):
+            return None
+    if not isinstance(value, str):
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    if re.fullmatch(r"-?\d+(?:\.\d+)?", raw):
+        try:
+            return parse_timestamp(float(raw))
+        except ValueError:
+            return None
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        # Some emitters use more than six fractional digits. Trim to microseconds.
+        match = re.match(r"^(.*?\.\d{6})\d*(Z|[+-]\d\d:\d\d)?$", value.strip())
+        if not match:
+            return None
+        repaired = match.group(1) + (match.group(2) or "+00:00")
+        if repaired.endswith("Z"):
+            repaired = repaired[:-1] + "+00:00"
+        try:
+            parsed = datetime.fromisoformat(repaired)
+        except ValueError:
+            return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def session_id_for(path: Path) -> str:
+    matches = UUID_RE.findall(path.name)
+    return matches[-1].lower() if matches else path.stem
+
+
+def positive_int(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)) and math.isfinite(float(value)):
+        return max(0, int(value))
+    if isinstance(value, str):
+        try:
+            return max(0, int(float(value)))
+        except ValueError:
+            return 0
+    return 0
+
+
+def token_total(mapping: Any, *, prefer_total: bool = True) -> int:
+    """Best-effort extraction across snake_case and camelCase usage objects."""
+    if not isinstance(mapping, dict):
+        return 0
+    if prefer_total:
+        for key in ("totalTokens", "total_tokens", "total", "tokens"):
+            value = positive_int(mapping.get(key))
+            if value:
+                return value
+    keys = (
+        "input",
+        "input_tokens",
+        "inputTokens",
+        "output",
+        "output_tokens",
+        "outputTokens",
+        "reasoning",
+        "reasoning_tokens",
+        "reasoningTokens",
+        "cacheRead",
+        "cache_read",
+        "cache_read_input_tokens",
+        "cacheReadInputTokens",
+        "cacheWrite",
+        "cache_write",
+        "cache_creation_input_tokens",
+        "cacheCreationInputTokens",
+    )
+    return sum(positive_int(mapping.get(key)) for key in keys)
+
+
+def iter_jsonl_files(
+    roots: Sequence[Path], cutoff_utc: datetime, stats: ScanStats, *, mtime_prune: bool
+) -> Iterator[Path]:
+    cutoff_epoch = cutoff_utc.timestamp()
+    seen: set[tuple[int, int] | str] = set()
+    for root in roots:
+        expanded = root.expanduser()
+        stats.roots.append(str(expanded))
+        if not expanded.exists():
+            stats.roots_missing.append(str(expanded))
+            continue
+        try:
+            candidates = expanded.rglob("*.jsonl") if expanded.is_dir() else [expanded]
+            for path in candidates:
+                try:
+                    st = path.stat()
+                except OSError:
+                    continue
+                stats.files_considered += 1
+                identity: tuple[int, int] | str
+                identity = (st.st_dev, st.st_ino) if st.st_ino else str(path.resolve())
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                if mtime_prune and st.st_mtime < cutoff_epoch:
+                    stats.files_skipped_by_mtime += 1
+                    continue
+                yield path
+        except OSError:
+            continue
+
+
+def in_period(ts: datetime | None, start_utc: datetime, end_utc: datetime) -> bool:
+    return ts is not None and start_utc <= ts < end_utc
+
+
+def scan_claude_code(
+    roots: Sequence[Path], start_utc: datetime, end_utc: datetime, *, mtime_prune: bool
+) -> tuple[list[Event], ScanStats]:
+    stats = ScanStats()
+    events: list[Event] = []
+    for path in iter_jsonl_files(roots, start_utc, stats, mtime_prune=mtime_prune):
+        stats.files_read += 1
+        found = False
+        sid = session_id_for(path)
+        seen_message_ids: set[str] = set()
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                for line_no, line in enumerate(handle, 1):
+                    stats.lines_read += 1
+                    # Cheap rejection: Claude assistant records always expose one of these.
+                    if (
+                        '"type":"assistant"' not in line
+                        and '"type": "assistant"' not in line
+                        and '"role":"assistant"' not in line
+                        and '"role": "assistant"' not in line
+                    ):
+                        continue
+                    if '"timestamp"' not in line:
+                        continue
+                    stats.candidate_lines += 1
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        stats.parse_errors += 1
+                        continue
+                    message = obj.get("message") if isinstance(obj.get("message"), dict) else obj
+                    if obj.get("type") != "assistant" and message.get("role") != "assistant":
+                        continue
+                    ts = parse_timestamp(obj.get("timestamp") or message.get("timestamp"))
+                    if not in_period(ts, start_utc, end_utc):
+                        continue
+                    message_id = str(message.get("id") or obj.get("uuid") or f"line-{line_no}")
+                    if message_id in seen_message_ids:
+                        continue
+                    seen_message_ids.add(message_id)
+                    model = str(message.get("model") or obj.get("model") or "unknown")
+                    usage = message.get("usage") if isinstance(message.get("usage"), dict) else {}
+                    tokens = token_total(usage)
+                    events.append(
+                        Event(
+                            timestamp=ts,
+                            provider="claude",
+                            source="claude_code",
+                            model=model,
+                            tokens=tokens,
+                            session_id=sid,
+                            event_id=message_id,
+                        )
+                    )
+                    found = True
+        except OSError:
+            continue
+        if found:
+            stats.files_with_events += 1
+    stats.events_before_dedup = len(events)
+    events = dedupe_events(events)
+    stats.events_after_dedup = len(events)
+    return events, stats
+
+
+def pi_provider_for(provider: str, model: str) -> str | None:
+    provider = provider.strip()
+    model = model.strip()
+    if provider == "claude-bridge" or model.startswith("claude-bridge/"):
+        return "claude"
+    if provider == "openai-codex" or model.startswith("openai-codex/"):
+        return "codex"
+    return None
+
+
+def scan_pi(
+    roots: Sequence[Path], start_utc: datetime, end_utc: datetime, *, mtime_prune: bool
+) -> tuple[dict[str, list[Event]], ScanStats]:
+    stats = ScanStats()
+    output: dict[str, list[Event]] = {"claude": [], "codex": []}
+
+    for path in iter_jsonl_files(roots, start_utc, stats, mtime_prune=mtime_prune):
+        stats.files_read += 1
+        sid = session_id_for(path)
+        current_provider = ""
+        current_model = ""
+        seen_ids: set[str] = set()
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                for line_no, line in enumerate(handle, 1):
+                    stats.lines_read += 1
+                    # model_change is needed as fallback for old Pi records whose message
+                    # does not self-tag; assistant records are the actual activity events.
+                    if (
+                        '"model_change"' not in line
+                        and '"role":"assistant"' not in line
+                        and '"role": "assistant"' not in line
+                    ):
+                        continue
+                    stats.candidate_lines += 1
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        stats.parse_errors += 1
+                        continue
+                    event_type = str(obj.get("type") or "")
+                    if event_type == "model_change":
+                        current_provider = str(obj.get("provider") or "")
+                        current_model = str(obj.get("modelId") or obj.get("model") or "")
+                        continue
+                    message = obj.get("message") if isinstance(obj.get("message"), dict) else obj
+                    if message.get("role") != "assistant":
+                        continue
+                    provider = str(message.get("provider") or obj.get("provider") or current_provider)
+                    model = str(
+                        message.get("model")
+                        or message.get("modelId")
+                        or obj.get("model")
+                        or current_model
+                        or "unknown"
+                    )
+                    normalized = pi_provider_for(provider, model)
+                    if normalized is None:
+                        continue
+                    ts = parse_timestamp(obj.get("timestamp") or message.get("timestamp"))
+                    if not in_period(ts, start_utc, end_utc):
+                        continue
+                    raw_id = message.get("id") or obj.get("id") or obj.get("uuid")
+                    message_id = str(raw_id or f"line-{line_no}")
+                    dedup_id = f"{normalized}:{message_id}"
+                    if dedup_id in seen_ids:
+                        continue
+                    seen_ids.add(dedup_id)
+                    usage = message.get("usage") if isinstance(message.get("usage"), dict) else {}
+                    tokens = token_total(usage)
+                    output[normalized].append(
+                        Event(
+                            timestamp=ts,
+                            provider=normalized,
+                            source=(
+                                "pi_claude_bridge"
+                                if normalized == "claude"
+                                else "pi_openai_codex"
+                            ),
+                            model=model,
+                            tokens=tokens,
+                            session_id=sid,
+                            event_id=message_id,
+                        )
+                    )
+        except OSError:
+            continue
+
+    for provider in ("claude", "codex"):
+        output[provider] = dedupe_events(output[provider])
+    return output, stats
+
+
+def codex_last_usage(payload: dict[str, Any]) -> int:
+    info = payload.get("info")
+    if not isinstance(info, dict):
+        return 0
+    last = info.get("last_token_usage") or info.get("lastTokenUsage")
+    if isinstance(last, dict):
+        return token_total(last)
+    return 0
+
+
+def collapse_codex_fallback(events: list[Event], within_seconds: float = 2.0) -> list[Event]:
+    """Collapse adjacent assistant response items likely emitted by one API response."""
+    if not events:
+        return []
+    events = sorted(events, key=lambda event: event.timestamp)
+    collapsed = [events[0]]
+    for event in events[1:]:
+        previous = collapsed[-1]
+        if (
+            event.session_id == previous.session_id
+            and event.model == previous.model
+            and (event.timestamp - previous.timestamp).total_seconds() <= within_seconds
+        ):
+            continue
+        collapsed.append(event)
+    return collapsed
+
+
+def scan_codex_cli(
+    roots: Sequence[Path], start_utc: datetime, end_utc: datetime, *, mtime_prune: bool
+) -> tuple[list[Event], ScanStats]:
+    stats = ScanStats()
+    all_events: list[Event] = []
+    for path in iter_jsonl_files(roots, start_utc, stats, mtime_prune=mtime_prune):
+        stats.files_read += 1
+        sid = session_id_for(path)
+        current_model = "unknown"
+        token_events: list[Event] = []
+        fallback_events: list[Event] = []
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                for line_no, line in enumerate(handle, 1):
+                    stats.lines_read += 1
+                    if not any(
+                        marker in line
+                        for marker in (
+                            '"type":"turn_context"',
+                            '"type": "turn_context"',
+                            '"type":"event_msg"',
+                            '"type": "event_msg"',
+                            '"type":"response_item"',
+                            '"type": "response_item"',
+                        )
+                    ):
+                        continue
+                    stats.candidate_lines += 1
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        stats.parse_errors += 1
+                        continue
+                    record_type = str(obj.get("type") or "")
+                    payload = obj.get("payload") if isinstance(obj.get("payload"), dict) else {}
+                    ts = parse_timestamp(obj.get("timestamp") or payload.get("timestamp"))
+
+                    if record_type == "turn_context":
+                        model = payload.get("model") or payload.get("model_id")
+                        if model:
+                            current_model = str(model)
+                        continue
+
+                    if record_type == "event_msg" and payload.get("type") == "token_count":
+                        tokens = codex_last_usage(payload)
+                        if tokens <= 0 or not in_period(ts, start_utc, end_utc):
+                            continue
+                        token_events.append(
+                            Event(
+                                timestamp=ts,
+                                provider="codex",
+                                source="codex_cli",
+                                model=current_model,
+                                tokens=tokens,
+                                session_id=sid,
+                                event_id=f"line-{line_no}-token-count",
+                            )
+                        )
+                        continue
+
+                    if record_type == "response_item":
+                        role = payload.get("role")
+                        item_type = payload.get("type")
+                        if role == "assistant" and item_type in (None, "message") and in_period(
+                            ts, start_utc, end_utc
+                        ):
+                            fallback_events.append(
+                                Event(
+                                    timestamp=ts,
+                                    provider="codex",
+                                    source="codex_cli",
+                                    model=current_model,
+                                    tokens=0,
+                                    session_id=sid,
+                                    event_id=str(payload.get("id") or f"line-{line_no}-response-item"),
+                                )
+                            )
+        except OSError:
+            continue
+
+        selected = token_events if token_events else collapse_codex_fallback(fallback_events)
+        if selected:
+            stats.files_with_events += 1
+            if not token_events:
+                stats.fallback_events += len(selected)
+            all_events.extend(selected)
+
+    stats.events_before_dedup = len(all_events)
+    all_events = dedupe_events(all_events)
+    stats.events_after_dedup = len(all_events)
+    return all_events, stats
+
+
+def dedupe_events(events: Iterable[Event]) -> list[Event]:
+    seen: set[tuple[Any, ...]] = set()
+    result: list[Event] = []
+    for event in sorted(events, key=lambda item: item.timestamp):
+        key = (
+            event.provider,
+            event.source,
+            event.session_id,
+            event.event_id,
+            event.timestamp.isoformat(),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(event)
+    return result
+
+
+def percentile(values: Sequence[float | int], p: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(float(value) for value in values)
+    if len(ordered) == 1:
+        return ordered[0]
+    rank = (len(ordered) - 1) * p
+    lower = math.floor(rank)
+    upper = math.ceil(rank)
+    if lower == upper:
+        return ordered[lower]
+    fraction = rank - lower
+    return ordered[lower] + (ordered[upper] - ordered[lower]) * fraction
+
+
+def build_bursts(events: Sequence[Event], gap: timedelta) -> list[list[Event]]:
+    if not events:
+        return []
+    ordered = sorted(events, key=lambda event: event.timestamp)
+    bursts: list[list[Event]] = [[ordered[0]]]
+    for event in ordered[1:]:
+        if event.timestamp - bursts[-1][-1].timestamp > gap:
+            bursts.append([event])
+        else:
+            bursts[-1].append(event)
+    return bursts
+
+
+# ── Burn-smoothing m derivation ───────────────────────────────────────
+
+def _clamped(value: float, band: tuple[float, float]) -> float:
+    """Clamp value into an inclusive (low, high) band.
+
+    >>> _clamped(8.2, (15.0, 25.0))
+    15.0
+    >>> _clamped(77.0, (15.0, 25.0))
+    25.0
+    >>> _clamped(17.7, (15.0, 20.0))
+    17.7
+    """
+    low, high = band
+    return min(high, max(low, value))
+
+
+def _weekly_smoothing_m(events: Sequence[Event]) -> float:
+    """m rides above the routine idle tail: p95 inter-burst gap (% of week) with margin."""
+    bursts = build_bursts(events, BURST_GAP)
+    gaps_pct = [
+        (right[0].timestamp - left[-1].timestamp) / timedelta(weeks=1) * 100
+        for left, right in zip(bursts, bursts[1:])
+    ]
+    p95 = percentile(gaps_pct, 0.95)
+    if p95 is None:
+        return BURN_SMOOTHING_DEFAULT_PCT
+    return _clamped(BURN_SMOOTHING_GAP_MARGIN * p95, BURN_SMOOTHING_WEEKLY_BAND)
+
+
+def _chain_session_windows(events: Sequence[Event]) -> list[list[Event]]:
+    """Activity-triggered 5h windows: first event opens one; the first event at or after expiry opens the next."""
+    ordered = sorted(events, key=lambda event: event.timestamp)
+    grouped: list[list[Event]] = [[ordered[0]]]
+    window_start = ordered[0].timestamp
+    for event in ordered[1:]:
+        if event.timestamp < window_start + SESSION_DURATION:
+            grouped[-1].append(event)
+        else:
+            grouped.append([event])
+            window_start = event.timestamp
+    return grouped
+
+
+def _session_smoothing_m(events: Sequence[Event]) -> float:
+    """m stays below the typical largest intra-window lull (a fraction of its median)."""
+    largest_lulls_pct = [
+        max(right.timestamp - left.timestamp for left, right in zip(window, window[1:]))
+        / SESSION_DURATION * 100
+        for window in _chain_session_windows(events)
+        if len(window) > 1
+    ]
+    median = percentile(largest_lulls_pct, 0.50)
+    if median is None:
+        return BURN_SMOOTHING_DEFAULT_PCT
+    return _clamped(BURN_SMOOTHING_LULL_FRACTION * median, BURN_SMOOTHING_SESSION_BAND)
+
+
+def derive_burn_smoothing(now: datetime) -> dict[str, dict[str, float]]:
+    """Scan the last four weeks of local transcripts into per-provider, per-window m values."""
+    end_utc = now.astimezone(UTC)
+    start_utc = end_utc - BURN_SMOOTHING_LOOKBACK
+    claude_events, _ = scan_claude_code(CLAUDE_TRANSCRIPT_ROOTS, start_utc, end_utc, mtime_prune=True)
+    codex_events, _ = scan_codex_cli(CODEX_TRANSCRIPT_ROOTS, start_utc, end_utc, mtime_prune=True)
+    pi_events, _ = scan_pi(PI_TRANSCRIPT_ROOTS, start_utc, end_utc, mtime_prune=True)
+    merged = {
+        "CLAUDE": dedupe_events([*claude_events, *pi_events["claude"]]),
+        "CODEX": dedupe_events([*codex_events, *pi_events["codex"]]),
+    }
+    return {
+        name: {"weekly": _weekly_smoothing_m(events), "session": _session_smoothing_m(events)}
+        for name, events in merged.items()
+        if events
+    }
+
+
+def _with_smoothing(usage: Usage, m_by_window: dict[str, float] | None) -> Usage:
+    """Stamp derived m values onto a provider's windows; None keeps the defaults."""
+    if m_by_window is None:
+        return usage
+    session = (
+        dataclasses.replace(usage.session, smoothing_m=m_by_window["session"])
+        if usage.session is not None
+        else None
+    )
+    return dataclasses.replace(
+        usage,
+        session=session,
+        weekly=dataclasses.replace(usage.weekly, smoothing_m=m_by_window["weekly"]),
+    )
+
+
 # ── Main ──────────────────────────────────────────────────────────────
 
 def parse_arguments() -> argparse.Namespace:
@@ -875,6 +1494,27 @@ def main() -> None:
         warnings.append(warning)
         print(f"WARNING: {warning}", file=sys.stderr)
         openrouter_source = "unavailable"
+
+    try:
+        smoothing_by_provider = derive_burn_smoothing(now)
+    except Exception as error:
+        warning = (
+            f"Burn-smoothing derivation failed ({type(error).__name__}: {error}); "
+            f"using m={BURN_SMOOTHING_DEFAULT_PCT:g} everywhere."
+        )
+        warnings.append(warning)
+        print(f"WARNING: {warning}", file=sys.stderr)
+        smoothing_by_provider = {}
+    for provider_name, m_by_window in smoothing_by_provider.items():
+        for window_name, m in m_by_window.items():
+            if not (BURN_SMOOTHING_SANITY_BAND[0] < m < BURN_SMOOTHING_SANITY_BAND[1]):
+                warning = (
+                    f"Derived burn-smoothing m={m:.1f} for {provider_name} {window_name} is outside "
+                    f"{BURN_SMOOTHING_SANITY_BAND}; the derivation logic may be out of whack."
+                )
+                warnings.append(warning)
+                print(f"WARNING: {warning}", file=sys.stderr)
+    usages = [_with_smoothing(usage, smoothing_by_provider.get(usage.name)) for usage in usages]
 
     if args.format == "json":
         json.dump(
