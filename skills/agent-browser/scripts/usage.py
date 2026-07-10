@@ -62,6 +62,10 @@ PAGE_LOAD_DELAY_SECONDS = 3
 CLAUDE_URL = "https://claude.ai/new#settings/usage"
 CODEX_URL = "https://chatgpt.com/codex/cloud/settings/analytics"
 SESSION_DURATION = timedelta(hours=5)
+# Bayesian burn-rate smoothing: pseudo-elapsed percent of window worth of a 1.0× prior.
+# At elapsed == m the prior and observed data weigh equally. 15 ≈ one day-night cycle of
+# a 7-day window; empirically p99 of real usage gaps is ~8% of the window (nightly sleep).
+BURN_SMOOTHING_PSEUDO_ELAPSED_PCT = 15.0
 BODY_TEXT_EXPRESSION = "document.body.innerText"
 SCRAPE_READY_TIMEOUT_SECONDS = 30
 SCRAPE_POLL_SECONDS = 1
@@ -434,6 +438,15 @@ def _duration_json(value: timedelta) -> dict[str, object]:
     }
 
 
+def smoothed_burn_rate(used_pct: float, elapsed_pct: float) -> float:
+    """Burn rate shrunk toward a 1.0× prior; converges to used/elapsed as the window fills.
+
+    >>> smoothed_burn_rate(6.0, 1.2)
+    1.2962962962962963
+    """
+    return (used_pct + BURN_SMOOTHING_PSEUDO_ELAPSED_PCT) / (elapsed_pct + BURN_SMOOTHING_PSEUDO_ELAPSED_PCT)
+
+
 def _limit_json(limit: Limit, now: datetime) -> dict[str, object]:
     elapsed_percent = limit.elapsed_pct(now)
     burn_rate = limit.used_pct / elapsed_percent if elapsed_percent > 0 else None
@@ -448,6 +461,7 @@ def _limit_json(limit: Limit, now: datetime) -> dict[str, object]:
         "used_percent": round(limit.used_pct, 2),
         "elapsed_percent": round(elapsed_percent, 2),
         "burn_rate": round(burn_rate, 4) if burn_rate is not None else None,
+        "burn_rate_smoothed": round(smoothed_burn_rate(limit.used_pct, elapsed_percent), 4),
         "over_elapsed_pace": limit.used_pct > elapsed_percent,
         "resets": limit.resets,
         "started_at": _isoformat_seconds(limit.window_start),
@@ -529,10 +543,10 @@ def _label(
     used_style_slack: str = "cyan",
     used_style_over: str = "bright_red",
 ) -> Text:
-    """Glyph-tagged atoms (●used% ┊elapsed%) + burn rate, mirroring the track's legend.
+    """Glyph-tagged atoms (●used% ┊elapsed%) + raw and B-smoothed burn rates.
 
     >>> _label(164.53, 141.08, width=36).plain
-    '●165% ┊141% · 1.17×'
+    '●165% ┊141% · 1.17× · 1.15×B'
     """
     used_pos = round(max(0.0, min(100.0, used_pct)) / 100 * (width - 1))
     elapsed_pos = round(max(0.0, min(100.0, elapsed_pct)) / 100 * (width - 1))
@@ -554,6 +568,9 @@ def _label(
         burn = used_pct / elapsed_pct
         text.append(" · ", style="black")
         text.append(f"{burn:.2f}×", style="dim")
+    text.append(" · ", style="black")
+    text.append(f"{smoothed_burn_rate(used_pct, elapsed_pct):.2f}×", style="dim")
+    text.append("B", style="dim")
     return text
 
 
@@ -587,7 +604,7 @@ def _session_track(used_pct: float, elapsed_pct: float, width: int = 50) -> Text
 
 
 DEFAULT_PICASSO_WIDTH = 36
-PICASSO_RESERVED_COLUMNS = 42
+PICASSO_RESERVED_COLUMNS = 51
 
 
 def _parse_positive_int(raw_value: str | None) -> int | None:
@@ -603,7 +620,7 @@ def _parse_picasso_width(raw_width: str | None, raw_columns: str | None) -> int:
     """Parse the meter width, shrinking to fit the terminal when its width is known.
 
     The resolved width is capped by the configured/default width and by the
-    available terminal space after reserving 42 columns for non-meter content.
+    available terminal space after reserving 51 columns for non-meter content.
 
     >>> _parse_picasso_width(None, None)
     36
@@ -611,11 +628,11 @@ def _parse_picasso_width(raw_width: str | None, raw_columns: str | None) -> int:
     42
     >>> _parse_picasso_width("oops", None)
     36
-    >>> _parse_picasso_width(None, "56")
+    >>> _parse_picasso_width(None, "65")
     14
-    >>> _parse_picasso_width(None, "80")
+    >>> _parse_picasso_width(None, "90")
     36
-    >>> _parse_picasso_width("50", "56")
+    >>> _parse_picasso_width("50", "65")
     14
     >>> _parse_picasso_width(None, "0")
     36
