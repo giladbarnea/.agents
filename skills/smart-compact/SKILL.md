@@ -6,7 +6,7 @@ This Skill's purpose is to compact an AI session transcription by removing redun
 
 ### 1. Skip Trial-and-Error Bouts (All Tools)
 **Drop the struggle; keep the resolution.**
--   Identify sequences of thrashing-whether it's fighting syntax errors, correcting failed attempts, or guessing paths. Discard the entire iterative loop of failures and keep only the final, successful tool invocation that resolves the bout. Keep that final one as-is.
+-   Identify sequences of thrashing-whether it's fighting syntax errors, correcting failed attempts, or guessing paths. Discard the entire iterative loop of failures and keep only the final, successful tool invocation that resolves the bout. Preserve its resolution; represent it under the tool-call rules below.
 -   Drop external technical difficulties like user interrupts, connection retries, etc.
 
 ### 2. Remove "murmur" and general noise
@@ -59,13 +59,31 @@ In JSON:
 ```
 → `"<Read path=\"/path/to/file.py\" id=\"...\"/>"`
 
-This applies to Read, Edit, Write, Delete, and Bash commands that read or write specific files.
+This applies to `Read`, `Edit`, `Write`, and `Delete`. For Bash, use the boundary below rather than treating every incidental file touch as CRUD.
 
-**Bash boundary**: not every Bash command that touches a file deserves this treatment.
-Use the "role in the story" test: Bash commands that *discover information* a next step depends on, or *validate* that a step completed, earn their place with output intact (Rule 6 overrides).
-Pure mechanical setup/teardown (`mkdir`, `kill`, `sleep`) or simple `ls` inventory calls can be reduced to a path-only invocation.
+**Bash boundary**: pure mechanical setup/teardown (`mkdir`, `kill`, `sleep`) or simple `ls` inventory calls can be reduced to a path-only invocation. A Bash command that *discovers information* a next step depends on or *validates* completion may instead qualify as a pivotal tool skeleton below.
 
-### 4. End the compacted result with a list of affected file references
+### 4. Pivotal non-CRUD tools become semantic skeletons
+
+**Keep the decision, not the transcript.** When a non-CRUD tool call materially changes the assistant's decision, execution path, or established system state, replace its raw input and output with one self-contained XML skeleton:
+
+```xml
+<tool-skeleton name="Bash" command="…" purpose="…" outcome="…" meaning="…"/>
+```
+
+1. `name`, `command`, `purpose`, and `outcome` are required. `meaning` is required when the result explains a consequential decision; otherwise omit it.
+2. `command` is a concise, faithful description of the executed command. Keep the exact command only when its precise syntax is itself material to the story.
+3. `purpose` states what the tool was meant to establish or do. `outcome` records the decisive result, including definitive validation evidence. `meaning` connects that result to the decision or state transition it enabled.
+4. This replaces the raw tool payload and output. Do not duplicate their details in surrounding narration unless the conversation itself needs them.
+5. File CRUD still wins: represent `Read`, `Edit`, `Write`, `Delete`, and purely mechanical file-touching commands only as the path references required by §3. Omit non-pivotal tools entirely.
+
+For example:
+
+```xml
+<tool-skeleton name="Bash" command="pytest" purpose="Validate the fix" outcome="148 tests passed" meaning="Proved the change before release"/>
+```
+
+### 5. End the compacted result with a list of affected file references
 At the very end, create such an object:
 ```
 <affected-files>
@@ -75,13 +93,13 @@ At the very end, create such an object:
 ```
 The unique set of all CRUD'ed files in the session.
 
-### 5. The "Final Observation" Rule (`Read`, `Bash` Exploration)
+### 6. The "Final Observation" Rule (`Read`, `Bash` Exploration)
 **Keep only the tool call that successfully acquires the target information.**
 - **Scratchpads**: Drop reads, writes and edits of transient/debug/temporary files created by the agent during the session with the purpose of helping itself arrive at some desired state.
--  **Bash:** Group commands by semantic purpose. Keep only the one - verbatim - that effectively returns the answer, dropping empty returns or redundant variations.
+- **Bash:** Group commands by semantic purpose. Keep only the final call that effectively returns the answer; represent it as a pivotal skeleton when it changed the story, otherwise drop it.
 
-### 6. The "Definitive Validation" Rule (`Bash` Execution)
-**Keep the proof, drop the debugging loop.** For commands that validate system state (e.g., running `pytest` or a build script), keep only the final successful execution that proves the task is complete.
+### 7. The "Definitive Validation" Rule (`Bash` Execution)
+**Keep the proof, drop the debugging loop.** For commands that validate system state (e.g., running `pytest` or a build script), keep only the final successful execution. Record its decisive evidence in the skeleton's `outcome` attribute when it is pivotal.
 
 ---
 
