@@ -211,8 +211,12 @@ def conversation_messages(data: dict[str, object]) -> list[dict[str, object]]:
         raise ValueError("The shared-conversation payload has no active message path")
 
     path: list[dict[str, object]] = []
+    visited_node_ids: set[str] = set()
     node_id: str | None = current_node
     while node_id is not None:
+        if node_id in visited_node_ids:
+            raise ValueError(f"The active message path contains a cycle at node {node_id!r}")
+        visited_node_ids.add(node_id)
         node = mapping.get(node_id)
         if not isinstance(node, dict):
             raise ValueError(f"The active message path references unknown node {node_id!r}")
