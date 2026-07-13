@@ -25,7 +25,13 @@ class SearchResult:
     package_url: str
     downloads: int
     published_at_unix_milliseconds: int
-    types: list[str]
+
+
+@dataclasses.dataclass(frozen=True)
+class SearchPage:
+    final_url: str
+    next_page_url: str | None
+    results: list[SearchResult]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -52,15 +58,19 @@ def fetch(url: str) -> httpx.Response:
     return response
 
 
-def search_url(query: str, package_type: str, sort: str) -> str:
-    parameters = urllib.parse.urlencode(
-        {"name": query, "type": package_type, "sort": sort}
-    )
-    return f"{ORIGIN}/packages?{parameters}"
+def search_url(query: str, package_type: str, sort: str, page: int) -> str:
+    parameters: dict[str, str | int] = {
+        "name": query,
+        "type": package_type,
+        "sort": sort,
+    }
+    if page > 1:
+        parameters["page"] = page
+    return f"{ORIGIN}/packages?{urllib.parse.urlencode(parameters)}"
 
 
-def search_packages(query: str, package_type: str, sort: str) -> tuple[str, list[SearchResult]]:
-    response = fetch(search_url(query, package_type, sort))
+def search_packages(query: str, package_type: str, sort: str, page: int) -> SearchPage:
+    response = fetch(search_url(query, package_type, sort, page))
     document = bs4.BeautifulSoup(response.text, "html.parser")
     results: list[SearchResult] = []
 
@@ -76,10 +86,23 @@ def search_packages(query: str, package_type: str, sort: str) -> tuple[str, list
                 package_url=urllib.parse.urljoin(ORIGIN, str(link["href"]).split("?")[0]),
                 downloads=int(str(card["data-package-downloads"])),
                 published_at_unix_milliseconds=int(str(card["data-package-date"])),
-                types=str(card.get("data-package-types", "")).split(),
             )
         )
-    return str(response.url), results
+    next_page = next(
+        (
+            link
+            for link in document.select("nav[aria-label='Package pages'] a")
+            if compact_text(link.get_text()) == "Next →"
+        ),
+        None,
+    )
+    return SearchPage(
+        final_url=str(response.url),
+        next_page_url=urllib.parse.urljoin(ORIGIN, str(next_page["href"]))
+        if next_page
+        else None,
+        results=results,
+    )
 
 
 def package_url(package_name: str) -> str:
@@ -104,7 +127,7 @@ def package_details(package_name: str, include_readme: bool) -> PackageDetails:
         package_url=str(response.url),
         types=[badge.get_text(strip=True) for badge in detail.select(".packages-badge")],
         install_command=compact_text(install_command.get_text()).removeprefix("$ "),
-        readme=compact_text(readme.get_text(" ")) if include_readme and readme else None,
+        readme=readme.get_text("\n", strip=True) if include_readme and readme else None,
     )
 
 
@@ -116,18 +139,19 @@ def main() -> None:
     search_parser.add_argument("query")
     search_parser.add_argument("--type", default="")
     search_parser.add_argument("--sort", default="downloads")
+    search_parser.add_argument("--page", type=int, default=1)
 
     show_parser = commands.add_parser("show")
     show_parser.add_argument("package_name")
     show_parser.add_argument("--readme", action="store_true")
 
     arguments = parser.parse_args()
+    if arguments.command == "search" and arguments.page < 1:
+        parser.error("--page must be at least 1")
     if arguments.command == "search":
-        final_url, results = search_packages(arguments.query, arguments.type, arguments.sort)
-        output: dict[str, object] = {
-            "final_url": final_url,
-            "results": [dataclasses.asdict(result) for result in results],
-        }
+        output = dataclasses.asdict(
+            search_packages(arguments.query, arguments.type, arguments.sort, arguments.page)
+        )
     else:
         output = dataclasses.asdict(package_details(arguments.package_name, arguments.readme))
     print(json.dumps(output, indent=2))
