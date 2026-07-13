@@ -128,6 +128,25 @@ Provides structured data about the transcript (tool-output indices, repeated fil
 validation runs, duplicate commands) to inform semantic decisions. Use its output as
 a maybe-worth-checking guide, not authoritative. Read the transcription in full regardless.
 
+**Non-destructive marking** (instead of editing the transcript): flag an object for
+removal with `remove: true`, guarded by an index+content double check:
+```bash
+scripts/markremove.py transcription.json -i <index> --safeguard='<short substring of that object content>'
+```
+The mark is written only when the object at that index actually contains the safeguard
+substring, so a mis-remembered index cannot mark the wrong object.
+
+**Transfer marks to the native pi session** — delete the marked objects' lines from the
+original `~/.pi/agent/sessions/**.jsonl` the transcript was imported from:
+```bash
+uv run scripts/transfer-to-pi-session.py transcription.json path/to/session.jsonl
+```
+Joins by tool-call id (the importer's block ids are 4-char prefixes of the JSONL toolCall
+ids), content-proves every match, and refuses to run if any tool pair is marked on one
+side only — deleting it would orphan its toolCall/toolResult partner, so mark both sides
+or neither. Always backs up to a sibling `.jsonl.backup-N` first and splices the parentId
+chain across removed lines.
+
 **Quick story-first orientation** (optional): read the session as simplified Markdown
 without tool calls to understand the narrative arc before diving into details:
 ```sh
