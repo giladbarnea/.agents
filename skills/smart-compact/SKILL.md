@@ -110,7 +110,8 @@ cp transcription.json transcription.backup.json
 File-mutation scripts use index-based logic. Re-running on already-compacted output
 with stale indices will corrupt the result. Work from the backup if you need to restart.
 Always reference messages by their stable `original_index` field, not by positional
-array offset — the offset shifts with every removal.
+array offset — the offset shifts with every removal. Work only on exported transcription
+files; do not modify the native CLI agent's `.jsonl` session files.
 
 **Deterministic pre-processing** (no semantics, no heuristics):
 ```bash
@@ -150,25 +151,16 @@ uv run -p python3 python3 scripts/apply_compaction_plan.py \
 Each replacement supplies the message's complete new content and lists all structured tool IDs
 currently in that message. Unmentioned messages stay unchanged; the script refuses stale
 checksums, mismatched IDs, surviving raw tool blocks, and appends one affected-files footer.
+When a Markdown transcription accompanies the JSON, the JSON is the source of truth; update
+the Markdown to match the final compacted JSON.
 
-**Non-destructive marking** for the separate native-session workflow: flag an object for
-removal with `remove: true`, guarded by stable index plus content:
+**Non-destructive marking** while reviewing exported JSON: flag an object for removal with
+`remove: true`, guarded by stable index plus content:
 ```bash
 scripts/markremove.py transcription.json --original-index <original_index> \
   --safeguard='<short substring of that object content>'
 ```
 The mark is written only when that exact `original_index` contains the safeguard substring.
-
-**Transfer marks to the native pi session** — delete the marked objects' lines from the
-original `~/.pi/agent/sessions/**.jsonl` the transcript was imported from:
-```bash
-uv run scripts/transfer-to-pi-session.py transcription.json path/to/session.jsonl
-```
-Joins by tool-call id (the importer's block ids are 4-char prefixes of the JSONL toolCall
-ids), content-proves every match, and refuses to run if any tool pair is marked on one
-side only — deleting it would orphan its toolCall/toolResult partner, so mark both sides
-or neither. Always backs up to a sibling `.jsonl.backup-N` first and splices the parentId
-chain across removed lines.
 
 **Quick story-first orientation** (optional): read the session as simplified Markdown
 without tool calls to understand the narrative arc before diving into details:
