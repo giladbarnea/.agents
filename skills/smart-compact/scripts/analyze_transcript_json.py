@@ -14,6 +14,8 @@ import sys
 
 import yaml
 
+import transcript_common
+
 
 MURMUR_PATTERNS = [
     re.compile(pattern, re.IGNORECASE)
@@ -210,15 +212,17 @@ def load_messages(path: pathlib.Path) -> list[Message]:
 
 
 def detect_file_touches(messages: list[Message]) -> list[FileTouch]:
+    """Return every structured file operation, expanding multi-file reads.
+
+    >>> message = Message(1, "assistant", "assistant-response", [{"type": "tool-input", "name": "read_many_files", "paths": ["a", "b"]}])
+    >>> [touch.path for touch in detect_file_touches([message])]
+    ['a', 'b']
+    """
     touches: list[FileTouch] = []
     for message in messages:
         for block in message.tool_inputs:
-            tool_name = block.get("name")
-            if not isinstance(tool_name, str):
-                continue
-            path = block.get("path") or block.get("file_path")
-            if isinstance(path, str):
-                touches.append(FileTouch(tool=tool_name, path=path, index=message.index))
+            for operation, path, _ in transcript_common.file_references(block):
+                touches.append(FileTouch(tool=operation, path=path, index=message.index))
     return touches
 
 

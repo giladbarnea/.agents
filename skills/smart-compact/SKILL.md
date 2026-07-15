@@ -59,7 +59,7 @@ In JSON:
 ```
 → `"<Read path=\"/path/to/file.py\" id=\"...\"/>"`
 
-This applies to `Read`, `Edit`, `Write`, and `Delete`. For Bash, use the boundary below rather than treating every incidental file touch as CRUD.
+This applies to `Read`, `read_many_files`, `Edit`, `Write`, `Patch`, and `Delete`. A multi-file read becomes one `<Read …/>` per path. For Bash, use the boundary below rather than treating every incidental file touch as CRUD.
 
 **Bash boundary**: pure mechanical setup/teardown (`mkdir`, `kill`, `sleep`) or simple `ls` inventory calls can be reduced to a path-only invocation. A Bash command that *discovers information* a next step depends on or *validates* completion may instead qualify as a pivotal tool skeleton below.
 
@@ -75,7 +75,7 @@ This applies to `Read`, `Edit`, `Write`, and `Delete`. For Bash, use the boundar
 2. `command` is a concise, faithful description of the executed command. Keep the exact command only when its precise syntax is itself material to the story.
 3. `purpose` states what the tool was meant to establish or do. `outcome` records the decisive result, including definitive validation evidence. `meaning` connects that result to the decision or state transition it enabled.
 4. This replaces the raw tool payload and output. Do not duplicate their details in surrounding narration unless the conversation itself needs them.
-5. File CRUD still wins: represent `Read`, `Edit`, `Write`, `Delete`, and purely mechanical file-touching commands only as the path references required by §3. Omit non-pivotal tools entirely.
+5. File CRUD still wins: represent `Read`, `read_many_files`, `Edit`, `Write`, `Patch`, `Delete`, and purely mechanical file-touching commands only as the path references required by §3. Omit non-pivotal tools entirely.
 
 For example:
 
@@ -116,9 +116,8 @@ array offset — the offset shifts with every removal.
 ```bash
 uv run python3 scripts/prune_transcript.py transcription.json > pruned.json
 ```
-Removes todo messages, Read/Write/Edit/Patch tool-outputs, and transforms their
-tool-inputs to path-only references. Safe to run before semantic compacting to
-clear low-hanging noise.
+Removes todos and raw outputs for Read/read_many_files/Write/Edit/Patch/Delete,
+expands multi-file reads, and replaces file inputs in place without reordering mixed blocks.
 
 **Diagnostics**:
 ```bash
@@ -128,13 +127,37 @@ Provides structured data about the transcript (tool-output indices, repeated fil
 validation runs, duplicate commands) to inform semantic decisions. Use its output as
 a maybe-worth-checking guide, not authoritative. Read the transcription in full regardless.
 
-**Non-destructive marking** (instead of editing the transcript): flag an object for
-removal with `remove: true`, guarded by an index+content double check:
-```bash
-scripts/markremove.py transcription.json -i <index> --safeguard='<short substring of that object content>'
+**Apply semantic decisions declaratively** instead of writing a one-off transformer (`shasum -a 256 pruned.json` gives the checksum):
+```json
+{
+  "version": 1,
+  "source_sha256": "<sha256 of pruned.json>",
+  "drop_messages": [2, 3],
+  "replace_messages": [
+    {
+      "original_index": 18,
+      "expected_tool_ids": ["Jw7x", "kWv1"],
+      "content": ["<tool-skeleton name=\"Bash\" command=\"…\" purpose=\"…\" outcome=\"…\"/>"]
+    }
+  ],
+  "affected_files_extra": ["path/inspected/by/bash.csv"]
+}
 ```
-The mark is written only when the object at that index actually contains the safeguard
-substring, so a mis-remembered index cannot mark the wrong object.
+```bash
+uv run -p python3 python3 scripts/apply_compaction_plan.py \
+  pruned.json compaction-plan.json > compacted.json
+```
+Each replacement supplies the message's complete new content and lists all structured tool IDs
+currently in that message. Unmentioned messages stay unchanged; the script refuses stale
+checksums, mismatched IDs, surviving raw tool blocks, and appends one affected-files footer.
+
+**Non-destructive marking** for the separate native-session workflow: flag an object for
+removal with `remove: true`, guarded by stable index plus content:
+```bash
+scripts/markremove.py transcription.json --original-index <original_index> \
+  --safeguard='<short substring of that object content>'
+```
+The mark is written only when that exact `original_index` contains the safeguard substring.
 
 **Transfer marks to the native pi session** — delete the marked objects' lines from the
 original `~/.pi/agent/sessions/**.jsonl` the transcript was imported from:
