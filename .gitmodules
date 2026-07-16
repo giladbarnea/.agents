@@ -1,3 +1,6 @@
 [submodule "skills/in-html"]
 	path = skills/in-html
 	url = git@github.com:giladbarnea/in-html.git
+[submodule "skills/instruct-another-ai"]
+	path = skills/instruct-another-ai
+	url = git@github.com:giladbarnea/instruct-another-ai.git
