@@ -103,6 +103,18 @@ The unique set of all CRUD'ed files in the session.
 
 ---
 
+**Export and round-trip with `ch`** when the source is a supported AI CLI session:
+```bash
+ch <session-id> -t:s -f json > transcription.json
+ch <session-id> -t:s > transcription.md
+```
+Treat the structured JSON as the source of truth. Convert in either direction with:
+```bash
+ch parse transcription.json > transcription.md
+ch parse -f json transcription.md > transcription.json
+```
+`ch parse` accepts compacted messages containing multiple string content blocks. A Markdown round trip canonicalizes adjacent text blocks and timestamp precision, so do not expect byte-identical JSON; rerendered Markdown is the stable representation.
+
 **Always make a backup before editing the transcript in-place**:
 ```bash
 cp transcription.json transcription.backup.json
@@ -128,31 +140,52 @@ Provides structured data about the transcript (tool-output indices, repeated fil
 validation runs, duplicate commands) to inform semantic decisions. Use its output as
 a maybe-worth-checking guide, not authoritative. Read the transcription in full regardless.
 
-**Apply semantic decisions declaratively** instead of writing a one-off transformer (`shasum -a 256 pruned.json` gives the checksum):
+**Author semantic decisions only** — every mechanical field is derived for you. Write a
+decisions file containing nothing but judgments:
 ```json
 {
-  "version": 1,
-  "source_sha256": "<sha256 of pruned.json>",
-  "drop_messages": [2, 3],
-  "replace_messages": [
-    {
-      "original_index": 18,
-      "expected_tool_ids": ["Jw7x", "kWv1"],
-      "content": ["<tool-skeleton name=\"Bash\" command=\"…\" purpose=\"…\" outcome=\"…\"/>"]
-    }
+  "drop_texts": [90, 262],
+  "drop_text_blocks": [{"original_index": 12, "contains": "Now I'll wrap up"}],
+  "skeletons": [
+    {"original_index": 236, "command": "…", "purpose": "…", "outcome": "…", "meaning": "…"}
   ],
-  "affected_files_extra": ["path/inspected/by/bash.csv"]
+  "scratchpad_paths": ["/tmp/render_helper.py"],
+  "opaque_artifacts": ["/path/created/by/opaque/shell.csv"]
 }
 ```
+Semantics: every surviving raw tool block is inferred noise and dropped unless a skeleton
+preserves its meaning. `drop_texts` removes whole contentful messages. `drop_text_blocks`
+removes individual prose blocks inside mixed messages by substring; prose in mixed messages
+is otherwise preserved while their tool blocks are removed. A skeleton anchors to its
+message's single tool-input block; when a message holds several, add `"tool_id"` to select
+one (multiple skeletons per message are allowed). The skeleton's `name` is derived from the
+anchored block — override it only when the skeleton summarizes a wider bout.
+`scratchpad_paths` excludes transient helper files from both the transcript and the footer.
+`opaque_artifacts` is the narrow escape hatch for shell-created files no structured tool
+reported. Ordinarily only `drop_texts` and `skeletons` are needed.
 ```bash
-uv run -p python3 python3 scripts/apply_compaction_plan.py \
-  pruned.json compaction-plan.json > compacted.json
+uv run python3 scripts/generate_compaction_plan.py pruned.json decisions.json > compaction-plan.json
+uv run -p python3 python3 scripts/apply_compaction_plan.py pruned.json compaction-plan.json > compacted.json
 ```
-Each replacement supplies the message's complete new content and lists all structured tool IDs
-currently in that message. Unmentioned messages stay unchanged; the script refuses stale
-checksums, mismatched IDs, surviving raw tool blocks, and appends one affected-files footer.
-When a Markdown transcription accompanies the JSON, the JSON is the source of truth; update
-the Markdown to match the final compacted JSON.
+The generator computes the source checksum, infers the raw-tool drop set, serializes and
+XML-escapes skeletons, derives every expected tool ID, honors `remove: true` marks as drops,
+and collects affected-file provenance automatically: file references, registered
+artifact-producing tools (e.g. Lumen output paths), and declared opaque artifacts. It prints
+a mandatory audit to stderr — inferred removals grouped by tool, normalized mixed messages,
+skeleton anchors, explicit drops, scratchpad exclusions, affected paths with provenance
+category, final counts — and self-verifies the plan against the apply stage before emitting
+it. Unresolved structured blocks, invalid or ambiguous anchors, conflicting decisions,
+unreferenced scratchpad paths, and artifact-extractor failures fail loudly.
+
+The generated plan is a plain, inspectable JSON artifact (`drop_messages`,
+`replace_messages` with `expected_tool_ids`, `affected_files_extra`, `source_sha256`).
+The apply stage retains its own validation: stale checksums, missing indices, mismatched
+tool IDs, surviving raw blocks, and duplicate footers are refused.
+When a Markdown transcription accompanies the JSON, regenerate it directly from the final compacted JSON:
+```bash
+ch parse compacted.json > compacted.md
+```
+Do not hand-render Markdown or write an ad hoc converter.
 
 **Non-destructive marking** while reviewing exported JSON: flag an object for removal with
 `remove: true`, guarded by stable index plus content:
