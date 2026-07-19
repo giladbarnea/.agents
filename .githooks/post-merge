@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 source "$(dirname "$0")/common.sh"
+git submodule update --init --recursive plugins/claude-plugins || exit 1
 render_agents_md || exit 1
 render_skills || exit 1
 clean_orphaned_skill_links
