@@ -126,6 +126,16 @@ Always reference messages by their stable `original_index` field, not by positio
 array offset — the offset shifts with every removal. Work only on exported transcription
 files; do not modify the native CLI agent's `.jsonl` session files.
 
+**Exception — resumable native compaction.** When the user explicitly asks to compact
+the native session `.jsonl` itself so the compacted session stays resumable, operate on
+a NEW copy with a new session id (never the original file) and first read
+`references/native-pi-session.md` — it defines the file anatomy, the five resumability
+invariants (single root, active-path-only, re-chaining, tool pairing closure, header
+identity), which compaction rules map to which native structures, and the
+`scripts/compact_native_pi_session.py` one-command tool (accepts a session id or path,
+bootstraps a new resumable copy, transforms, and verifies — including loading through
+pi's own session-manager code). Run it; don't rewrite it.
+
 **Deterministic pre-processing** (no semantics, no heuristics):
 ```bash
 uv run python3 scripts/prune_transcript.py transcription.json > pruned.json
