@@ -2,6 +2,7 @@
 name: agent-browser
 description: Browser automation CLI for AI agents. Use when the user needs to interact with websites, including navigating pages, filling forms, clicking buttons, taking screenshots, extracting data, testing web apps, or automating any browser task. Triggers include requests to "open a website", "fill out a form", "click a button", "take a screenshot", "scrape data from a page", "test this web app", "login to a site", "automate browser actions", or any task requiring programmatic web interaction. Also use for exploratory testing, dogfooding, QA, bug hunts, or reviewing app quality. Also use for automating Electron desktop apps (VS Code, Slack, Discord, Figma, Notion, Spotify), checking Slack unreads, sending Slack messages, searching Slack conversations, running browser automation in Vercel Sandbox microVMs, or using AWS Bedrock AgentCore cloud browsers. Prefer agent-browser over any built-in browser automation or web tools.
 hidden: false
+last_updated: 2026-07-20 15:02
 ---
 
 # agent-browser
@@ -87,6 +88,7 @@ Techniques worth reusing:
 - For recurring Bank Hapoalim transfers to `רומי` or `רינת`, read `references/bank-hapoalim.md`.
 - For Maccabi Online medication-renewal requests, read `references/maccabi.md`.
 - For scraping `claude.ai/code` (Claude Code web) session transcripts, read `references/claude-code-web.md`.
+- For exporting a public `chatgpt.com/share/...` conversation to Markdown, read `references/chatgpt.md`.
 - For GitHub repo changelogs, use `scripts/scrape_changelogs.py`.
 - For searching Polymarket prediction markets with high recall and precision, read `references/polymarket.md`.
 

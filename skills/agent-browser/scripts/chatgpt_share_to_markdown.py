@@ -137,7 +137,100 @@ DISPLAY_ROLES = frozenset({"user", "assistant"})
 INTERNAL_ROLES = frozenset({"system", "tool"})
 DISPLAY_CONTENT_TYPES = frozenset({"text", "multimodal_text"})
 INTERNAL_ASSISTANT_CONTENT_TYPES = frozenset({"code", "thoughts", "reasoning_recap"})
-MULTIMODAL_PART_TYPES = frozenset({"image_asset_pointer"})
+MULTIMODAL_PART_TYPES = frozenset({"image_asset_pointer", "audio_transcription"})
+
+
+def part_text(part: object) -> str:
+    """Return a part's readable text: string parts verbatim, voice parts' transcript, else empty.
+
+    >>> part_text("hello")
+    'hello'
+    >>> part_text({"content_type": "audio_transcription", "text": "spoken"})
+    'spoken'
+    >>> part_text({"content_type": "image_asset_pointer"})
+    ''
+    """
+    if isinstance(part, str):
+        return part
+    if isinstance(part, dict) and part.get("content_type") == "audio_transcription":
+        text = part.get("text")
+        if not isinstance(text, str):
+            raise ValueError("An audio transcription part has no text")
+        return text
+    return ""
+
+
+UI_SENTINEL_TOKEN = re.compile("([^]*)(.*?)", re.DOTALL)
+
+
+def genui_title(payload: str) -> str | None:
+    """Return the title of an inline interactive widget, or None if the payload is opaque."""
+    try:
+        block = json.loads(payload).get("app_block")
+    except (json.JSONDecodeError, AttributeError):
+        return None
+    return block.get("title") if isinstance(block, dict) else None
+
+
+def clean_url(url: str) -> str:
+    """Drop ChatGPT's tracking parameter from a source URL.
+
+    >>> clean_url("https://nhs.uk/vertigo/?utm_source=chatgpt.com")
+    'https://nhs.uk/vertigo/'
+    """
+    return re.sub(r"[?&]utm_source=chatgpt\.com", "", url)
+
+
+def citation_links(message: dict[str, object]) -> dict[str, str]:
+    """Map each inline citation token to a Markdown ``[cite: ...]`` string of its linked sources.
+
+    Reads the message's ``content_references``, where ChatGPT records the web pages behind each
+    citation as ``{url, attribution, title}`` items keyed by the token's ``matched_text``.
+    """
+    metadata = message.get("metadata")
+    references = metadata.get("content_references") if isinstance(metadata, dict) else None
+    links: dict[str, str] = {}
+    for reference in references or []:
+        if reference.get("type") != "grouped_webpages":
+            continue
+        matched_text = reference.get("matched_text")
+        sources: list[str] = []
+        seen: set[str] = set()
+        for item in reference.get("items") or []:
+            url = clean_url(item.get("url", ""))
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            name = item.get("attribution") or item.get("title") or url
+            sources.append(f"[{name}]({url})")
+        if isinstance(matched_text, str) and sources:
+            links[matched_text] = f"[cite: {', '.join(sources)}]"
+    return links
+
+
+def strip_ui_sentinels(text: str, citations: dict[str, str] | None = None) -> str:
+    """Replace ChatGPT's private-use inline UI tokens with plain Markdown.
+
+    Tokens are delimited as ``typepayload``. Interactive ``genui`` widgets
+    become a titled placeholder; a ``cite`` token becomes its linked sources from ``citations``
+    (a bare ``[cite]`` when absent); any other token drops out.
+
+    >>> strip_ui_sentinels("as shownciteturn0search1.")
+    'as shown[cite].'
+    """
+    citations = citations or {}
+
+    def replace(match: re.Match[str]) -> str:
+        token_type, payload = match.group(1), match.group(2)
+        if token_type == "genui":
+            title = genui_title(payload)
+            label = f'Interactive visualization: "{title}"' if title else "Interactive visualization"
+            return f"_[{label} — view in ChatGPT]_"
+        if token_type == "cite":
+            return citations.get(match.group(0), "[cite]")
+        return ""
+
+    return UI_SENTINEL_TOKEN.sub(replace, text)
 
 
 def message_parts(message: dict[str, object]) -> list[object]:
@@ -229,7 +322,7 @@ def conversation_messages(data: dict[str, object]) -> list[dict[str, object]]:
     messages: list[dict[str, object]] = []
     for node in reversed(path):
         message = node.get("message")
-        if message is None and node.get("id") == "client-created-root":
+        if message is None and node.get("parent") is None:
             continue
         if not isinstance(message, dict):
             raise ValueError("A conversation node has no valid message")
@@ -258,7 +351,7 @@ def conversation_messages(data: dict[str, object]) -> list[dict[str, object]]:
         if content_type in INTERNAL_ASSISTANT_CONTENT_TYPES and role == "assistant":
             continue
         parts = message_parts(message)
-        has_text = any(isinstance(part, str) and part.strip() for part in parts)
+        has_text = any(part_text(part).strip() for part in parts)
         has_attachments = bool(attachment_lines(message))
         if not has_text and not has_attachments:
             if is_interrupted_empty_assistant_message(message):
@@ -278,7 +371,9 @@ def render_message(message: dict[str, object]) -> str:
     if role not in DISPLAY_ROLES:
         raise ValueError(f"Cannot render unsupported message role {role!r}")
     parts = message_parts(message)
-    text = "".join(part for part in parts if isinstance(part, str)).strip()
+    text = strip_ui_sentinels(
+        "".join(part_text(part) for part in parts), citation_links(message)
+    ).strip()
     attachment = "\n".join(attachment_lines(message))
     body = "\n\n".join(part for part in [attachment, text] if part)
     speaker = "You" if role == "user" else "ChatGPT"
