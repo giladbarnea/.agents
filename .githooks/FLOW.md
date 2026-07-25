@@ -4,10 +4,8 @@
 ├── Load sync rules from common.sh
 │   ├── Instruction targets: Claude, Codex, Gemini, Pi
 │   ├── Skill-provider directories for those four tools
-│   ├── Claude-specific frontmatter whitelist
 │   └── Runtime-skill registry
-│       ├── simplify-code
-│       └── smart-compact
+│       └── simplify-code
 │
 ├── Align the plugin checkout with ~/.agents
 │   │
@@ -48,8 +46,8 @@
 │
 ├── Validate the runtime-skill registry
 │   ├── Every registered directory must exist
-│   ├── It must contain a generator and/or SKILL.md.j2
-│   └── A skill containing runtime machinery but missing from the
+│   ├── It must contain a create/create.py generator
+│   └── A skill containing a generator but missing from the
 │       registry is rejected
 │
 ├── Traverse every source under ~/.agents/skills/
@@ -63,38 +61,30 @@
 │   ├── Ordinary static skills
 │   │   └── Require an existing SKILL.md; otherwise skip
 │   │
-│   ├── simplify-code
-│   │   └── Run create/create.py
-│   │       ├── Ask GitHub for the latest relevant upstream commit
-│   │       ├── Compare it with the commit recorded in SKILL.md
-│   │       ├── Upstream file unchanged ──> keep existing SKILL.md
-│   │       └── Upstream file changed
-│   │           ├── Fetch the upstream skill
-│   │           ├── Combine it with the local Anthropic version
-│   │           └── Write a new SKILL.md
-│   │
-│   └── smart-compact
-│       ├── Render SKILL.md.j2 into the source SKILL.md
-│       └── When exposing it to Claude:
-│           ├── Create a concrete provider-specific directory
-│           ├── Keep Claude-supported frontmatter fields
-│           ├── Reject unexpected leftover entries
-│           └── Render Claude’s provider-specific SKILL.md
+│   └── simplify-code
+│       └── Run create/create.py
+│           ├── Ask GitHub for the latest relevant upstream commit
+│           ├── Compare it with the commit recorded in SKILL.md
+│           ├── Upstream file unchanged ──> keep existing SKILL.md
+│           └── Upstream file changed
+│               ├── Fetch the upstream skill
+│               ├── Combine it with the local Anthropic version
+│               └── Write a new SKILL.md
 │
-│   [Routine whole-directory provider symlinks omitted]
+│   Every skill is then whole-directory symlinked into all four
+│   provider skill roots.
 │
 └── Clean orphaned provider links
     ├── Scan Claude, Codex, Gemini, and Pi skill directories
     ├── Find symlinks whose ~/.agents source no longer exists
     ├── Interactive terminal ──> ask before removing each one
-    ├── No terminal ───────────> report it and leave it alone
-    └── Concrete/materialized skill directories are never removed
+    └── No terminal ───────────> report it and leave it alone
 
 
 Failure behavior
 │
 ├── Submodule alignment fails ────────────> stop
 ├── Instruction rendering fails ─────────> stop
-├── Runtime generation/rendering fails ──> stop
+├── Runtime generation fails ────────────> stop
 ├── Invalid skill structure is found ─────> stop
 └── Only after all succeed does orphan cleanup run

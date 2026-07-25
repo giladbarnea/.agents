@@ -5,11 +5,11 @@
 # ///
 """
 Create .agents/skills/simplify-code/SKILL.md by combining the current skill
-with a Gemini-tersified version of Addy Osmani's code-simplification skill.
+with Addy Osmani's code-simplification skill.
 
 Output structure:
     {simplify-code frontmatter + adis_origin object}
-    {terse Addy body}
+    {Addy body}
     ---
     {anthropics-version.md body}
 
@@ -119,15 +119,6 @@ def strip_inspired_by(body: str) -> str:
     return re.sub(r'\n> Inspired by[^\n]*\n\n', '\n', body)
 
 
-def run_gemini_terser(adis_body: str) -> str:
-    """Apply terse-output editing to adis_body via Gemini.
-
-    Uses an ephemeral temp file as the edit target for run-agent.sh — written
-    before the subprocess call, read back after, deleted immediately.
-    """
-    return adis_body
-
-
 def create() -> None:
     recreate, latest_commit = should_recreate()
     if not recreate:
@@ -135,7 +126,6 @@ def create() -> None:
         return
 
     adis_body = strip_inspired_by(strip_frontmatter(fetch(ADIS_RAW_URL)))
-    terse_adis_body = run_gemini_terser(adis_body)
 
     current_frontmatter = read_frontmatter(ANTHROPICS_VERSION)
     current_body = read_body(ANTHROPICS_VERSION)
@@ -150,7 +140,7 @@ def create() -> None:
     }
 
     SKILL_MD.write_text(
-        render_frontmatter(output_frontmatter, f"{terse_adis_body}\n---\n{current_body}"),
+        render_frontmatter(output_frontmatter, f"{adis_body}\n---\n{current_body}"),
         encoding='utf-8',
     )
     print(f"Created {SKILL_MD}")

@@ -1,0 +1,22 @@
+#!/usr/bin/env zsh
+
+emulate -L zsh
+setopt errexit nounset pipefail
+
+if (( $# != 1 )); then
+  print -u2 -r -- 'usage: probe-glyphs "✓⇄★…"  — prints YES/NO per character for SF (SFNS.ttf)'
+  exit 1
+fi
+
+uv run -p python3 --with=fonttools python3 - "$1" <<'PY'
+import sys
+
+from fontTools.ttLib import TTFont
+
+character_map = TTFont("/System/Library/Fonts/SFNS.ttf", fontNumber=0).getBestCmap()
+for character in dict.fromkeys(sys.argv[1]):
+    if character.isspace():
+        continue
+    supported = "YES" if ord(character) in character_map else "NO"
+    print(f"{character}\tU+{ord(character):04X}\t{supported}")
+PY

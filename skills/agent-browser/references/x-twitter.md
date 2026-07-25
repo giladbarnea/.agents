@@ -12,7 +12,9 @@ AUTH_TOKEN=... CT0=... node scripts/x_thread.mjs <tweetId|url>
 node scripts/x_thread.mjs <url> --from-chrome        # default port 9222
 ```
 
-Output is a JSON array of `{id, username, name, text, likes, created}` on stdout; progress (`pages=… replies=…`) goes to stderr. Element `[0]` is the focal post; the rest are replies.
+`--from-chrome` imports the `ws` package. If it is missing, install `ws` beside the script; `npx -p ws` alone may still fail because ESM resolves imports from the script’s directory rather than npx’s transient executable path.
+
+Output is a JSON array of `{id, username, name, text, likes, created}` on stdout; progress (`pages=… replies=…`) goes to stderr. Element `[0]` is the focal post; the rest are replies. Long Note posts may be truncated because the script currently reads `legacy.full_text`; when the focal text ends mid-sentence or at a stray `t.co` URL, read the rendered post in the logged-in browser or update the collector to prefer `note_tweet.note_tweet_results.result.text`.
 
 ## X Articles are not threads
 

@@ -1,0 +1,94 @@
+#!/usr/bin/env zsh
+
+emulate -L zsh
+setopt errexit nounset pipefail
+
+function fail() {
+  print -u2 -r -- "kitty-image-window: $*"
+  return 1
+}
+
+if (( $# < 1 || $# > 2 )); then
+  fail 'usage: kitty-image-window IMAGE_PATH [WINDOW_TITLE]'
+fi
+
+image_path="${1:A}"
+window_title="${2:-${image_path:t}}"
+kitty_process_id="${KITTY_PID:-}"
+
+[[ -f "$image_path" ]] || fail "image does not exist: $image_path"
+[[ -n "$window_title" ]] || fail 'window title cannot be empty'
+[[ "$kitty_process_id" =~ '^[0-9]+$' ]] || fail 'KITTY_PID does not identify the Mac-side Kitty process'
+kill -0 "$kitty_process_id" 2>/dev/null || fail "Kitty process is not running: $kitty_process_id"
+
+kitten_path="$(command -v kitten)" || fail 'kitten is not available on PATH'
+kitty_terminal_name="$(
+  ps -axo ppid=,tty= | awk -v kitty_process_id="$kitty_process_id" '
+    !found && $1 == kitty_process_id && $2 ~ /^ttys[0-9]+$/ {
+      print $2
+      found = 1
+    }
+  '
+)"
+[[ -n "$kitty_terminal_name" ]] || fail "no terminal belongs directly to Kitty process $kitty_process_id"
+
+kitty_terminal_path="/dev/$kitty_terminal_name"
+[[ -w "$kitty_terminal_path" ]] || fail "Kitty terminal is not writable: $kitty_terminal_path"
+
+capture_path="$(mktemp "${TMPDIR:-/tmp}/kitty-image-window.capture.XXXXXX")"
+support_path="$(mktemp "${TMPDIR:-/tmp}/kitty-image-window.support.XXXXXX")"
+image_identifier=$(( ((RANDOM << 16) | RANDOM) + 1 ))
+trap 'rm -f -- "$capture_path" "$support_path"' EXIT
+
+child_command='kitten_path="$1"; support_path="$2"; image_path="$3"; image_identifier="$4"; "$kitten_path" icat --detect-support 2>"$support_path" && exec "$kitten_path" icat --hold --align=center --fit=both --scale-up --image-id="$image_identifier" "$image_path"'
+
+env -u KITTY_WINDOW_ID script -q "$capture_path" \
+  kitten @ launch \
+    --no-response \
+    --type=os-window \
+    --title="$window_title" \
+    --os-window-title="$window_title" \
+    /bin/zsh -c "$child_command" zsh "$kitten_path" "$support_path" "$image_path" "$image_identifier" \
+  >/dev/null 2>&1
+
+perl -0777 -ne '
+  my $escape = chr 27;
+  my $prefix = $escape . "P\@kitty-cmd";
+  my $suffix = $escape . "\\";
+  my $start = index($_, $prefix);
+  die "remote-control frame not found\n" if $start < 0;
+  my $end = index($_, $suffix, $start);
+  die "remote-control frame is incomplete\n" if $end < 0;
+  print substr($_, $start, $end + length($suffix) - $start);
+' "$capture_path" > "$kitty_terminal_path"
+
+integer attempt
+for attempt in {1..50}; do
+  [[ -s "$support_path" ]] && break
+  sleep 0.1
+done
+[[ -s "$support_path" ]] || fail 'Kitty OS window did not confirm graphics support within five seconds'
+
+transfer_mode="$(tr -d '\r\n' < "$support_path")"
+case "$transfer_mode" in
+  file|memory|stream) ;;
+  *) fail "unexpected Kitty graphics transfer mode: $transfer_mode" ;;
+esac
+
+renderer_process="$(
+  ps -axo pid=,ppid=,tty=,command= | awk \
+    -v kitty_process_id="$kitty_process_id" \
+    -v image_path="$image_path" \
+    -v image_identifier="$image_identifier" '
+      $2 == kitty_process_id && index($0, "kitten icat") && index($0, image_path) && index($0, "--image-id=" image_identifier) {
+        print $1, $3
+      }
+    '
+)"
+[[ -n "$renderer_process" ]] || fail 'Kitty confirmed graphics support, but the image renderer exited'
+
+read -r renderer_process_id renderer_terminal_name <<< "$renderer_process"
+print -r -- "opened: $image_path"
+print -r -- "window: $window_title"
+print -r -- "graphics: $transfer_mode"
+print -r -- "renderer: pid=$renderer_process_id terminal=$renderer_terminal_name"
