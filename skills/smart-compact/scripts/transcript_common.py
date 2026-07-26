@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Small shared helpers for structured transcript file tools."""
 
+import os.path
 import re
 import xml.etree.ElementTree
 import xml.sax.saxutils
@@ -8,6 +9,37 @@ import xml.sax.saxutils
 
 FILE_TOOLS = {"Read", "Write", "Edit", "Patch", "Delete"}
 FILE_OUTPUT_TOOLS = FILE_TOOLS | {"read_many_files"}
+SKILL_INVOCATION_PATTERN = re.compile(
+    r"\A(?P<body><skill\b.*?</skill>)(?P<tail>.*)\Z", re.DOTALL
+)
+
+
+def split_skill_invocation(block: str) -> tuple[str, str] | None:
+    r"""Split one leading skill body from its invocation-specific user instruction.
+
+    >>> split_skill_invocation('<skill name="demo">rules</skill>\n\ndo work')
+    ('<skill name="demo">rules</skill>', '\n\ndo work')
+    >>> split_skill_invocation('ordinary prose') is None
+    True
+    """
+    match = SKILL_INVOCATION_PATTERN.match(block)
+    if match is None:
+        return None
+    return match.group("body"), match.group("tail")
+
+
+def path_identity(path: str) -> str:
+    """Return a stable comparison key without changing the displayed path.
+
+    Absolute paths resolve filesystem aliases; relative paths remain relative.
+
+    >>> path_identity("notes/../board.json")
+    'board.json'
+    """
+    expanded_path = os.path.expanduser(path)
+    if os.path.isabs(expanded_path):
+        return os.path.realpath(expanded_path)
+    return os.path.normpath(path)
 
 
 def file_references(block: dict[str, object]) -> list[tuple[str, str, str | None]]:
@@ -51,11 +83,22 @@ def render_reference(operation: str, path: str, identifier: str | None) -> str:
     return f"<{operation} {attributes}/>"
 
 
-def reference_path(block: str) -> str | None:
+def file_reference(block: str) -> tuple[str, str] | None:
+    """Return the operation and path from a rendered file reference.
+
+    >>> file_reference('<Read path="notes.md" id="read"/>')
+    ('Read', 'notes.md')
+    """
     try:
         element = xml.etree.ElementTree.fromstring(block.strip())
     except xml.etree.ElementTree.ParseError:
         return None
     if element.tag not in FILE_TOOLS or list(element) or (element.text or "").strip():
         return None
-    return element.attrib.get("path") or None
+    path = element.attrib.get("path")
+    return (element.tag, path) if path else None
+
+
+def reference_path(block: str) -> str | None:
+    reference = file_reference(block)
+    return reference[1] if reference is not None else None

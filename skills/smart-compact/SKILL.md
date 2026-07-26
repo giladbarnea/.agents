@@ -142,6 +142,19 @@ uv run python3 scripts/prune_transcript.py transcription.json > pruned.json
 ```
 Removes todos and raw outputs for Read/read_many_files/Write/Edit/Patch/Delete,
 expands multi-file reads, and replaces file inputs in place without reordering mixed blocks.
+It also separates a leading `<skill>…</skill>` body from that invocation's trailing user
+instruction, retaining the first byte-identical body and every invocation-specific instruction.
+
+An interrupted file-tool call with no path fails loudly rather than disappearing silently.
+After inspecting it, authorize a provably empty orphan by its exact tool ID:
+```bash
+uv run python3 scripts/prune_transcript.py transcription.json \
+  --drop-orphan-tool-id <tool-id> > pruned.json
+```
+The exception is deliberately narrow: the call must contain only its type, name, and ID,
+have no matching tool output, and be uniquely identified by that ID. Payload-bearing, paired,
+missing, and ambiguous calls remain errors. Every accepted orphan is reported on stderr with
+its tool name, ID, and stable `original_index`.
 
 **Diagnostics**:
 ```bash
@@ -157,6 +170,9 @@ decisions file containing nothing but judgments:
 {
   "drop_texts": [90, 262],
   "drop_text_blocks": [{"original_index": 12, "contains": "Now I'll wrap up"}],
+  "drop_file_references": [
+    {"original_index": 6, "operation": "Read", "path": "/path/to/stale.py"}
+  ],
   "skeletons": [
     {"original_index": 236, "command": "…", "purpose": "…", "outcome": "…", "meaning": "…"}
   ],
@@ -167,7 +183,9 @@ decisions file containing nothing but judgments:
 Semantics: every surviving raw tool block is inferred noise and dropped unless a skeleton
 preserves its meaning. `drop_texts` removes whole contentful messages. `drop_text_blocks`
 removes individual prose blocks inside mixed messages by substring; prose in mixed messages
-is otherwise preserved while their tool blocks are removed. A skeleton anchors to its
+is otherwise preserved while their tool blocks are removed. `drop_file_references` removes
+one normalized file-reference block by its stable message index, operation, and displayed path;
+each declaration must match exactly one block. A skeleton anchors to its
 message's single tool-input block; when a message holds several, add `"tool_id"` to select
 one (multiple skeletons per message are allowed). The skeleton's `name` is derived from the
 anchored block — override it only when the skeleton summarizes a wider bout.
@@ -206,24 +224,17 @@ scripts/markremove.py transcription.json --original-index <original_index> \
 ```
 The mark is written only when that exact `original_index` contains the safeguard substring.
 
-**Quick story-first orientation** (optional): read the session as simplified Markdown
-without tool calls to understand the narrative arc before diving into details:
+**Review-oriented story view** (optional): render the session for semantic review before
+authoring decisions:
 ```sh
-jq -r '
-     .[]
-     | if .content[0] | type == "string" then
-         "## \(if .role == "user" then "User" else "Assistant" end)\n\n" + .content[0] + "\n"
-       else
-         "## Tool\n\n" + (
-           if .content[0].type == "tool-input" then
-             "```bash [input]\n" + (.content[0].command // "") + "\n```"
-           else
-             "```[output]\n" + ([.content[0].content[] | select(.type == "text") | .text] | join("")) + "\n```"
-           end
-         ) + "\n"
-       end
-   ' transcription.json
+uv run python3 scripts/render_review_view.py transcription.json > review.md
 ```
+The renderer preserves message and prose order, emits byte-identical skill bodies once while
+retaining every invocation's user instruction, marks compactions as explicit boundaries, and
+pairs tool inputs with outputs by exact tool ID. Unmatched calls and results are flagged rather
+than paired by proximity. These mechanics make the evidence easier to review; deciding which
+tool events are pivotal, what they mean, and whether a compaction summary is redundant remains
+semantic work.
 
 ---
 

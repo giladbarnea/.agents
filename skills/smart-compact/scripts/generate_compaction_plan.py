@@ -43,10 +43,18 @@ class SkeletonDeclaration:
     name: str | None = None
 
 
+@dataclasses.dataclass(frozen=True)
+class FileReferenceDecision:
+    original_index: int
+    operation: str
+    path: str
+
+
 @dataclasses.dataclass
 class Decisions:
     drop_texts: list[int]
     drop_text_blocks: list[tuple[int, str]]
+    drop_file_references: list[FileReferenceDecision]
     skeletons: list[SkeletonDeclaration]
     scratchpad_paths: list[str]
     opaque_artifacts: list[str]
@@ -87,7 +95,14 @@ def output_text(block: dict[str, object]) -> str:
 
 
 def parse_decisions(raw: dict[str, object]) -> Decisions:
-    known_keys = {"drop_texts", "drop_text_blocks", "skeletons", "scratchpad_paths", "opaque_artifacts"}
+    known_keys = {
+        "drop_texts",
+        "drop_text_blocks",
+        "drop_file_references",
+        "skeletons",
+        "scratchpad_paths",
+        "opaque_artifacts",
+    }
     unknown = sorted(set(raw) - known_keys)
     if unknown:
         raise ValueError(f"unknown decision keys: {unknown}")
@@ -101,6 +116,22 @@ def parse_decisions(raw: dict[str, object]) -> Decisions:
         if not isinstance(entry, dict) or not isinstance(entry.get("original_index"), int) or not isinstance(entry.get("contains"), str) or not entry["contains"]:
             raise ValueError(f"drop_text_blocks entry needs original_index and non-empty contains: {entry!r}")
         drop_text_blocks.append((entry["original_index"], entry["contains"]))
+
+    drop_file_references: list[FileReferenceDecision] = []
+    for entry in raw.get("drop_file_references", []):
+        if (
+            not isinstance(entry, dict)
+            or set(entry) != {"original_index", "operation", "path"}
+            or not isinstance(entry.get("original_index"), int)
+            or entry.get("operation") not in transcript_common.FILE_TOOLS
+            or not isinstance(entry.get("path"), str)
+            or not entry["path"]
+        ):
+            raise ValueError(
+                "drop_file_references entries need exactly original_index, "
+                f"operation, and non-empty path: {entry!r}"
+            )
+        drop_file_references.append(FileReferenceDecision(**entry))
 
     skeletons: list[SkeletonDeclaration] = []
     for entry in raw.get("skeletons", []):
@@ -122,6 +153,7 @@ def parse_decisions(raw: dict[str, object]) -> Decisions:
     return Decisions(
         drop_texts=drop_texts,
         drop_text_blocks=drop_text_blocks,
+        drop_file_references=drop_file_references,
         skeletons=skeletons,
         scratchpad_paths=list(raw.get("scratchpad_paths", [])),
         opaque_artifacts=list(raw.get("opaque_artifacts", [])),
@@ -173,18 +205,21 @@ def collect_provenance(
     messages: list[dict[str, object]], decisions: Decisions
 ) -> list[tuple[str, str]]:
     """Ordered, deduplicated (path, provenance category) pairs for the footer."""
-    scratchpads = set(decisions.scratchpad_paths)
-    collected: dict[str, str] = {}
-    referenced: set[str] = set()
+    scratchpad_identities = {
+        transcript_common.path_identity(path) for path in decisions.scratchpad_paths
+    }
+    collected: dict[str, tuple[str, str]] = {}
+    referenced_identities: set[str] = set()
     for message in messages:
         for block in message.get("content", []):
             if isinstance(block, str):
                 path = transcript_common.reference_path(block)
                 if path is None:
                     continue
-                referenced.add(path)
-                if path not in scratchpads and path not in collected:
-                    collected[path] = "file reference"
+                identity = transcript_common.path_identity(path)
+                referenced_identities.add(identity)
+                if identity not in scratchpad_identities and identity not in collected:
+                    collected[identity] = (path, "file reference")
                 continue
             if not isinstance(block, dict) or block.get("type") != "tool-output":
                 continue
@@ -201,17 +236,23 @@ def collect_provenance(
                     "produced no extractable path"
                 )
             for path in artifact_paths:
-                if path not in scratchpads and path not in collected:
-                    collected[path] = f"artifact ({tool_name})"
+                identity = transcript_common.path_identity(path)
+                if identity not in scratchpad_identities and identity not in collected:
+                    collected[identity] = (path, f"artifact ({tool_name})")
 
-    unreferenced_scratchpads = sorted(scratchpads - referenced)
+    unreferenced_scratchpads = sorted(
+        path
+        for path in decisions.scratchpad_paths
+        if transcript_common.path_identity(path) not in referenced_identities
+    )
     if unreferenced_scratchpads:
         raise ValueError(f"scratchpad paths never referenced in transcript: {unreferenced_scratchpads}")
 
     for path in decisions.opaque_artifacts:
-        if path not in collected:
-            collected[path] = "opaque artifact"
-    return list(collected.items())
+        identity = transcript_common.path_identity(path)
+        if identity not in collected:
+            collected[identity] = (path, "opaque artifact")
+    return list(collected.values())
 
 
 def generate_plan(
@@ -233,7 +274,11 @@ def generate_plan(
     if conflicts:
         raise ValueError(f"messages both dropped and skeleton-anchored: {conflicts}")
 
-    scratchpads = set(decisions.scratchpad_paths)
+    scratchpad_identities = {
+        transcript_common.path_identity(path) for path in decisions.scratchpad_paths
+    }
+    file_reference_drops = set(decisions.drop_file_references)
+    matched_file_reference_drops: collections.Counter[FileReferenceDecision] = collections.Counter()
     block_drops_by_index: dict[int, list[str]] = collections.defaultdict(list)
     for index, substring in decisions.drop_text_blocks:
         if index not in messages_by_index:
@@ -263,8 +308,21 @@ def generate_plan(
         for block in original_content:
             if isinstance(block, str):
                 had_prose = True
-                path = transcript_common.reference_path(block)
-                if path is not None and path in scratchpads:
+                reference = transcript_common.file_reference(block)
+                path = reference[1] if reference is not None else None
+                if (
+                    path is not None
+                    and transcript_common.path_identity(path) in scratchpad_identities
+                ):
+                    changed = True
+                    continue
+                file_reference_decision = (
+                    FileReferenceDecision(index, *reference)
+                    if reference is not None
+                    else None
+                )
+                if file_reference_decision in file_reference_drops:
+                    matched_file_reference_drops[file_reference_decision] += 1
                     changed = True
                     continue
                 matching = [s for s in block_drops_by_index.get(index, []) if s in block]
@@ -306,6 +364,19 @@ def generate_plan(
             "content": new_content,
         })
 
+    invalid_file_reference_drops = [
+        (decision, matched_file_reference_drops[decision])
+        for decision in decisions.drop_file_references
+        if matched_file_reference_drops[decision] != 1
+    ]
+    if invalid_file_reference_drops:
+        details = ", ".join(
+            f"{decision.original_index} {decision.operation} {decision.path!r} "
+            f"matched {match_count}"
+            for decision, match_count in invalid_file_reference_drops
+        )
+        raise ValueError(f"drop_file_references must match exactly one block: {details}")
+
     unmatched = sorted(set(decisions.drop_text_blocks) - matched_substrings)
     if unmatched:
         raise ValueError(f"drop_text_blocks matched no string block: {unmatched}")
@@ -328,7 +399,22 @@ def generate_plan(
         f"explicit text drops: {sorted(decisions.drop_texts) or 'none'}"
         + (f"; marked removals: {sorted(marked_removals)}" if marked_removals else ""),
         f"text block drops: {sorted(matched_substrings) or 'none'}",
-        f"scratchpad exclusions: {sorted(scratchpads) or 'none'}",
+        "file reference drops: "
+        + (
+            ", ".join(
+                f"{decision.original_index} {decision.operation} {decision.path}"
+                for decision in sorted(
+                    matched_file_reference_drops,
+                    key=lambda decision: (
+                        decision.original_index,
+                        decision.operation,
+                        decision.path,
+                    ),
+                )
+            )
+            or "none"
+        ),
+        f"scratchpad exclusions: {sorted(decisions.scratchpad_paths) or 'none'}",
         "affected files: "
         + ("; ".join(f"{path} [{category}]" for path, category in provenance) or "none"),
         f"messages: {len(messages)} total → {kept_untouched} untouched, "

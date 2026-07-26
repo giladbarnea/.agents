@@ -121,18 +121,21 @@ def apply_plan(
     if not compacted:
         raise ValueError("manifest removed every message")
 
+    referenced_paths = [
+        path
+        for message in compacted
+        for block in message["content"]
+        for path in [transcript_common.reference_path(block)]
+        if path is not None
+    ]
     affected_paths: list[str] = []
-    for message in compacted:
-        content = message["content"]
-        if not isinstance(content, list):
+    affected_identities: set[str] = set()
+    for path in referenced_paths + extra_raw:
+        identity = transcript_common.path_identity(path)
+        if identity in affected_identities:
             continue
-        for block in content:
-            path = transcript_common.reference_path(block) if isinstance(block, str) else None
-            if path and path not in affected_paths:
-                affected_paths.append(path)
-    for path in extra_raw:
-        if isinstance(path, str) and path not in affected_paths:
-            affected_paths.append(path)
+        affected_identities.add(identity)
+        affected_paths.append(path)
     final_content = compacted[-1]["content"]
     if not isinstance(final_content, list):
         raise ValueError("final message has no content array")
