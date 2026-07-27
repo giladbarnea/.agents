@@ -5,18 +5,13 @@ description: Maintain project documentation as compact, trustworthy institutiona
 
 # Project memory is a maintained model of reality
 
-An archive answers, “What was once said?” Project memory answers, “What should
-I believe now, why do we believe it, what remains undecided, and how should that
-affect my work?”
+An archive answers, “What was once said?” Project memory answers, “What should I believe now, why do we believe it, what remains undecided, and how should that affect my work?”
 
-Raw meetings, chats, research, and experiments are evidence. They are not
-automatically memory. Memory is the smaller, resolved model distilled from
-them for the next agent.
+Raw meetings, chats, research, and experiments are evidence. They are not automatically memory. Memory is the smaller, resolved model distilled from them for the next agent.
 
 ## Work in information vectors
 
-An information vector is the smallest independently meaningful claim that
-changes an agent's understanding or behavior.
+An information vector is the smallest independently meaningful claim that changes an agent's understanding or behavior.
 
 Examples include:
 
@@ -24,60 +19,40 @@ Examples include:
 - “Filesystem persistence is undecided.”
 - “The worker retries a failed job three times.”
 - “This approach was rejected because it created unacceptable operational work.”
+- “The database is Postgres.”
 
-Every useful vector should have a clear epistemic state: current truth,
-validated capability, decision, constraint, open question, or historical
-rationale. Preserve historical rationale only when it prevents future confusion
-or repeated mistakes.
+Every useful vector should have a clear epistemic state: current truth, validated capability, decision, constraint, open question, or historical rationale. Preserve historical rationale only when it prevents future confusion or repeated mistakes.
 
-A proposal must not quietly read like a decision. A narrow test must not inflate
-into a broad capability claim. An old assumption must not remain beside its
-replacement.
+A proposal must not quietly read like a decision. A narrow test must not inflate into a broad capability claim. An old assumption must not remain beside its replacement.
 
 ## Maintain memory while doing the work
 
-When new work changes the project's model, update the relevant memory in the
-same unit of work. Identify the new vector, its epistemic state, and its
-canonical home. Then resolve any vector it contradicts. Do not merely add the
-new statement and leave reconciliation to the next agent.
+When new work changes the project's model, update the relevant memory in the same unit of work. Identify the new vector, its epistemic state, and its canonical home. Then resolve any vector it contradicts. Do not merely add the new statement and leave reconciliation to the next agent.
 
-Record the result at the narrowest truthful scope. Distinguish what was directly
-observed from what was inferred. If the answer is not known, write a short open
-question rather than filling the gap with plausible architecture.
+Record the result at the narrowest truthful scope. Distinguish what was directly observed from what was inferred. If the answer is not known, write a short open question rather than filling the gap with plausible architecture. Distinguish a hypothetical and assumption from an empirical observation. If it’s a hypothetical, state your assumptions explicitly and use an advisory tone when writing it so that it does not wrongly read as an assertion. Conversely, if it’s an empirical observation, support it with the minimal set of references. 
 
-Retain enough reason to recover consequential decisions, but do not retell the
-whole path that produced them. The project should remember why it took an
-important turn without forcing every future agent to relive the conversation.
+Retain enough reason to recover consequential decisions, but do not retell the whole path that produced them. The project should remember why it took an important turn without forcing every future agent to relive the conversation.
 
 ## Keep the corpus MECE across two axes
 
-The horizontal axis assigns each kind of memory one document role. A common
-division is:
+The horizontal axis assigns each kind of memory one document role. A common division is:
 
 - `AGENTS.md`: durable instructions for how agents should work in the project.
-- `README.md` or `docs/current-state.md`: the present model—what exists, how it
+- `README.md`: the present model—what exists, how it
   works, and what is currently true.
-- `LEDGER.md`: dated decisions, validations, reversals, and the reasons behind
-  consequential changes.
-- `meetings/`, `research/`, or `references/`: source evidence, subordinate to
-  canonical memory.
+- `LEDGER.md`: dated decisions, validations, reversals, and the reasons behind consequential changes.
+- `meetings/`, `research/`, `references/`, and arbitrary `{topic}/`: source evidence, subordinate to canonical memory.
 
-Use the project's existing structure when it already provides these roles. Do
-not create documents merely to satisfy these example names.
+Use the project's existing structure when it already provides these roles. Do not create documents merely to satisfy these example names.
 
-The vertical axis gives each information vector one canonical home. Other
-documents may link to it or record that it changed, but should not independently
-maintain competing versions of the same current truth.
+The vertical axis gives each information vector one canonical home. Other documents may link to it or record that it changed, but should not independently maintain competing versions of the same current truth.
 
 The two-dimensional test is simple:
 
 1. Does every useful vector have a home?
 2. Does each vector have only one authoritative home?
 
-Functional overlap is sometimes legitimate. A ledger may record that a decision
-occurred while current-state describes the resulting system. Semantic
-duplication is the problem: several passages independently claiming what the
-current truth is.
+Functional overlap is sometimes legitimate. A ledger may record that a decision occurred while current-state describes the resulting system. Semantic duplication is the problem: several passages independently claiming what the current truth is.
 
 ## Do not start a yelling contest
 
