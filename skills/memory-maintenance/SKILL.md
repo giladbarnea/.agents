@@ -89,6 +89,6 @@ If the agent must reconcile contradictions, distinguish plans from decisions, or
 
 ## Retrospective maintenance is a separate operation
 
-Ordinary bookkeeping keeps memory healthy as work happens. An intentional retrospective maintenance pass treats the corpus itself as the work product.
+On-the-job bookkeeping keeps memory healthy as work happens. An intentional retrospective maintenance pass treats the corpus itself as the work product.
 
 When asked to audit, clean up, reconcile, prune, or maintain an existing corpus, read [the maintenance procedure](references/maintenance.md) in full before editing. 
