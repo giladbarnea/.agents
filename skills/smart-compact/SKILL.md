@@ -1,7 +1,6 @@
 ---
 name: smart-compact
 description: Instructions for tree-shaking a user-provided AI session transcript
-disable-model-invocation: true
 ---
 This Skill's purpose is to compact an AI session transcription by removing redundant-information messages and keeping the contentful ones intact.
 
