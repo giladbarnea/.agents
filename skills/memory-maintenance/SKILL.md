@@ -38,8 +38,7 @@ Retain enough reason to recover consequential decisions, but do not retell the w
 The horizontal axis assigns each kind of memory one document role. A common division is:
 
 - `AGENTS.md`: durable instructions for how agents should work in the project.
-- `README.md`: the present model—what exists, how it
-  works, and what is currently true.
+- `README.md`: the present model—what exists, how it works, and what is currently true.
 - `LEDGER.md`: dated decisions, validations, reversals, and the reasons behind consequential changes.
 - `meetings/`, `research/`, `references/`, and arbitrary `{topic}/`: source evidence, subordinate to canonical memory.
 
@@ -56,69 +55,40 @@ Functional overlap is sometimes legitimate. A ledger may record that a decision 
 
 ## Do not start a yelling contest
 
-A yelling contest begins when an agent wants to record a fresh vector, finds
-several pre-existing vectors that contradict it, and tries to overpower them
-with more detail, heavier emphasis, repeated warnings, bold text, or all-caps.
-The corpus quickly becomes a room full of teenagers, each talking louder to
-become the center of attention.
+A yelling contest begins when an agent wants to record a fresh vector, finds several pre-existing vectors that contradict it, and tries to overpower them with more detail, heavier emphasis, repeated warnings, bold text, or all-caps. The corpus quickly becomes a room full of teenagers, each talking louder to become the center of attention.
 
-Do not make the fresh vector louder. Decay the stale or contradictory vectors:
-delete false claims, replace superseded present-state claims, compress valuable
-history into its proper historical home, and remove obsolete prominence. Clear
-the space first. Then write the fresh vector calmly, at the ordinary length,
-detail, and emphasis it deserves.
+Do not make the fresh vector louder. Decay the stale or contradictory vectors: delete false claims, replace superseded present-state claims, compress valuable history into its proper historical home, and remove obsolete prominence. Clear the space first. Then write the fresh vector calmly, at the ordinary length, detail, and emphasis it deserves.
 
 ## Evidence remains as narrow as the test
 
-A validation establishes only what was observed. One successful HTTP request
-does not prove unrestricted network access. One process launched under a user
-account does not prove arbitrary installation capability. One observed workflow
-does not prove that every case follows it.
+A validation establishes only what was observed. One successful HTTP request does not prove unrestricted network access. One process launched under a user account does not prove arbitrary installation capability. One observed workflow does not prove that every case follows it.
 
-Broader conclusions may be recorded, but label them as inferences or open
-assumptions. Do not let convenient language silently widen evidence.
+Broader conclusions may be recorded, but label them as inferences or open assumptions. Do not let convenient language silently widen evidence.
 
 ## Open questions are first-class memory
 
-An unresolved question is useful project state. State it once and keep it short.
-It should name the decision surface without prematurely designing the answer.
+An unresolved question is useful project state. State it once and keep it short. It should name the decision surface without prematurely designing the answer.
 
-Supporting possibilities belong only when they materially explain why the
-question exists. A long speculative branch is not a better open question.
+Supporting possibilities belong only when they materially explain why the question exists. A long speculative branch is not a better open question.
 
 ## Let project complexity determine memory complexity
 
-A small early project usually benefits from direct deletion. There is little
-value in preserving the ancestry of every discarded thought. A mature project
-may need more decision history because surprising constraints, reversals, and
-institutional precedent affect future work.
+A small early project usually benefits from direct deletion. There is little value in preserving the ancestry of every discarded thought. A mature project may need more decision history because surprising constraints, reversals, and institutional precedent affect future work.
 
-History earns its place when it explains a current constraint, prevents a
-likely repeated mistake, or preserves meaningful accountability. It should not
-survive merely because it once existed.
+History earns its place when it explains a current constraint, prevents a likely repeated mistake, or preserves meaningful accountability. It should not survive merely because it once existed.
 
 ## Good memory reads like one informed mind
 
-Current reality appears before history. Claims are precise about scope and
-certainty. Important rationale survives without taking over the page. Open
-questions are visibly unresolved. Failed assumptions do not linger as ambient
-possibilities. Links connect documents instead of prose duplicating them. The
-amount of documentation matches the project's actual complexity.
+Current reality appears before history. Claims are precise about scope and certainty. Important rationale survives without taking over the page. Open questions are visibly unresolved. Failed assumptions do not linger as ambient possibilities. Links connect documents instead of prose duplicating them. The amount of documentation matches the project's actual complexity.
 
 The governing test is:
 
-> Could a capable new agent read this corpus once and proceed with approximately
-> the same model of reality as the person maintaining the project?
+> Could a capable new agent read this corpus once and proceed with approximately the same model of reality as the person maintaining the project?
 
-If the agent must reconcile contradictions, distinguish plans from decisions,
-or repeatedly discover which passages are obsolete, the memory system has
-passed its bookkeeping cost to every future session.
+If the agent must reconcile contradictions, distinguish plans from decisions, or repeatedly discover which passages are obsolete, the memory system has passed its bookkeeping cost to every future session.
 
 ## Retrospective maintenance is a separate operation
 
-Ordinary bookkeeping keeps memory healthy as work happens. An intentional
-retrospective maintenance pass treats the corpus itself as the work product.
+Ordinary bookkeeping keeps memory healthy as work happens. An intentional retrospective maintenance pass treats the corpus itself as the work product.
 
-When asked to audit, clean up, reconcile, prune, or maintain an existing corpus,
-read [the maintenance procedure](references/maintenance.md) in full before
-editing.
+When asked to audit, clean up, reconcile, prune, or maintain an existing corpus, read [the maintenance procedure](references/maintenance.md) in full before editing. 
