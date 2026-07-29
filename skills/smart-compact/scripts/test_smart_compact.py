@@ -14,8 +14,8 @@ import unittest
 
 import analyze_transcript_json
 import apply_compaction_plan
+import compile_annotations
 import generate_compaction_plan
-import markremove
 import prune_transcript
 import render_review_view
 
@@ -30,6 +30,118 @@ def message(index: int, role: str, content: list[object]) -> dict[str, object]:
 
 
 class SmartCompactTests(unittest.TestCase):
+    def test_annotation_compiler_expands_ranges_over_existing_messages(self) -> None:
+        source = [
+            message(10, "user", ["keep"]),
+            message(20, "assistant", ["drop directly"]),
+            message(40, "assistant", ["drop through range"]),
+            message(70, "assistant", ["keep too"]),
+        ]
+        source_bytes = json.dumps(source).encode()
+
+        decisions = compile_annotations.compile_annotations(
+            source_bytes,
+            {
+                "drop": {
+                    "indices": [20],
+                    "ranges": [[30, 60]],
+                },
+                "skeletons": [],
+            },
+        )
+
+        self.assertEqual(
+            decisions.get("drop_texts"),
+            [20, 40],
+            f"Drop declarations were not compiled against existing stable indices: {decisions!r}",
+        )
+        self.assertEqual(
+            decisions.get("source_sha256"),
+            hashlib.sha256(source_bytes).hexdigest(),
+            f"Compiled decisions were not bound to their reviewed source: {decisions!r}",
+        )
+        generate_compaction_plan.parse_decisions(decisions)
+
+    def test_compiled_annotations_refuse_a_different_source(self) -> None:
+        source_bytes = json.dumps(
+            [message(10, "user", ["reviewed"]), message(20, "assistant", ["drop"])]
+        ).encode()
+        decisions = compile_annotations.compile_annotations(
+            source_bytes,
+            {"drop": {"indices": [20]}},
+        )
+        changed_source_bytes = json.dumps(
+            [message(10, "user", ["changed"]), message(20, "assistant", ["drop"])]
+        ).encode()
+
+        with self.assertRaisesRegex(ValueError, "annotation source checksum mismatch"):
+            generate_compaction_plan.generate_plan(
+                changed_source_bytes,
+                generate_compaction_plan.parse_decisions(decisions),
+            )
+
+    def test_annotation_cli_produces_decisions_accepted_by_the_existing_pipeline(self) -> None:
+        source = [
+            message(10, "user", ["Investigate"]),
+            message(20, "assistant", ["Discard this"]),
+            message(
+                40,
+                "assistant",
+                [{"type": "tool-input", "name": "Bash", "id": "test", "command": "pytest"}],
+            ),
+            message(
+                41,
+                "user",
+                [{"type": "tool-output", "name": "Bash", "id": "test", "content": "12 passed"}],
+            ),
+            message(70, "assistant", ["Done"]),
+        ]
+        source_bytes = json.dumps(source).encode()
+        annotations = """\
+drop:
+  indices: [20]
+skeletons:
+  - original_index: 40
+    command: pytest
+    purpose: Validate
+    outcome: 12 passed
+"""
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source_path = pathlib.Path(temporary_directory, "pruned.json")
+            annotations_path = pathlib.Path(temporary_directory, "annotations.yaml")
+            source_path.write_bytes(source_bytes)
+            annotations_path.write_text(annotations)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(pathlib.Path(compile_annotations.__file__)),
+                    str(source_path),
+                    str(annotations_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(result.returncode, 0, f"Compiler failed: {result.stderr}")
+        raw_decisions = json.loads(result.stdout)
+        decisions = generate_compaction_plan.parse_decisions(raw_decisions)
+        plan, _ = generate_compaction_plan.generate_plan(source_bytes, decisions)
+        compacted = apply_compaction_plan.apply_plan(source_bytes, plan)
+
+        self.assertEqual(
+            [item["original_index"] for item in compacted],
+            [10, 40, 70],
+            f"Compiled annotations did not drive the existing pipeline: {compacted!r}",
+        )
+        self.assertEqual(
+            compacted[1]["content"],
+            [
+                '<tool-skeleton name="Bash" command="pytest" purpose="Validate" outcome="12 passed"/>'
+            ],
+            f"Skeleton annotations were not preserved: {compacted!r}",
+        )
+
     def test_pruner_handles_multi_read_delete_and_mixed_order(self) -> None:
         mixed = [
             "before",
@@ -555,13 +667,6 @@ class SmartCompactTests(unittest.TestCase):
             generate_compaction_plan.generate_plan(
                 artifact_without_path, generate_compaction_plan.parse_decisions({})
             )
-
-    def test_markremove_targets_original_index(self) -> None:
-        messages = [message(10, "user", ["keep"]), message(20, "user", ["remove this"])]
-        markremove.mark_message(messages, 20, "remove this")
-        self.assertNotIn("remove", messages[0], f"Wrong message marked: {messages!r}")
-        self.assertIs(messages[1].get("remove"), True, f"Target not marked: {messages!r}")
-
 
 if __name__ == "__main__":
     unittest.main()

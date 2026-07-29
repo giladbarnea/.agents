@@ -1,6 +1,7 @@
 ---
 name: smart-compact
 description: Instructions for tree-shaking a user-provided AI session transcript
+last_updated: 2026-07-28 18:43
 ---
 This Skill's purpose is to compact an AI session transcription by removing redundant-information messages and keeping the contentful ones intact.
 
@@ -92,6 +93,7 @@ At the very end, create such an object:
 </affected-files>
 ```
 The unique set of all CRUD'ed files in the session.
+Use `scripts/filestats.sh <filepath>[ filepaths...] > ... # somewhere` on the affected files list and replace that block with filestats.sh's output.
 
 ### 6. The "Final Observation" Rule (`Read`, `Bash` Exploration)
 **Keep only the tool call that successfully acquires the target information.**
@@ -163,41 +165,61 @@ Provides structured data about the transcript (tool-output indices, repeated fil
 validation runs, duplicate commands) to inform semantic decisions. Use its output as
 a maybe-worth-checking guide, not authoritative. Read the transcription in full regardless.
 
-**Author semantic decisions only** — every mechanical field is derived for you. Write a
-decisions file containing nothing but judgments:
-```json
-{
-  "drop_texts": [90, 262],
-  "drop_text_blocks": [{"original_index": 12, "contains": "Now I'll wrap up"}],
-  "drop_file_references": [
-    {"original_index": 6, "operation": "Read", "path": "/path/to/stale.py"}
-  ],
-  "skeletons": [
-    {"original_index": 236, "command": "…", "purpose": "…", "outcome": "…", "meaning": "…"}
-  ],
-  "scratchpad_paths": ["/tmp/render_helper.py"],
-  "opaque_artifacts": ["/path/created/by/opaque/shell.csv"]
-}
+**Review once, annotate semantic decisions, then compile them.** First render the optional
+story view:
+```sh
+uv run --script scripts/render_review_view.py pruned.json > review.md
 ```
-Semantics: every surviving raw tool block is inferred noise and dropped unless a skeleton
-preserves its meaning. `drop_texts` removes whole contentful messages. `drop_text_blocks`
-removes individual prose blocks inside mixed messages by substring; prose in mixed messages
-is otherwise preserved while their tool blocks are removed. `drop_file_references` removes
-one normalized file-reference block by its stable message index, operation, and displayed path;
-each declaration must match exactly one block. A skeleton anchors to its
-message's single tool-input block; when a message holds several, add `"tool_id"` to select
-one (multiple skeletons per message are allowed). The skeleton's `name` is derived from the
-anchored block — override it only when the skeleton summarizes a wider bout.
-`scratchpad_paths` excludes transient helper files from both the transcript and the footer.
-`opaque_artifacts` is the narrow escape hatch for shell-created files no structured tool
-reported. Ordinarily only `drop_texts` and `skeletons` are needed.
+The renderer preserves message and prose order, emits byte-identical skill bodies once while
+retaining every invocation's user instruction, marks compactions as explicit boundaries, and
+pairs tool inputs with outputs by exact tool ID. Unmatched calls and results are flagged rather
+than paired by proximity.
+
+Write an `annotations.yaml` containing only judgments:
+```yaml
+drop:
+  indices: [90, 262]
+  ranges:
+    - [432, 437]
+drop_text_blocks:
+  - {original_index: 12, contains: "Now I'll wrap up"}
+drop_file_references:
+  - {original_index: 6, operation: Read, path: /path/to/stale.py}
+skeletons:
+  - original_index: 236
+    command: "…"
+    purpose: "…"
+    outcome: "…"
+    meaning: "…"
+scratchpad_paths: [/tmp/render_helper.py]
+opaque_artifacts: [/path/created/by/opaque/shell.csv]
+```
+`drop.ranges` are inclusive over messages that exist in the pruned transcript, so gaps in
+stable indices are skipped. Direct indices must exist, and every range must match at least one
+message. Compile the annotations into the strict decisions contract:
 ```bash
-uv run python3 scripts/generate_compaction_plan.py pruned.json decisions.json > compaction-plan.json
-uv run -p python3 python3 scripts/apply_compaction_plan.py pruned.json compaction-plan.json > compacted.json
+uv run --script scripts/compile_annotations.py \
+  pruned.json annotations.yaml > decisions.json
+```
+The compiler rejects unknown keys and malformed selections, validates all passthrough
+decisions with the plan generator, and binds the result to the exact pruned source checksum.
+Do not hand-edit the generated decisions file.
+
+Every surviving raw tool block is inferred noise and dropped unless a skeleton preserves its
+meaning. Text-block and file-reference drops target individual normalized blocks. A skeleton
+anchors to its message's single tool-input block; when a message holds several, add `tool_id`
+to select one. `scratchpad_paths` excludes transient helper files from both the transcript and
+footer. `opaque_artifacts` is the narrow escape hatch for shell-created files no structured
+tool reported. Ordinarily only `drop` and `skeletons` are needed.
+```bash
+uv run --script scripts/generate_compaction_plan.py \
+  pruned.json decisions.json > compaction-plan.json
+uv run --script scripts/apply_compaction_plan.py \
+  pruned.json compaction-plan.json > compacted.json
 ```
 The generator computes the source checksum, infers the raw-tool drop set, serializes and
-XML-escapes skeletons, derives every expected tool ID, honors `remove: true` marks as drops,
-and collects affected-file provenance automatically: file references, registered
+XML-escapes skeletons, derives every expected tool ID, rejects annotations compiled against a
+different source, and collects affected-file provenance automatically: file references, registered
 artifact-producing tools (e.g. Lumen output paths), and declared opaque artifacts. It prints
 a mandatory audit to stderr — inferred removals grouped by tool, normalized mixed messages,
 skeleton anchors, explicit drops, scratchpad exclusions, affected paths with provenance
@@ -214,26 +236,6 @@ When a Markdown transcription accompanies the JSON, regenerate it directly from 
 ch parse compacted.json > compacted.md
 ```
 Do not hand-render Markdown or write an ad hoc converter.
-
-**Non-destructive marking** while reviewing exported JSON: flag an object for removal with
-`remove: true`, guarded by stable index plus content:
-```bash
-scripts/markremove.py transcription.json --original-index <original_index> \
-  --safeguard='<short substring of that object content>'
-```
-The mark is written only when that exact `original_index` contains the safeguard substring.
-
-**Review-oriented story view** (optional): render the session for semantic review before
-authoring decisions:
-```sh
-uv run python3 scripts/render_review_view.py transcription.json > review.md
-```
-The renderer preserves message and prose order, emits byte-identical skill bodies once while
-retaining every invocation's user instruction, marks compactions as explicit boundaries, and
-pairs tool inputs with outputs by exact tool ID. Unmatched calls and results are flagged rather
-than paired by proximity. These mechanics make the evidence easier to review; deciding which
-tool events are pivotal, what they mean, and whether a compaction summary is redundant remains
-semantic work.
 
 ---
 

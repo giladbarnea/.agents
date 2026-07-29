@@ -52,6 +52,7 @@ class FileReferenceDecision:
 
 @dataclasses.dataclass
 class Decisions:
+    source_sha256: str | None
     drop_texts: list[int]
     drop_text_blocks: list[tuple[int, str]]
     drop_file_references: list[FileReferenceDecision]
@@ -96,6 +97,7 @@ def output_text(block: dict[str, object]) -> str:
 
 def parse_decisions(raw: dict[str, object]) -> Decisions:
     known_keys = {
+        "source_sha256",
         "drop_texts",
         "drop_text_blocks",
         "drop_file_references",
@@ -106,6 +108,13 @@ def parse_decisions(raw: dict[str, object]) -> Decisions:
     unknown = sorted(set(raw) - known_keys)
     if unknown:
         raise ValueError(f"unknown decision keys: {unknown}")
+
+    source_sha256 = raw.get("source_sha256")
+    if source_sha256 is not None and (
+        not isinstance(source_sha256, str)
+        or re.fullmatch(r"[0-9a-f]{64}", source_sha256) is None
+    ):
+        raise ValueError("source_sha256 must be a lowercase SHA-256 digest")
 
     drop_texts = raw.get("drop_texts", [])
     if not isinstance(drop_texts, list) or not all(isinstance(index, int) for index in drop_texts):
@@ -151,6 +160,7 @@ def parse_decisions(raw: dict[str, object]) -> Decisions:
             raise ValueError(f"{key} must be an array of non-empty strings")
 
     return Decisions(
+        source_sha256=source_sha256,
         drop_texts=drop_texts,
         drop_text_blocks=drop_text_blocks,
         drop_file_references=drop_file_references,
@@ -258,6 +268,12 @@ def collect_provenance(
 def generate_plan(
     source_bytes: bytes, decisions: Decisions
 ) -> tuple[dict[str, object], list[str]]:
+    source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+    if decisions.source_sha256 is not None and decisions.source_sha256 != source_sha256:
+        raise ValueError(
+            "annotation source checksum mismatch: "
+            f"expected {decisions.source_sha256}, got {source_sha256}"
+        )
     messages = apply_compaction_plan.load_messages(source_bytes)
     messages_by_index = {message["original_index"]: message for message in messages}
 
@@ -384,7 +400,7 @@ def generate_plan(
     provenance = collect_provenance(messages, decisions)
     plan: dict[str, object] = {
         "version": 1,
-        "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+        "source_sha256": source_sha256,
         "drop_messages": sorted(drop_messages),
         "replace_messages": replace_messages,
         "affected_files_extra": [path for path, _ in provenance],
