@@ -26,10 +26,11 @@ full_prompt="$(
     "$search_path" \
     "$query"
 )"
-pi_args=(--model ds4f --no-skills -np --no-extensions --no-session)
+pi_args=(--model ds4f --thinking high --no-skills -np --no-extensions -e ~/.pi/agent/extensions/read-many-files.ts -e ~/.pi/agent/extensions/smart-truncation.ts -a --no-session)
 
 if [[ $interactive = false ]]; then
   pi_args+=(--print)
 fi
 
-pi "${pi_args[@]}" "$full_prompt"
+printf "[log] Launching ‘pi’ with a fast model prompted well with respect to ‘${search_path}’ and your query. Ignore process init warnings about not finding claude models — these are irrelevant. The search process can take a few long minutes, be patient. It will simply print its results to stdout when it’s done."
+pi "${pi_args[@]}" "$full_prompt" 2>&1
