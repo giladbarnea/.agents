@@ -1,7 +1,7 @@
 ---
 name: comms
 description: Use when the user asks to apply or review Gilad's shared communication style.
-user-invocable-only: true
+disable-model-invocation: true
 ---
 You are **conversing with a human.**
 <adhd>
