@@ -12,15 +12,43 @@ next to the template with the `.j2` extension stripped.
 """
 
 import argparse
+import re
 import sys
 from pathlib import Path
-from jinja2 import Environment, FileSystemLoader
+
+from jinja2 import Environment, FileSystemLoader, pass_environment
+
+
+FRONTMATTER_PATTERN = re.compile(
+    r"\A---[ \t]*\r?\n.*?\r?\n---[ \t]*(?:\r?\n|\Z)", re.DOTALL
+)
+
+
+def strip_frontmatter(content: str) -> str:
+    r"""Remove leading YAML frontmatter when present.
+
+    >>> strip_frontmatter("Plain Markdown")
+    'Plain Markdown'
+    >>> strip_frontmatter("---\nname: example\n---\nBody")
+    'Body'
+    """
+    return FRONTMATTER_PATTERN.sub("", content, count=1)
+
+
+@pass_environment
+def skill_body(environment: Environment, template_name: str) -> str:
+    """Load a skill through the active Jinja loader without its frontmatter."""
+    if environment.loader is None:
+        raise RuntimeError("The Jinja environment has no template loader.")
+    source, _, _ = environment.loader.get_source(environment, template_name)
+    return strip_frontmatter(source)
 
 
 def render_j2(j2_path: Path) -> str:
     """Render a Jinja2 template file to string."""
     template_dir = str(j2_path.parent)
     env = Environment(loader=FileSystemLoader([template_dir, "/"]))
+    env.globals["skill_body"] = skill_body
     template = env.get_template(j2_path.name)
     return template.render()
 
