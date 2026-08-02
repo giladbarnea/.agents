@@ -1,3 +1,0 @@
-[submodule "plugins/claude-plugins"]
-	path = plugins/claude-plugins
-	url = git@github.com:giladbarnea/claude-plugins.git
