@@ -1,6 +1,6 @@
 ---
 name: "plan"
-description: "Planning best practices. Load when planning a multi-phase deliverable."
+description: "Planning best practices. Load when planning a multi-phase, heavyweight deliverable. Unfit for small-medium sized efforts."
 ---
 
 # Planning Best Practices
