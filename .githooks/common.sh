@@ -44,30 +44,30 @@ render_one() {
 
   can_prompt_for_render || return 1
 
-  printf 'Show diff? Y/N/R ' > /dev/tty
-  read -r reply < /dev/tty || return 1
+  printf 'Show diff? Y/N/R ' >/dev/tty
+  read -r reply </dev/tty || return 1
 
   case "$reply" in
-    [Yy])
-      rendered_tmp="$(mktemp)"
-      ./render.py --stdout "$target" > "$rendered_tmp"
-      show_render_diff "$output" "$rendered_tmp"
-      rm -f "$rendered_tmp"
+  [Yy])
+    rendered_tmp="$(mktemp)"
+    ./render.py --stdout "$target" >"$rendered_tmp"
+    show_render_diff "$output" "$rendered_tmp"
+    rm -f "$rendered_tmp"
 
-      printf 'Render %s now? Y/N ' "$output" > /dev/tty
-      read -r reply < /dev/tty || return 1
-      if [[ "$reply" == "Y" || "$reply" == "y" ]]; then
-        ./render.py "$target" || return 1
-      else
-        printf '⊘ Skipped %s\n' "$output" > /dev/tty
-      fi
-      ;;
-    [Rr])
+    printf 'Render %s now? Y/N ' "$output" >/dev/tty
+    read -r reply </dev/tty || return 1
+    if [[ "$reply" == "Y" || "$reply" == "y" ]]; then
       ./render.py "$target" || return 1
-      ;;
-    *)
-      return 1
-      ;;
+    else
+      printf '⊘ Skipped %s\n' "$output" >/dev/tty
+    fi
+    ;;
+  [Rr])
+    ./render.py "$target" || return 1
+    ;;
+  *)
+    return 1
+    ;;
   esac
 }
 
@@ -90,7 +90,7 @@ render_agents_md() {
 # e.g. (claude codex) -> "$HOME/.{claude,codex}", (claude) -> "$HOME/.claude".
 join_braced() {
   local IFS=,
-  if (( $# == 1 )); then
+  if (($# == 1)); then
     printf '%s/.%s' "$HOME" "$1"
   else
     printf '%s/.{%s}' "$HOME" "$*"
@@ -108,7 +108,10 @@ ensure_symlink() {
     printf '✗ Refusing to link over non-symlink destination: %s\n' "$link" >&2
     return 1
   }
-  ln -sfn "$target" "$link" || { printf '✗ Failed to link %s → %s\n' "$target" "$link" >&2; return 1; }
+  ln -sfn "$target" "$link" || {
+    printf '✗ Failed to link %s → %s\n' "$target" "$link" >&2
+    return 1
+  }
 }
 
 is_runtime_skill_path() {
@@ -150,28 +153,30 @@ render_skills() {
     [[ -f "$generator" ]] && has_generator=1
 
     [[ -f "$skill_directory/SKILL.md" || $has_generator -eq 1 ]] || continue
-    (( has_generator == 0 )) || is_runtime_skill_path "$skill_path" || {
+    ((has_generator == 0)) || is_runtime_skill_path "$skill_path" || {
       printf '✗ Runtime skill is missing from %s: %s\n' \
         "$GITHOOKS_DIRECTORY/runtime-skills.sh" "$skill_path" >&2
       return 1
     }
 
-    (( has_generator == 0 )) || [[ -x "$generator" ]] || {
+    ((has_generator == 0)) || [[ -x "$generator" ]] || {
       printf '✗ Skill runtime is not executable: %s\n' "$generator" >&2
       return 1
     }
-    (( has_generator == 0 )) || "$generator" || return 1
+    ((has_generator == 0)) || "$generator" || return 1
     [[ -f "$skill_directory/SKILL.md" ]] || {
       printf '✗ Runtime did not produce SKILL.md: %s\n' "$skill_directory" >&2
       return 1
     }
-    if (( has_generator == 1 )) && [[ -n "$stage" ]]; then
+    if ((has_generator == 1)) && [[ -n "$stage" ]]; then
       git -C "$REPOSITORY_ROOT" add "$skill_path/SKILL.md"
     fi
 
     linked=()
     for provider in "${SKILL_PROVIDERS[@]}"; do
-      short="${provider#"$HOME"/}"; short="${short%%/*}"; short="${short#.}"
+      short="${provider#"$HOME"/}"
+      short="${short%%/*}"
+      short="${short#.}"
       ensure_symlink "$skill_directory" "$provider/$skill_name" || return 1
       linked+=("$short")
     done
@@ -201,9 +206,9 @@ clean_orphaned_skill_links() {
         printf '  → points to (missing): %s\n' "$target" >&2
 
         if can_prompt_for_render; then
-          printf 'Remove orphaned link %s? Y/N ' "$link_name" > /dev/tty
+          printf 'Remove orphaned link %s? Y/N ' "$link_name" >/dev/tty
           local reply
-          read -r reply < /dev/tty || continue
+          read -r reply </dev/tty || continue
           if [[ "$reply" == "Y" || "$reply" == "y" ]]; then
             rm -f "$link" && printf '✓ Removed %s\n' "$link" >&2
           else
@@ -216,7 +221,12 @@ clean_orphaned_skill_links() {
     done < <(find "$skills_dir" -maxdepth 1 -mindepth 1 -type l -print)
   done
 
-  if (( found_orphans == 0 )); then
+  if ((found_orphans == 0)); then
     printf '✓ No orphaned skill links found\n' >&2
   fi
+}
+
+sync_plugins() {
+  "$GITHOOKS_DIRECTORY/sync-claude-plugins.sh" || return 1
+  "$GITHOOKS_DIRECTORY/sync-codex-plugins.sh" || return 1
 }
