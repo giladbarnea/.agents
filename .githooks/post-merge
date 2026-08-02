@@ -5,4 +5,4 @@ source "$(dirname "$0")/common.sh"
 render_agents_md || exit 1
 render_skills || exit 1
 clean_orphaned_skill_links
-sync_plugins || exit 1
+sync_plugins ORIG_HEAD..HEAD || exit 1

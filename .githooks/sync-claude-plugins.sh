@@ -30,6 +30,80 @@ replace_file() {
   mv "$source_file" "$destination_file"
 }
 
+collect_plugin_names() {
+  local output_file="$1"
+  local plugin_directory
+
+  {
+    for plugin_directory in "$SOURCE_PLUGINS_DIRECTORY"/*/; do
+      [[ -d "$plugin_directory" ]] || continue
+      basename "$plugin_directory"
+    done
+
+    {
+      git -C "$REPOSITORY_ROOT" diff --no-renames --name-only --diff-filter=D -- plugins
+      git -C "$REPOSITORY_ROOT" diff --cached --no-renames --name-only --diff-filter=D -- plugins
+      if [[ -n "${PLUGIN_SYNC_GIT_RANGE:-}" ]]; then
+        git -C "$REPOSITORY_ROOT" diff --no-renames --name-only --diff-filter=D "$PLUGIN_SYNC_GIT_RANGE" -- plugins
+      fi
+    } | awk -F/ '$1 == "plugins" && $2 !~ /^\./ && NF >= 3 {print $2}'
+  } | sort -u >"$output_file"
+}
+
+plugin_has_non_empty_skill() {
+  local source_plugin_directory="$1"
+  local skill_file
+
+  for skill_file in "$source_plugin_directory"/skills/*/SKILL.md; do
+    [[ -s "$skill_file" ]] && return 0
+  done
+  return 1
+}
+
+remove_plugin() {
+  local plugin_name="$1"
+  local marketplace_name="$plugin_name"
+  local marketplace_directory="$CLAUDE_DIRECTORY/plugins/marketplaces/$marketplace_name"
+  local cache_directory="$CLAUDE_DIRECTORY/plugins/cache/$marketplace_name"
+  local plugin_identifier="$plugin_name@$marketplace_name"
+  local settings_temporary_file="$TEMPORARY_DIRECTORY/settings.json"
+  local known_marketplaces_temporary_file="$TEMPORARY_DIRECTORY/known-marketplaces.json"
+  local installed_plugins_temporary_file="$TEMPORARY_DIRECTORY/installed-plugins.json"
+
+  jq \
+    --arg marketplace_name "$marketplace_name" \
+    --arg plugin_identifier "$plugin_identifier" \
+    'del(.extraKnownMarketplaces[$marketplace_name])
+      | del(.enabledPlugins[$plugin_identifier])' \
+    "$SETTINGS_FILE" \
+    >"$settings_temporary_file"
+
+  jq \
+    --arg marketplace_name "$marketplace_name" \
+    'del(.[$marketplace_name])' \
+    "$KNOWN_MARKETPLACES_FILE" \
+    >"$known_marketplaces_temporary_file"
+
+  jq \
+    --arg plugin_identifier "$plugin_identifier" \
+    'del(.plugins[$plugin_identifier])' \
+    "$INSTALLED_PLUGINS_FILE" \
+    >"$installed_plugins_temporary_file"
+
+  jq empty \
+    "$settings_temporary_file" \
+    "$known_marketplaces_temporary_file" \
+    "$installed_plugins_temporary_file"
+
+  replace_file "$settings_temporary_file" "$SETTINGS_FILE"
+  replace_file "$known_marketplaces_temporary_file" "$KNOWN_MARKETPLACES_FILE"
+  replace_file "$installed_plugins_temporary_file" "$INSTALLED_PLUGINS_FILE"
+
+  rm -rf "$marketplace_directory" "$cache_directory"
+
+  printf '✓ Removed deleted plugin %s from Claude\n' "$plugin_identifier"
+}
+
 sync_plugin() {
   local source_plugin_directory="$1"
   local plugin_name
@@ -39,7 +113,6 @@ sync_plugin() {
   local cache_directory
   local plugin_identifier
   local plugin_description
-  local has_non_empty_skill
   local skill_file
   local skill_directory
   local expected_skill_name
@@ -60,12 +133,6 @@ sync_plugin() {
   [[ -d "$source_plugin_directory/skills" ]] || fail "Missing plugin skills directory: $source_plugin_directory/skills"
 
   skill_files=("$source_plugin_directory"/skills/*/SKILL.md)
-  has_non_empty_skill=0
-  for skill_file in "${skill_files[@]}"; do
-    [[ -s "$skill_file" ]] && has_non_empty_skill=1
-  done
-  (( has_non_empty_skill == 1 )) || fail "Plugin has no non-empty skills/*/SKILL.md: $source_plugin_directory"
-
   plugin_description=""
   for skill_file in "${skill_files[@]}"; do
     skill_directory="$(dirname "$skill_file")"
@@ -166,6 +233,24 @@ sync_plugin() {
   printf '✓ Synced %s into Claude as %s\n' "$source_plugin_directory" "$plugin_identifier"
 }
 
+reconcile_plugin() {
+  local plugin_name="$1"
+  local source_plugin_directory="$SOURCE_PLUGINS_DIRECTORY/$plugin_name"
+
+  if [[ ! -d "$source_plugin_directory" ]]; then
+    remove_plugin "$plugin_name"
+    return
+  fi
+
+  if plugin_has_non_empty_skill "$source_plugin_directory"; then
+    sync_plugin "$source_plugin_directory"
+    return
+  fi
+
+  printf '⚠ Plugin exists without a non-empty skills/*/SKILL.md; leaving Claude unchanged: %s\n' \
+    "$source_plugin_directory" >&2
+}
+
 [[ $# -eq 0 ]] || fail "Usage: $0"
 
 for required_command in jq rsync yq; do
@@ -176,9 +261,9 @@ done
 [[ -f "$KNOWN_MARKETPLACES_FILE" ]] || fail "Missing Claude marketplace registry: $KNOWN_MARKETPLACES_FILE"
 [[ -f "$INSTALLED_PLUGINS_FILE" ]] || fail "Missing Claude plugin registry: $INSTALLED_PLUGINS_FILE"
 
-plugin_directories=("$SOURCE_PLUGINS_DIRECTORY"/*/)
-[[ -d "${plugin_directories[0]}" ]] || fail "No plugins found in: $SOURCE_PLUGINS_DIRECTORY"
+plugin_names_file="$TEMPORARY_DIRECTORY/plugin-names"
+collect_plugin_names "$plugin_names_file"
 
-for plugin_directory in "${plugin_directories[@]}"; do
-  sync_plugin "${plugin_directory%/}"
-done
+while IFS= read -r plugin_name; do
+  reconcile_plugin "$plugin_name"
+done <"$plugin_names_file"
