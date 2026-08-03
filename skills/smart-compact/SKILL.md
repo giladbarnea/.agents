@@ -235,14 +235,12 @@ artifact-producing tools (e.g. Lumen output paths), and declared opaque artifact
 a mandatory audit to stderr — inferred removals grouped by tool, normalized mixed messages,
 skeleton anchors, explicit drops, scratchpad exclusions, affected paths with provenance
 category, final counts — and self-verifies the plan against the apply stage before emitting
-it. Unresolved structured blocks, invalid or ambiguous anchors, conflicting decisions,
+it. Malformed structured blocks, invalid or ambiguous anchors, conflicting decisions,
 unreferenced scratchpad paths, and artifact-extractor failures fail loudly.
 
-**Current structured-block limit:** the semantic plan generator accepts only
-`tool-input` and `tool-output` objects. A `thinking`, sub-agent, or other structured
-object fails as unresolved. Native compaction can preserve `thinking` blocks, but the
-exported semantic-plan pipeline does not yet pass them through. The native plan applier
-uses the plan's tool decisions while preserving the native session's thinking blocks.
+Non-tool structured blocks, including `thinking` and `subagent-task`, pass through unchanged.
+Transcript strings may be grouped because `ch parse` rejects non-adjacent strings. Native Pi
+thinking blocks keep their exact positions.
 
 The generated plan is a plain, inspectable JSON artifact (`drop_messages`,
 `replace_messages`, `affected_files_extra`, `source_sha256`). Each replacement carries

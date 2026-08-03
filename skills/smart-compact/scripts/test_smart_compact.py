@@ -18,6 +18,7 @@ import compile_annotations
 import generate_compaction_plan
 import prune_transcript
 import render_review_view
+import transfer_to_pi_session
 
 
 def message(index: int, role: str, content: list[object]) -> dict[str, object]:
@@ -473,6 +474,23 @@ skeletons:
             f"Wrong footer: {compacted!r}",
         )
 
+    def test_footer_keeps_final_message_strings_adjacent(self) -> None:
+        thinking = {"type": "thinking", "content": "Check the final wording"}
+        source = [message(1, "assistant", ["Final answer", thinking])]
+        source_bytes = json.dumps(source).encode()
+        plan, _ = generate_compaction_plan.generate_plan(
+            source_bytes,
+            generate_compaction_plan.parse_decisions({}),
+        )
+
+        compacted = apply_compaction_plan.apply_plan(source_bytes, plan)
+
+        self.assertEqual(
+            compacted[0].get("content"),
+            ["Final answer", "<affected-files>\n</affected-files>", thinking],
+            f"The footer separated final message strings around thinking: {compacted!r}",
+        )
+
     def test_manifest_refuses_stale_source(self) -> None:
         with self.assertRaisesRegex(ValueError, "checksum mismatch"):
             apply_compaction_plan.apply_plan(
@@ -590,40 +608,46 @@ skeletons:
     def test_semantic_pipeline_preserves_structured_blocks(self) -> None:
         thinking = {"type": "thinking", "content": "Keep this reasoning"}
         subagent_task = {"type": "subagent-task", "content": "Inspect the parser"}
-        source = [
-            message(1, "assistant", [
-                thinking,
-                "Before validation",
-                {
-                    "type": "tool-input",
-                    "name": "Bash",
-                    "id": "01AB",
-                    "native_tool_call_id": "toolu_01AB-full",
-                    "native_content_index": 2,
-                    "command": "pytest",
-                },
-            ]),
-            message(2, "user", [{
-                "type": "tool-output",
+        agent_message = {
+            "type": "agent",
+            "role": "agent",
+            "original_index": 1,
+            "agent_id": "agent-1",
+            "native_entry_id": "agent-entry",
+            "content": [subagent_task, "The parser is sound"],
+        }
+        tool_message = message(2, "assistant", [
+            "Before validation",
+            thinking,
+            {
+                "type": "tool-input",
                 "name": "Bash",
                 "id": "01AB",
                 "native_tool_call_id": "toolu_01AB-full",
-                "content": "12 passed",
-            }]),
-            {
-                "type": "agent",
-                "role": "agent",
-                "original_index": 3,
-                "agent_id": "agent-1",
-                "content": [subagent_task, "The parser is sound"],
+                "native_content_index": 2,
+                "command": "pytest",
             },
+        ])
+        tool_message["native_entry_id"] = "assistant-entry"
+        result_message = message(3, "user", [{
+            "type": "tool-output",
+            "name": "Bash",
+            "id": "01AB",
+            "native_tool_call_id": "toolu_01AB-full",
+            "content": "12 passed",
+        }])
+        result_message["native_entry_id"] = "result-entry"
+        source = [
+            agent_message,
+            tool_message,
+            result_message,
             message(4, "assistant", ["Done"]),
         ]
         pruned = prune_transcript.prune(source)
         source_bytes = json.dumps(pruned).encode()
         decisions = generate_compaction_plan.parse_decisions({
             "skeletons": [{
-                "original_index": 1,
+                "original_index": 2,
                 "tool_id": "toolu_01AB-full",
                 "command": "pytest",
                 "purpose": "Validate",
@@ -639,18 +663,132 @@ skeletons:
         }
 
         self.assertEqual(
-            content_by_index.get(1),
+            content_by_index.get(2),
             [
-                thinking,
                 "Before validation",
                 '<tool-skeleton name="Bash" command="pytest" purpose="Validate" outcome="12 passed"/>',
+                thinking,
             ],
-            f"Thinking did not survive tool compaction in place. Got: {compacted!r}",
+            f"Thinking did not survive a ch-compatible tool compaction. Got: {compacted!r}",
         )
         self.assertEqual(
-            content_by_index.get(3),
+            content_by_index.get(1),
             [subagent_task, "The parser is sound"],
             f"The sub-agent block did not survive unchanged. Got: {compacted!r}",
+        )
+
+        custom_raw = (
+            '{ "type": "custom_message", "id": "agent-entry", '
+            '"parentId": null, "customType": "pi-user-agents", "data": {"kept": true} }'
+        )
+        native_lines = [
+            '{"type":"session","version":3,"id":"target","timestamp":"now","cwd":"/tmp"}',
+            custom_raw,
+            json.dumps({
+                "type": "message",
+                "id": "assistant-entry",
+                "parentId": "agent-entry",
+                "timestamp": "now",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "thinking", "thinking": "Keep this reasoning"},
+                        {"type": "text", "text": "Before validation"},
+                        {
+                            "type": "toolCall",
+                            "id": "toolu_01AB-full",
+                            "name": "Bash",
+                            "arguments": {"command": "pytest"},
+                        },
+                    ],
+                },
+            }),
+            json.dumps({
+                "type": "message",
+                "id": "result-entry",
+                "parentId": "assistant-entry",
+                "timestamp": "now",
+                "message": {
+                    "role": "toolResult",
+                    "toolCallId": "toolu_01AB-full",
+                    "toolName": "Bash",
+                    "content": [{"type": "text", "text": "12 passed"}],
+                },
+            }),
+            json.dumps({
+                "type": "message",
+                "id": "done-entry",
+                "parentId": "result-entry",
+                "timestamp": "now",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Done"}],
+                },
+            }),
+        ]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            session_path = pathlib.Path(temporary_directory, "target.jsonl")
+            session_path.write_text("\n".join(native_lines) + "\n")
+            rendered, _ = transfer_to_pi_session.apply_native_plan(
+                source_bytes,
+                plan,
+                session_path,
+            )
+
+        native_content = json.loads(rendered[2])["message"]["content"]
+        self.assertEqual(
+            rendered[1],
+            custom_raw,
+            f"An untouched native sub-agent line was reserialized: {rendered[1]!r}",
+        )
+        self.assertEqual(
+            native_content,
+            [
+                {"type": "thinking", "thinking": "Keep this reasoning"},
+                {"type": "text", "text": "Before validation"},
+                {
+                    "type": "text",
+                    "text": '<tool-skeleton name="Bash" command="pytest" purpose="Validate" outcome="12 passed"/>',
+                },
+            ],
+            f"Native thinking changed while the tool was compacted: {native_content!r}",
+        )
+
+    def test_whole_message_text_drops_preserve_structured_blocks(self) -> None:
+        annotated_thinking = {
+            "type": "thinking",
+            "content": "Keep annotated reasoning",
+        }
+        marked_thinking = {
+            "type": "thinking",
+            "content": "Keep marked reasoning",
+        }
+        marked_message = message(2, "assistant", ["Drop marked prose", marked_thinking])
+        marked_message["remove"] = True
+        source = [
+            message(1, "assistant", ["Drop annotated prose", annotated_thinking]),
+            marked_message,
+            message(3, "assistant", ["Done"]),
+        ]
+        source_bytes = json.dumps(source).encode()
+        decisions = generate_compaction_plan.parse_decisions({"drop_texts": [1]})
+
+        plan, _ = generate_compaction_plan.generate_plan(source_bytes, decisions)
+        compacted = apply_compaction_plan.apply_plan(source_bytes, plan)
+        content_by_index = {
+            item["original_index"]: item["content"]
+            for item in compacted
+        }
+
+        self.assertEqual(
+            content_by_index.get(1),
+            [annotated_thinking],
+            f"An annotated text drop deleted its thinking block: {compacted!r}",
+        )
+        self.assertEqual(
+            content_by_index.get(2),
+            [marked_thinking],
+            f"A remove marker deleted its thinking block: {compacted!r}",
         )
 
     def test_generator_drops_one_file_reference_by_index_operation_and_path(self) -> None:

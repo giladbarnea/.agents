@@ -75,6 +75,23 @@ def render_skeleton(attributes: dict[str, str]) -> str:
     return f"<tool-skeleton {rendered}/>"
 
 
+def make_text_blocks_adjacent(content: list[object]) -> list[object]:
+    """Group strings without changing structured block values or relative order.
+
+    >>> make_text_blocks_adjacent(['before', {'type': 'thinking'}, 'after'])
+    ['before', 'after', {'type': 'thinking'}]
+    """
+    first_text_index = next(
+        (index for index, block in enumerate(content) if isinstance(block, str)),
+        len(content),
+    )
+    return (
+        content[:first_text_index]
+        + [block for block in content[first_text_index:] if isinstance(block, str)]
+        + [block for block in content[first_text_index:] if not isinstance(block, str)]
+    )
+
+
 def output_text(block: dict[str, object]) -> str:
     """Collect the text of a tool-output block across known transcript shapes.
 
@@ -326,9 +343,7 @@ def generate_plan(
 
     for message in messages:
         index = message["original_index"]
-        if index in whole_message_drops:
-            drop_messages.append(index)
-            continue
+        drop_message_text = index in whole_message_drops
         original_content = message.get("content")
         if not isinstance(original_content, list):
             raise ValueError(f"message {index} has no content array")
@@ -341,6 +356,9 @@ def generate_plan(
         for block in original_content:
             if isinstance(block, str):
                 had_prose = True
+                if drop_message_text:
+                    changed = True
+                    continue
                 reference = transcript_common.file_reference(block)
                 path = reference[1] if reference is not None else None
                 if (
@@ -365,7 +383,11 @@ def generate_plan(
                     continue
                 new_content.append(block)
                 continue
-            if not isinstance(block, dict) or not isinstance(block.get("type"), str):
+            if (
+                not isinstance(block, dict)
+                or not isinstance(block.get("type"), str)
+                or not block["type"]
+            ):
                 raise ValueError(f"message {index} contains an unresolved structured block: {block!r}")
             if block["type"] not in {"tool-input", "tool-output"}:
                 new_content.append(block)
@@ -393,13 +415,17 @@ def generate_plan(
                 )
             tool_skeletons.append({"tool_id": tool_identifier, "content": skeleton})
 
+        normalized_content = make_text_blocks_adjacent(new_content)
+        text_blocks_normalized = normalized_content != new_content
+        new_content = normalized_content
+        changed = changed or text_blocks_normalized
         if not new_content:
             drop_messages.append(index)
             continue
         if not changed:
             kept_untouched += 1
             continue
-        if had_prose and had_tools:
+        if (had_prose and had_tools) or text_blocks_normalized:
             mixed_normalized.append(index)
         replacement: dict[str, object] = {
             "original_index": index,

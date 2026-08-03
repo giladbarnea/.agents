@@ -152,8 +152,8 @@ export fails before writing with instructions to re-export and re-prune.
 It validates the source-bound plan and all mappings before writing. It applies text drops
 and block-level tool drops or replacements, inserts skeleton and file-reference strings
 where tool-call blocks were, and removes paired tool-result entries. It preserves
-surrounding text and native thinking blocks, keeps only the active path, and re-chains
-the survivors.
+surrounding text, keeps native Pi thinking blocks at their exact positions, keeps only
+the active path, and re-chains the survivors.
 
 Each planned skeleton has an exact association in its replacement entry:
 ```json

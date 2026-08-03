@@ -14,6 +14,8 @@ import xml.etree.ElementTree
 
 import transcript_common
 
+TOOL_BLOCK_TYPES = frozenset({"tool-input", "tool-output"})
+
 
 def load_messages(data: bytes) -> list[dict[str, object]]:
     raw = json.loads(data)
@@ -33,10 +35,32 @@ def tool_ids(message: dict[str, object]) -> set[str]:
     return {
         identifier
         for block in content
-        if isinstance(block, dict)
+        if isinstance(block, dict) and block.get("type") in TOOL_BLOCK_TYPES
         for identifier in [block.get("id")]
         if isinstance(identifier, str)
     }
+
+
+def passthrough_structured_blocks(
+    content: list[object], original_index: int
+) -> list[dict[str, object]]:
+    """Return validated non-tool objects in their original order.
+
+    >>> passthrough_structured_blocks([{'type': 'thinking', 'content': 'why'}, 'text'], 4)
+    [{'type': 'thinking', 'content': 'why'}]
+    """
+    blocks: list[dict[str, object]] = []
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        block_type = block.get("type")
+        if not isinstance(block_type, str) or not block_type:
+            raise ValueError(
+                f"message {original_index} contains an unresolved structured block: {block!r}"
+            )
+        if block_type not in TOOL_BLOCK_TYPES:
+            blocks.append(block)
+    return blocks
 
 
 def is_footer(block: object) -> bool:
@@ -178,6 +202,13 @@ def apply_plan(
             raise ValueError(
                 f"replacement {original_index} content must contain strings or structured blocks"
             )
+        source_content = messages_by_index[original_index].get("content")
+        if not isinstance(source_content, list):
+            raise ValueError(f"message {original_index} has no content array")
+        if passthrough_structured_blocks(
+            content, original_index
+        ) != passthrough_structured_blocks(source_content, original_index):
+            raise ValueError(f"replacement {original_index} structured blocks changed")
         replacement_tool_skeletons(
             item,
             messages_by_index[original_index],
@@ -198,9 +229,10 @@ def apply_plan(
         content = [block for block in content if not is_footer(block)]
         if not content:
             continue
+        passthrough_structured_blocks(content, original_index)
         if any(
             isinstance(block, dict)
-            and block.get("type") in {"tool-input", "tool-output"}
+            and block.get("type") in TOOL_BLOCK_TYPES
             for block in content
         ):
             raise ValueError(f"message {original_index} still contains raw tool blocks")
@@ -230,7 +262,15 @@ def apply_plan(
     final_content = compacted[-1]["content"]
     if not isinstance(final_content, list):
         raise ValueError("final message has no content array")
-    final_content.append(footer(affected_paths))
+    footer_position = max(
+        (
+            index
+            for index, block in enumerate(final_content)
+            if isinstance(block, str)
+        ),
+        default=len(final_content) - 1,
+    ) + 1
+    final_content.insert(footer_position, footer(affected_paths))
     return compacted
 
 
