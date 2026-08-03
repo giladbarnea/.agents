@@ -63,4 +63,4 @@ The way to keep output short is to be selective about what you include (drop det
 
 ---
 
-Relative to this skill has a `./references/` for special-cases. Don’t load unless instructed to. 
+Relative to this skill is a `./references/` for special-cases. Don’t load unless instructed to. 

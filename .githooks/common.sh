@@ -114,6 +114,25 @@ ensure_symlink() {
   }
 }
 
+link_skill() {
+  local skill_directory="$1"
+  shift
+  local skill_name="$(basename "$skill_directory")"
+  local provider short
+  local -a linked
+
+  linked=()
+  for provider in "$@"; do
+    short="${provider#"$HOME"/}"
+    short="${short%%/*}"
+    short="${short#.}"
+    ensure_symlink "$skill_directory" "$provider/$skill_name" || return 1
+    linked+=("$short")
+  done
+
+  printf '✓ Linked %s → %s\n' "$skill_name" "$(join_braced "${linked[@]}")" >&2
+}
+
 is_runtime_skill_path() {
   local skill_path="$1"
   local registered_skill_path
@@ -128,9 +147,7 @@ is_runtime_skill_path() {
 # skill and provider is otherwise handled by this single traversal.
 render_skills() {
   local stage="${1:-}"
-  local skill_path skill_directory skill_name generator has_generator
-  local provider short
-  local -a linked
+  local skill_path skill_directory generator has_generator
 
   for skill_path in "${RUNTIME_SKILL_PATHS[@]}"; do
     skill_directory="$REPOSITORY_ROOT/$skill_path"
@@ -147,7 +164,6 @@ render_skills() {
   for skill_directory in "$REPOSITORY_ROOT"/skills/*/; do
     skill_directory="${skill_directory%/}"
     skill_path="${skill_directory#"$REPOSITORY_ROOT"/}"
-    skill_name="$(basename "$skill_directory")"
     generator="$skill_directory/create/create.py"
     has_generator=0
     [[ -f "$generator" ]] && has_generator=1
@@ -172,16 +188,13 @@ render_skills() {
       git -C "$REPOSITORY_ROOT" add "$skill_path/SKILL.md"
     fi
 
-    linked=()
-    for provider in "${SKILL_PROVIDERS[@]}"; do
-      short="${provider#"$HOME"/}"
-      short="${short%%/*}"
-      short="${short#.}"
-      ensure_symlink "$skill_directory" "$provider/$skill_name" || return 1
-      linked+=("$short")
-    done
+    link_skill "$skill_directory" "${SKILL_PROVIDERS[@]}" || return 1
+  done
 
-    printf '✓ Linked %s → %s\n' "$skill_name" "$(join_braced "${linked[@]}")" >&2
+  for skill_directory in "$REPOSITORY_ROOT"/plugins/*/skills/*/; do
+    skill_directory="${skill_directory%/}"
+    [[ -s "$skill_directory/SKILL.md" ]] || continue
+    link_skill "$skill_directory" "$HOME/.pi/agent/skills" || return 1
   done
 }
 

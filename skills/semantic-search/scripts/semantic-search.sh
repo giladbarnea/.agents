@@ -26,7 +26,7 @@ full_prompt="$(
     "$search_path" \
     "$query"
 )"
-pi_args=(--model ds4f --thinking high --no-skills -np --no-extensions -e ~/.pi/agent/extensions/read-many-files.ts -e ~/.pi/agent/extensions/smart-truncation.ts -a --no-session)
+pi_args=(--model openai-codex/gpt-5.6-luna --thinking medium --no-skills -np --no-extensions -e ~/.pi/agent/extensions/read-many-files.ts -e ~/.pi/agent/extensions/smart-truncation.ts -a --no-session)
 
 if [[ $interactive = false ]]; then
   pi_args+=(--print)
