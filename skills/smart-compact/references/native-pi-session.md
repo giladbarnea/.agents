@@ -6,6 +6,21 @@ export). Everything here was reverse-engineered from
 `/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js`;
 consult it directly for anything not covered.
 
+## Choose the workflow by the required output
+
+The current tools have separate contracts:
+
+| Workflow | Output | Supports semantic skeletons | Write behavior |
+|---|---|---:|---|
+| `generate_compaction_plan.py` + `apply_compaction_plan.py` | Compacted `ch` transcription | Yes | Writes a new transcription |
+| `compact_native_pi_session.py` | Resumable native session | No | Creates a new session beside the source |
+| `transfer_to_pi_session.py` | Resumable native session | Yes | Edits an explicit target copy after backup |
+
+The transcription apply stage and native plan applier consume the same semantic plan in
+different ways. The transcription apply stage writes a compacted transcription. The
+native plan applier consumes the pruned source, the plan, and a native target copy.
+Do not pass the compacted transcription to the native plan applier.
+
 ## File anatomy
 
 One JSON object per line (strict LF framing).
@@ -45,8 +60,9 @@ One JSON object per line (strict LF framing).
 
 - Drop: `pi-time-sense` entries; `todo` toolCall+toolResult units; messages emptied by
   block removal. Keep `thinking` blocks unless the user opts out — ask if unstated.
-- Shrink in place (keeps pairing, zero tree risk): toolResult text > ~800 chars, and
-  always for `read`/`read_many_files`/`write` results.
+- Shrink in place (keeps pairing, zero tree risk): toolResult text above the configured
+  threshold (800 by default). `read`/`read_many_files`/`write` use a 400-character
+  minimum instead.
 - Keep verbatim: user/assistant `text` blocks (byte-for-byte), structural entries,
   `custom`/`pi-user-agents`, `bashExecution`, small tool results.
 
@@ -58,11 +74,18 @@ One JSON object per line (strict LF framing).
   convention (`<ts>_<id>.jsonl`) but not authoritative — header wins.
 - pi loads messages without content-type validation: a message containing only
   `thinking` blocks (e.g. after todo-stripping removes the toolCall) is harmless.
+- `ch -f json` preserves Pi provenance in additive JSON-only fields. Native messages
+  carry `native_entry_id`; tool inputs carry full `native_tool_call_id` and zero-based
+  `native_content_index`; tool outputs carry full `native_tool_call_id`. The shortened
+  display `id` remains for compatibility. `ch parse` accepts these fields and omits them
+  from XML output.
 
-## Native compaction script
+## Native default-policy compaction script
 
-`scripts/compact_native_pi_session.py` — one command that does the full native-resumable
-compaction. Accepts a **session id or file path** as argument.
+`scripts/compact_native_pi_session.py` performs structural native compaction with its
+fixed decisions schema. It accepts a **session id or file path** as its source argument.
+It does not consume `compaction-plan.json`, create semantic skeletons, select a tail
+boundary, or edit a user-named target in place.
 
 **Protocol — your first command is the dry-run:**
 ```bash
@@ -84,13 +107,17 @@ The commit run:
    drop tool units (call+result as atomic pairs), optional thinking strip, in-place
    shrink of large tool results. Active-path-only, re-chaining, and pairing closure
    are hard-coded invariants.
-3. **Verifies** structurally (single root, chain reaches all, pairing, text fidelity
-   vs source active path, no off-path leakage) and via pi's own session-manager
-   gold-standard loader (`pi-goldload.mjs`, SKIPPED gracefully if node absent).
+3. **Checks** structure (single root, chain reaches all, pairing, text fidelity
+   vs source active path, no off-path leakage). After writing, it also runs pi's own
+   session-manager loader and `ch` discovery smoke checks when available. Those two
+   smoke checks report failure but do not currently change the command's exit status.
 4. `--rewrite-content-id`: optionally replaces old session id inside message content
    with the new id (off by default; the census tells you if it matters).
 
-The original file is **never modified**. Output is JSON on stdout: `{new_id, new_file, stats}`.
+This script never modifies its source. It can still write its new output before
+reporting a structural verification failure, so inspect the exit status and verification
+report before using the new session. Output on success is JSON on stdout:
+`{new_id, new_file, stats}`.
 
 Also useful for orientation: `ch <session-id> -t:s` renders the session as a readable
 transcript with tools shortened — use it if the outline isn't enough story context.
@@ -107,12 +134,69 @@ Decisions file format (all fields optional, defaults apply for omitted):
 }
 ```
 
-## Legacy helper
+## Native semantic-plan applier
 
-`scripts/transfer_to_pi_session.py` applies a ch-transcript compaction to the native
-jsonl by **deletion only** (no in-place shrinking). It enforces pairing closure, splices
-`parentId` across deletions, backs up first, and re-validates. Use
-`compact_native_pi_session.py` for new work — it subsumes this script's capabilities.
+`scripts/transfer_to_pi_session.py` applies the semantic plan directly to a named native
+target copy:
+
+```bash
+uv run scripts/transfer_to_pi_session.py \
+  pruned.json compaction-plan.json session-copy.jsonl
+```
+
+`pruned.json` must come from the current `ch -f json` Pi export and the current pruner.
+The applier requires `native_entry_id`, `native_tool_call_id`, and
+`native_content_index` provenance instead of prefix or text matching. An older pruned
+export fails before writing with instructions to re-export and re-prune.
+
+It validates the source-bound plan and all mappings before writing. It applies text drops
+and block-level tool drops or replacements, inserts skeleton and file-reference strings
+where tool-call blocks were, and removes paired tool-result entries. It preserves
+surrounding text and native thinking blocks, keeps only the active path, and re-chains
+the survivors.
+
+Each planned skeleton has an exact association in its replacement entry:
+```json
+{
+  "tool_skeletons": [
+    {"tool_id": "toolu_full-native-id", "content": "<tool-skeleton .../>"}
+  ]
+}
+```
+The generator derives this full ID from the selected source block. The native applier maps
+the skeleton by this ID only. It never infers the target from a command or tool name.
+
+After all checks pass, it writes a verified sibling `<target>.backup-N` and atomically
+replaces the target. It does not mint or rewrite the session ID. Prepare the target copy
+with its intended identity before running it.
+
+For compatibility, an older plan without `tool_skeletons` remains safe only when its message
+has exactly one skeleton and one source tool input. The applier binds that pair through the
+source input's full native provenance. It refuses every ambiguous older plan before writing
+and asks for a regenerated plan.
+
+`compact_native_pi_session.py` does not subsume this applier. The native compactor creates
+a new session using its fixed decisions schema. The native plan applier transfers the
+semantic plan onto an existing named copy.
+
+## Safe named-copy in-place workflow
+
+The protected file is the original session. A copy that the user explicitly names as
+the target is not the original and may be edited in place.
+
+1. Resolve both paths and confirm that the target is not the original file or inode.
+2. Record the original and target SHA-256 hashes before any write.
+3. Confirm that the target contains the intended source snapshot. If the live original
+   gained entries after the copy, accept only an exact target-to-source prefix match.
+4. Create a sibling backup of the target before its first write. Never overwrite an
+   existing backup.
+5. Give the target its own header session ID. The header is authoritative for discovery;
+   a copied filename alone does not change session identity. Leave old session IDs inside
+   historical message content unchanged unless the user asks.
+6. Apply changes only to the target. Preserve untouched native lines byte-for-byte when
+   the writer supports it, especially any prefix outside the requested compaction scope.
+7. Run all verification below against the target. Confirm that the original hash stayed
+   unchanged and keep the backup until the user accepts the result.
 
 ## Verification (do all three)
 

@@ -76,10 +76,22 @@ def file_references(block: dict[str, object]) -> list[tuple[str, str, str | None
     return [(str(name), path, identifier)]
 
 
-def render_reference(operation: str, path: str, identifier: str | None) -> str:
+def render_reference(
+    operation: str,
+    path: str,
+    identifier: str | None,
+    native_tool_call_id: str | None = None,
+    native_content_index: int | None = None,
+) -> str:
     attributes = f"path={xml.sax.saxutils.quoteattr(path)}"
     if identifier is not None:
         attributes += f" id={xml.sax.saxutils.quoteattr(identifier)}"
+    if native_tool_call_id is not None:
+        attributes += (
+            f" native_tool_call_id={xml.sax.saxutils.quoteattr(native_tool_call_id)}"
+        )
+    if native_content_index is not None:
+        attributes += f' native_content_index="{native_content_index}"'
     return f"<{operation} {attributes}/>"
 
 

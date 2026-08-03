@@ -10,6 +10,7 @@ import hashlib
 import json
 import pathlib
 import sys
+import xml.etree.ElementTree
 
 import transcript_common
 
@@ -40,6 +41,84 @@ def tool_ids(message: dict[str, object]) -> set[str]:
 
 def is_footer(block: object) -> bool:
     return isinstance(block, str) and block.strip().startswith("<affected-files>")
+
+
+def is_tool_skeleton(block: object) -> bool:
+    if not isinstance(block, str):
+        return False
+    try:
+        element = xml.etree.ElementTree.fromstring(block.strip())
+    except xml.etree.ElementTree.ParseError:
+        return False
+    return element.tag == "tool-skeleton"
+
+
+def replacement_tool_skeletons(
+    replacement: dict[str, object],
+    source_message: dict[str, object],
+    original_index: int,
+) -> dict[str, str] | None:
+    """Validate and return exact tool-to-skeleton associations when present.
+
+    >>> skeleton = '<tool-skeleton name="Bash" command="pytest" purpose="test" outcome="pass"/>'
+    >>> replacement_tool_skeletons(
+    ...     {'content': [skeleton], 'tool_skeletons': [{'tool_id': 'full', 'content': skeleton}]},
+    ...     {'content': [{'type': 'tool-input', 'id': 'short', 'native_tool_call_id': 'full'}]},
+    ...     4,
+    ... )
+    {'full': '<tool-skeleton name="Bash" command="pytest" purpose="test" outcome="pass"/>'}
+    """
+    raw = replacement.get("tool_skeletons")
+    if raw is None:
+        return None
+    if not isinstance(raw, list) or not all(isinstance(item, dict) for item in raw):
+        raise ValueError(f"replacement {original_index} tool_skeletons must be objects")
+
+    associations: dict[str, str] = {}
+    for item in raw:
+        if set(item) != {"tool_id", "content"}:
+            raise ValueError(
+                f"replacement {original_index} tool_skeletons need exactly tool_id and content"
+            )
+        tool_id = item.get("tool_id")
+        content = item.get("content")
+        if not isinstance(tool_id, str) or not tool_id or not is_tool_skeleton(content):
+            raise ValueError(
+                f"replacement {original_index} has an invalid tool_skeleton association"
+            )
+        if tool_id in associations:
+            raise ValueError(
+                f"replacement {original_index} repeats tool_skeleton id {tool_id!r}"
+            )
+        associations[tool_id] = content
+
+    source_content = source_message.get("content")
+    if not isinstance(source_content, list):
+        raise ValueError(f"message {original_index} has no content array")
+    source_tool_ids = {
+        identifier
+        for block in source_content
+        if isinstance(block, dict) and block.get("type") == "tool-input"
+        for identifier in [block.get("native_tool_call_id") or block.get("id")]
+        if isinstance(identifier, str)
+    }
+    unknown_ids = sorted(set(associations) - source_tool_ids)
+    if unknown_ids:
+        raise ValueError(
+            f"replacement {original_index} tool_skeleton IDs do not match source: {unknown_ids}"
+        )
+
+    content = replacement.get("content")
+    skeleton_content = (
+        [block for block in content if is_tool_skeleton(block)]
+        if isinstance(content, list)
+        else []
+    )
+    if sorted(skeleton_content) != sorted(associations.values()):
+        raise ValueError(
+            f"replacement {original_index} tool_skeletons do not match replacement content"
+        )
+    return associations
 
 
 def footer(paths: list[str]) -> str:
@@ -97,6 +176,11 @@ def apply_plan(
             isinstance(block, str) for block in content
         ):
             raise ValueError(f"replacement {original_index} content must be non-empty strings")
+        replacement_tool_skeletons(
+            item,
+            messages_by_index[original_index],
+            original_index,
+        )
         replacements[original_index] = [
             block for block in content if isinstance(block, str) and not is_footer(block)
         ]

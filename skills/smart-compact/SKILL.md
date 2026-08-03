@@ -1,7 +1,7 @@
 ---
 name: smart-compact
 description: Instructions for tree-shaking a user-provided AI session transcript
-last_updated: 2026-07-28 18:43
+last_updated: 2026-08-03 17:15
 ---
 This Skill's purpose is to compact an AI session transcription by removing redundant-information messages and keeping the contentful ones intact.
 
@@ -115,6 +115,14 @@ Treat the structured JSON as the source of truth. Convert in either direction wi
 ch parse transcription.json > transcription.md
 ch parse -f json transcription.md > transcription.json
 ```
+For Pi exports, `ch -f json` adds `native_entry_id` to each visible native message.
+Tool inputs also carry `native_tool_call_id` and `native_content_index`; tool outputs
+carry `native_tool_call_id`. These additive JSON-only fields preserve exact native
+provenance. `ch parse` accepts them and omits them from XML output.
+The native plan applier requires these fields. Build `pruned.json` from a current
+`ch -f json` export with the current pruner. Older pruned exports fail before writing
+and must be re-exported and re-pruned.
+
 `ch parse` accepts compacted messages containing multiple string content blocks. A Markdown round trip canonicalizes adjacent text blocks and timestamp precision, so do not expect byte-identical JSON; rerendered Markdown is the stable representation.
 
 **Always make a backup before editing the transcript in-place**:
@@ -127,15 +135,15 @@ Always reference messages by their stable `original_index` field, not by positio
 array offset — the offset shifts with every removal. Work only on exported transcription
 files; do not modify the native CLI agent's `.jsonl` session files.
 
-**Exception — resumable native compaction.** When the user explicitly asks to compact
-the native session `.jsonl` itself so the compacted session stays resumable, operate on
-a NEW copy with a new session id (never the original file) and first read
-`references/native-pi-session.md` — it defines the file anatomy, the five resumability
-invariants (single root, active-path-only, re-chaining, tool pairing closure, header
-identity), which compaction rules map to which native structures, and the
-`scripts/compact_native_pi_session.py` one-command tool (accepts a session id or path,
-bootstraps a new resumable copy, transforms, and verifies — including loading through
-pi's own session-manager code). Run it; don't rewrite it.
+**Exception — resumable native compaction.** When the user asks to compact a native
+session `.jsonl`, first read `references/native-pi-session.md`. Protect the original
+session, not an explicitly named target copy. If the user supplies a named copy as the
+target, give it the intended session identity before compaction. Then use
+`scripts/transfer_to_pi_session.py` with the pruned transcription and semantic plan; it
+backs up and edits that target in place. If the user supplies only the original session,
+`scripts/compact_native_pi_session.py` creates a new resumable session using its simpler
+native decisions schema. The reference defines the file anatomy, exact commands,
+resumability invariants, identity rules, backup protocol, and verification requirements.
 
 **Deterministic pre-processing** (no semantics, no heuristics):
 ```bash
@@ -187,6 +195,7 @@ drop_file_references:
   - {original_index: 6, operation: Read, path: /path/to/stale.py}
 skeletons:
   - original_index: 236
+    tool_id: "toolu_full-native-id"
     command: "…"
     purpose: "…"
     outcome: "…"
@@ -206,11 +215,13 @@ decisions with the plan generator, and binds the result to the exact pruned sour
 Do not hand-edit the generated decisions file.
 
 Every surviving raw tool block is inferred noise and dropped unless a skeleton preserves its
-meaning. Text-block and file-reference drops target individual normalized blocks. A skeleton
-anchors to its message's single tool-input block; when a message holds several, add `tool_id`
-to select one. `scratchpad_paths` excludes transient helper files from both the transcript and
-footer. `opaque_artifacts` is the narrow escape hatch for shell-created files no structured
-tool reported. Ordinarily only `drop` and `skeletons` are needed.
+meaning. Text-block and file-reference drops target individual normalized blocks. Set each
+skeleton's `tool_id` to the tool input's full `native_tool_call_id` for a native Pi plan. A
+short display ID remains accepted when it selects exactly one tool in the message. The
+generator always records the selected tool's full native ID when that provenance exists.
+`scratchpad_paths` excludes transient helper files from both the transcript and footer.
+`opaque_artifacts` is the narrow escape hatch for shell-created files no structured tool
+reported. Ordinarily only `drop` and `skeletons` are needed.
 ```bash
 uv run --script scripts/generate_compaction_plan.py \
   pruned.json decisions.json > compaction-plan.json
@@ -227,10 +238,21 @@ category, final counts — and self-verifies the plan against the apply stage be
 it. Unresolved structured blocks, invalid or ambiguous anchors, conflicting decisions,
 unreferenced scratchpad paths, and artifact-extractor failures fail loudly.
 
+**Current structured-block limit:** the semantic plan generator accepts only
+`tool-input` and `tool-output` objects. A `thinking`, sub-agent, or other structured
+object fails as unresolved. Native compaction can preserve `thinking` blocks, but the
+exported semantic-plan pipeline does not yet pass them through. The native plan applier
+uses the plan's tool decisions while preserving the native session's thinking blocks.
+
 The generated plan is a plain, inspectable JSON artifact (`drop_messages`,
-`replace_messages` with `expected_tool_ids`, `affected_files_extra`, `source_sha256`).
+`replace_messages`, `affected_files_extra`, `source_sha256`). Each replacement carries
+`expected_tool_ids`; a skeleton replacement also carries `tool_skeletons`, with the skeleton
+text beside its exact full `tool_id`.
 The apply stage retains its own validation: stale checksums, missing indices, mismatched
 tool IDs, surviving raw blocks, and duplicate footers are refused.
+This apply stage writes a compacted **transcription**. It removes dropped messages and
+strips `remove` markers. Do not pass this compacted output to the native plan applier.
+Pass the pruned transcription, `compaction-plan.json`, and named native target instead.
 When a Markdown transcription accompanies the JSON, regenerate it directly from the final compacted JSON:
 ```bash
 ch parse compacted.json > compacted.md

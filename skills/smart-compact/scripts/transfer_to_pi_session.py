@@ -3,401 +3,916 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Apply `remove: true` marks from a smart-compacted transcript JSON to the native
-pi session JSONL it originated from, deleting the matching lines in place.
+"""Apply a semantic compaction plan to an explicit native Pi session copy.
 
-Correspondence is established deterministically, strongest key first:
-  1. tool-call id — the importer derives each compacted block id from the first
-     4 characters of the JSONL toolCall id (`call_<id>|…`). A compacted
-     tool-output maps to the `toolResult` line with that toolCallId prefix; a
-     compacted tool-input maps to the assistant line containing that toolCall.
-     Every id join is content-proven (tool name + output text must agree).
-  2. exact (role, full text) for id-less pure-text objects, order-disambiguated.
-  3. order-anchored gap-fill: mapped objects are monotonic in line number, so a
-     still-unmapped object must match the only same-role orphan line in the gap
-     between its mapped neighbours.
-
-Safety gates (all run before anything is written; any failure aborts untouched):
-  - input integrity: tool-input ids and tool-output ids in the compacted JSON
-    form a bijection;
-  - pair closure: for every tool call, the object holding its input is marked
-    for removal if and only if the object holding its output is — otherwise
-    line deletion would orphan a toolCall or a toolResult;
-  - total, injective mapping: every compacted object resolves to distinct JSONL
-    lines, so marked lines can never be shared with kept content.
-
-The session is always backed up first to a sibling `<name>.jsonl.backup-N`
-(first free N). After deletion the parentId chain is spliced across removed
-lines and the result is re-validated in memory before the file is replaced.
+The source transcript is required because the plan addresses its stable
+``original_index`` values. The target JSONL is changed in place only after the
+plan, native mapping, transformed tree, and tool pairing all validate. A
+byte-identical sibling backup is created before the atomic replacement.
 
 Usage:
-    uv run transfer-to-pi-session.py compacted.json session.jsonl
+    uv run transfer_to_pi_session.py pruned.json compaction-plan.json session-copy.jsonl
 """
 
 import argparse
-import difflib
+import dataclasses
 import json
+import os
 import re
-import sys
-from collections import defaultdict
+import tempfile
+import xml.etree.ElementTree
 from pathlib import Path
 
+import apply_compaction_plan
+import transcript_common
 
-def fail(message: str) -> "SystemExit":
+
+def fail(message: str) -> SystemExit:
     return SystemExit(f"ABORT (session file untouched): {message}")
-
-
-def short_tool_id(call_id: str) -> str:
-    """The 4-char prefix the smart-compact importer uses as a block id.
-
-    >>> short_tool_id("call_9tMRssh7XFy7QfUqtVn4Qfap|fc_0bec0afe")
-    '9tMR'
-    """
-    return call_id.split("|", 1)[0].removeprefix("call_")[:4]
 
 
 def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-# --------------------------- compacted-JSON side ---------------------------
-
-class CompactedObject:
-    def __init__(self, index: int, obj: dict):
-        self.index = index
-        self.marked: bool = obj.get("remove") is True
-        self.role: str = "user" if obj.get("type") == "user-message" else "assistant"
-        self.input_ids: list[str] = []
-        self.output_ids: list[str] = []
-        self.output_names: dict[str, str] = {}
-        self.output_texts: dict[str, str] = {}
-        text_parts: list[str] = []
-        for block in obj.get("content", []):
-            if isinstance(block, str):
-                text_parts.append(block)
-                continue
-            block_type = block.get("type")
-            if block_type == "tool-input":
-                self.input_ids.append(block["id"])
-            elif block_type == "tool-output":
-                self.output_ids.append(block["id"])
-                self.output_names[block["id"]] = str(block.get("name", ""))
-                self.output_texts[block["id"]] = _output_text(block)
-        self.text: str = "".join(text_parts)
+@dataclasses.dataclass
+class SessionLine:
+    raw: str
+    data: dict[str, object]
+    changed: bool = False
 
     @property
-    def is_pure_text(self) -> bool:
-        return not self.input_ids and not self.output_ids
+    def identifier(self) -> str | None:
+        identifier = self.data.get("id")
+        return identifier if isinstance(identifier, str) else None
 
 
-def _output_text(block: dict) -> str:
-    content = block.get("content", "")
-    if isinstance(content, list):
-        return "".join(
-            part.get("text", "") for part in content if isinstance(part, dict)
-        )
-    return str(content)
+@dataclasses.dataclass(frozen=True)
+class NativeToolCall:
+    entry: SessionLine
+    content_index: int
+    identifier: str
+    name: str
 
 
-# ----------------------------- pi-JSONL side -------------------------------
+@dataclasses.dataclass
+class SourceToolEvent:
+    original_index: int
+    name: str
+    replacements: list[str]
+    native_entry_id: str
+    native_identifier: str
+    native_content_index: int
+    native_call: NativeToolCall | None = None
 
-class SessionLine:
-    def __init__(self, lineno: int, raw: str, obj: dict):
-        self.lineno = lineno
-        self.raw = raw
-        self.obj = obj
-        message = obj.get("message", {}) if obj.get("type") == "message" else {}
-        self.role: str | None = message.get("role")
-        self.tool_name: str = str(message.get("toolName", ""))
-        self.result_prefix: str | None = None
-        self.call_prefixes: list[str] = []
-        self.text = ""
-        if self.role == "toolResult":
-            self.result_prefix = short_tool_id(message["toolCallId"])
-            self.text = "".join(
-                block.get("text", "")
-                for block in message.get("content", [])
-                if isinstance(block, dict) and block.get("type") == "text"
+
+def parse_session(path: Path) -> tuple[SessionLine, list[SessionLine]]:
+    parsed: list[SessionLine] = []
+    for line_number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not raw.strip():
+            continue
+        value = json.loads(raw)
+        if not isinstance(value, dict):
+            raise fail(f"line {line_number} is not a JSON object")
+        parsed.append(SessionLine(raw, value))
+    if len(parsed) < 2 or parsed[0].data.get("type") != "session":
+        raise fail("native JSONL needs a session header and at least one tree entry")
+
+    header = parsed[0]
+    tree = parsed[1:]
+    by_identifier = {
+        line.identifier: line for line in tree if line.identifier is not None
+    }
+    if len(by_identifier) != len(tree):
+        raise fail("every native tree entry must have a unique string id")
+
+    active_reversed: list[SessionLine] = []
+    seen: set[str] = set()
+    current: SessionLine | None = tree[-1]
+    while current is not None:
+        identifier = current.identifier
+        if identifier is None or identifier in seen:
+            raise fail(f"native parent chain cycles at {identifier!r}")
+        active_reversed.append(current)
+        seen.add(identifier)
+        parent_identifier = current.data.get("parentId")
+        if parent_identifier is None:
+            current = None
+            continue
+        if not isinstance(parent_identifier, str) or parent_identifier not in by_identifier:
+            raise fail(
+                f"entry {identifier!r} has unresolved parentId {parent_identifier!r}"
             )
-        elif self.role in ("user", "assistant"):
-            for block in message.get("content", []):
-                if not isinstance(block, dict):
-                    continue
-                if block.get("type") == "toolCall":
-                    self.call_prefixes.append(short_tool_id(block["id"]))
-                elif block.get("type") == "text":
-                    self.text += block.get("text", "")
+        current = by_identifier[parent_identifier]
+
+    active = list(reversed(active_reversed))
+    if active[0].data.get("parentId") is not None:
+        raise fail("active path has no root with parentId:null")
+    return header, active
 
 
-def parse_session(path: Path) -> list[SessionLine]:
-    lines = []
-    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines()):
-        if raw.strip():
-            lines.append(SessionLine(lineno, raw, json.loads(raw)))
-    return lines
+def message_data(line: SessionLine) -> dict[str, object] | None:
+    if line.data.get("type") != "message":
+        return None
+    message = line.data.get("message")
+    return message if isinstance(message, dict) else None
 
 
-# ------------------------------ safety gates -------------------------------
+def native_tools(
+    active: list[SessionLine],
+) -> tuple[list[NativeToolCall], dict[str, SessionLine]]:
+    calls: list[NativeToolCall] = []
+    results: dict[str, SessionLine] = {}
+    for line in active:
+        message = message_data(line)
+        if message is None:
+            continue
+        role = message.get("role")
+        if role == "toolResult":
+            tool_call_id = message.get("toolCallId")
+            if not isinstance(tool_call_id, str) or tool_call_id in results:
+                raise fail(f"entry {line.identifier!r} has an invalid or duplicate toolCallId")
+            results[tool_call_id] = line
+            continue
+        if role != "assistant":
+            continue
+        content = message.get("content")
+        if not isinstance(content, list):
+            raise fail(f"assistant entry {line.identifier!r} has no content array")
+        for content_index, block in enumerate(content):
+            if not isinstance(block, dict) or block.get("type") != "toolCall":
+                continue
+            identifier = block.get("id")
+            name = block.get("name")
+            if not isinstance(identifier, str) or not isinstance(name, str):
+                raise fail(f"entry {line.identifier!r} contains a malformed toolCall")
+            calls.append(NativeToolCall(line, content_index, identifier, name))
+    if len({call.identifier for call in calls}) != len(calls):
+        raise fail("native active path contains duplicate full toolCall ids")
+    return calls, results
 
-def check_input_pairing(objects: list[CompactedObject]) -> None:
-    inputs = [tool_id for o in objects for tool_id in o.input_ids]
-    outputs = [tool_id for o in objects for tool_id in o.output_ids]
-    problems = []
-    if len(set(inputs)) != len(inputs):
-        problems.append("duplicate tool-input ids")
-    if len(set(outputs)) != len(outputs):
-        problems.append("duplicate tool-output ids")
-    if set(inputs) != set(outputs):
-        missing_out = sorted(set(inputs) - set(outputs))[:5]
-        missing_in = sorted(set(outputs) - set(inputs))[:5]
-        problems.append(
-            f"inputs without outputs {missing_out}, outputs without inputs {missing_in}"
+
+def parse_file_reference(
+    block: str,
+) -> tuple[str, str, str, str | None, int | None] | None:
+    try:
+        element = xml.etree.ElementTree.fromstring(block.strip())
+    except xml.etree.ElementTree.ParseError:
+        return None
+    if element.tag not in transcript_common.FILE_TOOLS or list(element):
+        return None
+    path = element.attrib.get("path")
+    identifier = element.attrib.get("id")
+    if not path or not identifier:
+        return None
+    native_identifier = element.attrib.get("native_tool_call_id")
+    native_content_index_raw = element.attrib.get("native_content_index")
+    native_content_index = (
+        int(native_content_index_raw)
+        if native_content_index_raw is not None
+        and native_content_index_raw.isdecimal()
+        else None
+    )
+    return element.tag, path, identifier, native_identifier, native_content_index
+
+
+def source_tool_events(
+    source_messages: list[dict[str, object]],
+    compacted_messages: list[dict[str, object]],
+    manifest: dict[str, object],
+) -> tuple[list[SourceToolEvent], dict[int, list[str]]]:
+    compacted_by_index = {
+        message["original_index"]: message for message in compacted_messages
+    }
+    raw_replacements = manifest.get("replace_messages", [])
+    if not isinstance(raw_replacements, list):
+        raise fail("compaction plan replace_messages is malformed")
+    replacements_by_index = {
+        replacement["original_index"]: replacement
+        for replacement in raw_replacements
+        if isinstance(replacement, dict)
+        and isinstance(replacement.get("original_index"), int)
+    }
+    events: list[SourceToolEvent] = []
+    final_prose_by_index: dict[int, list[str]] = {}
+    for source_message in source_messages:
+        original_index = source_message["original_index"]
+        if not isinstance(original_index, int):
+            raise fail("source message has a non-integer original_index")
+        source_content = source_message.get("content")
+        if not isinstance(source_content, list):
+            raise fail(f"source message {original_index} has no content array")
+        compacted_message = compacted_by_index.get(original_index)
+        final_content = (
+            compacted_message.get("content", []) if compacted_message is not None else []
         )
-    if problems:
-        raise fail("compacted JSON tool pairing is broken: " + "; ".join(problems))
-
-
-def check_pair_closure(objects: list[CompactedObject]) -> None:
-    input_owner = {tid: o for o in objects for tid in o.input_ids}
-    output_owner = {tid: o for o in objects for tid in o.output_ids}
-    violations = []
-    for tool_id, out_obj in output_owner.items():
-        in_obj = input_owner[tool_id]
-        if out_obj.marked != in_obj.marked:
-            side = "output" if out_obj.marked else "input"
-            violations.append(f"{tool_id} ({side} marked, pair kept)")
-    if violations:
-        raise fail(
-            f"{len(violations)} tool pair(s) are marked on one side only — deleting "
-            f"them would orphan their toolCall/toolResult partner. Either mark both "
-            f"sides or neither. First few: {violations[:8]}"
+        if not isinstance(final_content, list):
+            raise fail(f"compacted message {original_index} has no content array")
+        final_strings = [
+            block
+            for block in final_content
+            if isinstance(block, str) and not apply_compaction_plan.is_footer(block)
+        ]
+        replacement = replacements_by_index.get(original_index)
+        declared_skeletons = (
+            apply_compaction_plan.replacement_tool_skeletons(
+                replacement,
+                source_message,
+                original_index,
+            )
+            if replacement is not None
+            else None
         )
-
-
-# ---------------------------- cross-referencing ----------------------------
-
-def cross_reference(
-    objects: list[CompactedObject], session: list[SessionLine]
-) -> dict[int, list[int]]:
-    """Map every compacted-object index to its JSONL line number(s)."""
-    result_line = {l.result_prefix: l.lineno for l in session if l.result_prefix}
-    call_line: dict[str, int] = {}
-    for line in session:
-        for prefix in line.call_prefixes:
-            if prefix in call_line:
-                raise fail(f"toolCall prefix {prefix!r} is not unique in the session")
-            call_line[prefix] = line.lineno
-
-    line_by_no = {l.lineno: l for l in session}
-    mapping: dict[int, list[int]] = {}
-
-    # 1) id joins, content-proven
-    for o in objects:
-        if o.output_ids:
-            linenos = set()
-            for tool_id in o.output_ids:
-                prefix = tool_id[:4]
-                if prefix not in result_line:
-                    raise fail(f"object {o.index}: no toolResult matches id {tool_id!r}")
-                line = line_by_no[result_line[prefix]]
-                _prove_output(o, tool_id, line)
-                linenos.add(line.lineno)
-            mapping[o.index] = sorted(linenos)
-        elif o.input_ids:
-            linenos = set()
-            for tool_id in o.input_ids:
-                prefix = tool_id[:4]
-                if prefix not in call_line:
-                    raise fail(f"object {o.index}: no toolCall matches id {tool_id!r}")
-                linenos.add(call_line[prefix])
-            mapping[o.index] = sorted(linenos)
-
-    # grouping invariant: one assistant line is owned by at most one object
-    owner_by_line: dict[int, int] = {}
-    for index, linenos in mapping.items():
-        for lineno in linenos:
-            if owner_by_line.setdefault(lineno, index) != index:
+        source_tool_inputs = [
+            block
+            for block in source_content
+            if isinstance(block, dict) and block.get("type") == "tool-input"
+        ]
+        final_skeletons = [
+            block for block in final_strings if apply_compaction_plan.is_tool_skeleton(block)
+        ]
+        if declared_skeletons is None and final_skeletons:
+            if len(source_tool_inputs) != 1 or len(final_skeletons) != 1:
                 raise fail(
-                    f"line {lineno} is claimed by objects {owner_by_line[lineno]} "
-                    f"and {index} — grouping assumption broken"
+                    f"plan replacement at message {original_index} lacks exact "
+                    "tool_skeletons associations; regenerate the plan"
+                )
+            legacy_tool_id = source_tool_inputs[0].get("native_tool_call_id")
+            if not isinstance(legacy_tool_id, str):
+                raise fail(
+                    f"legacy skeleton at message {original_index} lacks native provenance; "
+                    "regenerate the plan"
+                )
+            declared_skeletons = {legacy_tool_id: final_skeletons[0]}
+        exact_skeletons = declared_skeletons or {}
+        source_native_tool_ids = {
+            identifier
+            for block in source_tool_inputs
+            for identifier in [block.get("native_tool_call_id")]
+            if isinstance(identifier, str)
+        }
+        nonnative_ids = sorted(set(exact_skeletons) - source_native_tool_ids)
+        if nonnative_ids:
+            raise fail(
+                f"plan replacement at message {original_index} does not use exact full "
+                f"native tool IDs: {nonnative_ids}"
+            )
+        unplaced_skeleton_ids = set(exact_skeletons)
+        final_cursor = 0
+        native_entry_id = source_message.get("native_entry_id")
+        previous_reference_event: SourceToolEvent | None = None
+        final_prose: list[str] = []
+
+        for block in source_content:
+            if isinstance(block, str):
+                reference = parse_file_reference(block)
+                kept = (
+                    final_cursor < len(final_strings)
+                    and final_strings[final_cursor] == block
+                )
+                if kept:
+                    final_cursor += 1
+                if reference is None:
+                    if kept:
+                        final_prose.append(block)
+                    previous_reference_event = None
+                    continue
+                (
+                    name,
+                    _path,
+                    _identifier,
+                    native_identifier,
+                    native_content_index,
+                ) = reference
+                if (
+                    not isinstance(native_entry_id, str)
+                    or native_identifier is None
+                    or native_content_index is None
+                ):
+                    raise fail(
+                        f"file reference in source message {original_index} lacks native provenance; "
+                        "export it again with the current ch and prune it again"
+                    )
+                if (
+                    previous_reference_event is not None
+                    and previous_reference_event.native_identifier == native_identifier
+                ):
+                    if kept:
+                        previous_reference_event.replacements.append(block)
+                    continue
+                event = SourceToolEvent(
+                    original_index=original_index,
+                    name=name,
+                    replacements=[block] if kept else [],
+                    native_entry_id=native_entry_id,
+                    native_identifier=native_identifier,
+                    native_content_index=native_content_index,
+                )
+                events.append(event)
+                previous_reference_event = event
+                continue
+
+            previous_reference_event = None
+            if not isinstance(block, dict) or block.get("type") != "tool-input":
+                continue
+            identifier = block.get("id")
+            name = block.get("name")
+            if not isinstance(identifier, str) or not isinstance(name, str):
+                raise fail(f"source message {original_index} has a malformed tool-input")
+            native_identifier_raw = block.get("native_tool_call_id")
+            native_content_index_raw = block.get("native_content_index")
+            if (
+                not isinstance(native_entry_id, str)
+                or not isinstance(native_identifier_raw, str)
+                or not isinstance(native_content_index_raw, int)
+            ):
+                raise fail(
+                    f"tool-input in source message {original_index} lacks native provenance; "
+                    "export it again with the current ch and prune it again"
+                )
+            skeleton = exact_skeletons.get(native_identifier_raw)
+            replacements: list[str] = []
+            if skeleton is not None:
+                if final_cursor >= len(final_strings) or final_strings[final_cursor] != skeleton:
+                    raise fail(
+                        f"skeleton for native tool {native_identifier_raw!r} is not at "
+                        f"its source position in message {original_index}"
+                    )
+                replacements.append(skeleton)
+                final_cursor += 1
+                unplaced_skeleton_ids.remove(native_identifier_raw)
+            events.append(
+                SourceToolEvent(
+                    original_index=original_index,
+                    name=name,
+                    replacements=replacements,
+                    native_entry_id=native_entry_id,
+                    native_identifier=native_identifier_raw,
+                    native_content_index=native_content_index_raw,
+                )
+            )
+
+        if unplaced_skeleton_ids:
+            raise fail(
+                f"plan replacement at message {original_index} has unplaced skeleton IDs: "
+                f"{sorted(unplaced_skeleton_ids)}"
+            )
+        if final_cursor != len(final_strings):
+            raise fail(
+                f"plan replacement at message {original_index} cannot be aligned "
+                "to its source blocks"
+            )
+        final_prose_by_index[original_index] = final_prose
+    return events, final_prose_by_index
+
+
+def canonical_tool_name(name: str) -> str:
+    normalized = name.casefold().replace("-", "_")
+    if normalized == "read_many_files":
+        return "read"
+    if normalized == "apply_patch":
+        return "patch"
+    return normalized
+
+
+def names_match(source_name: str, native_name: str) -> bool:
+    return canonical_tool_name(source_name) == canonical_tool_name(native_name)
+
+
+def map_source_tools(events: list[SourceToolEvent], calls: list[NativeToolCall]) -> None:
+    calls_by_identifier = {call.identifier: call for call in calls}
+    source_identifiers = [event.native_identifier for event in events]
+    if len(source_identifiers) != len(set(source_identifiers)):
+        raise fail("pruned source maps more than one tool event to the same native toolCall")
+    for event in events:
+        call = calls_by_identifier.get(event.native_identifier)
+        if call is None:
+            raise fail(
+                f"source message {event.original_index} names missing native toolCall "
+                f"{event.native_identifier!r}"
+            )
+        if call.entry.identifier != event.native_entry_id:
+            raise fail(
+                f"source message {event.original_index} points to native entry "
+                f"{event.native_entry_id!r}, but its tool is in {call.entry.identifier!r}"
+            )
+        if call.content_index != event.native_content_index:
+            raise fail(
+                f"source tool {event.native_identifier!r} has stale native_content_index "
+                f"{event.native_content_index}; native value is {call.content_index}"
+            )
+        if not names_match(event.name, call.name):
+            raise fail(
+                f"source tool {event.native_identifier!r} changed name from "
+                f"{event.name!r} to {call.name!r}"
+            )
+        event.native_call = call
+
+
+def output_text(block: dict[str, object]) -> str:
+    content = block.get("content")
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    return "".join(
+        part.get("text", "")
+        for part in content
+        if isinstance(part, dict) and isinstance(part.get("text"), str)
+    )
+
+
+def native_result_text(line: SessionLine) -> str:
+    message = message_data(line)
+    if message is None:
+        return ""
+    content = message.get("content")
+    if not isinstance(content, list):
+        return ""
+    return "".join(
+        block.get("text", "")
+        for block in content
+        if isinstance(block, dict) and isinstance(block.get("text"), str)
+    )
+
+
+def verify_source_outputs(
+    source_messages: list[dict[str, object]],
+    events: list[SourceToolEvent],
+    results: dict[str, SessionLine],
+) -> None:
+    events_by_identifier = {event.native_identifier: event for event in events}
+    seen_identifiers: set[str] = set()
+    for source_message in source_messages:
+        original_index = source_message["original_index"]
+        content = source_message.get("content", [])
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "tool-output":
+                continue
+            identifier = block.get("id")
+            name = block.get("name")
+            if not isinstance(identifier, str) or not isinstance(name, str):
+                raise fail(f"source message {original_index} has a malformed tool-output")
+            native_identifier = block.get("native_tool_call_id")
+            if not isinstance(native_identifier, str):
+                raise fail(
+                    f"tool-output in source message {original_index} lacks native provenance; "
+                    "export it again with the current ch and prune it again"
+                )
+            event = events_by_identifier.get(native_identifier)
+            if event is None or event.native_call is None:
+                raise fail(
+                    f"source tool-output {name} {identifier!r} has no mapped tool-input"
+                )
+            if native_identifier in seen_identifiers:
+                raise fail(f"source repeats tool-output {native_identifier!r}")
+            seen_identifiers.add(native_identifier)
+            if not names_match(event.name, name):
+                raise fail(
+                    f"source tool-output {native_identifier!r} has name {name!r}, "
+                    f"but its input has {event.name!r}"
+                )
+            result = results.get(native_identifier)
+            if result is None:
+                raise fail(
+                    f"native toolCall {native_identifier!r} has no toolResult"
+                )
+            native_entry_id = source_message.get("native_entry_id")
+            if not isinstance(native_entry_id, str) or result.identifier != native_entry_id:
+                raise fail(
+                    f"source tool-output message {original_index} has stale native_entry_id"
+                )
+            expected = normalize(output_text(block))[:100]
+            actual = normalize(native_result_text(result))[:100]
+            if expected and expected != actual:
+                raise fail(
+                    f"tool-output content mismatch at source message {original_index}: "
+                    f"{expected[:60]!r} vs {actual[:60]!r}"
                 )
 
-    # 2) exact (role, text) with order disambiguation
-    text_index: dict[tuple[str, str], list[int]] = defaultdict(list)
-    for line in session:
-        if line.role in ("user", "assistant") and line.lineno not in owner_by_line:
-            text_index[(line.role, line.text)].append(line.lineno)
-    cursor: dict[tuple[str, str], int] = defaultdict(int)
-    for o in objects:
-        if not o.is_pure_text:
-            continue
-        key = (o.role, o.text)
-        candidates = text_index.get(key, [])
-        if cursor[key] < len(candidates):
-            mapping[o.index] = [candidates[cursor[key]]]
-            cursor[key] += 1
 
-    # 3) order-anchored gap-fill for the rest (importer-reformatted text)
-    mapped_pairs = sorted((i, mapping[i][0]) for i in mapping)
-    for (a, line_a), (b, line_b) in zip(mapped_pairs, mapped_pairs[1:]):
-        if line_a > line_b:
-            raise fail(f"mapping is not order-preserving ({a}->{line_a}, {b}->{line_b})")
-    claimed = {lineno for linenos in mapping.values() for lineno in linenos}
-    orphans = [
-        l for l in session
-        if l.role in ("user", "assistant", "toolResult") and l.lineno not in claimed
+def source_prose(message: dict[str, object]) -> list[str]:
+    content = message.get("content")
+    if not isinstance(content, list):
+        return []
+    return [
+        block
+        for block in content
+        if isinstance(block, str) and parse_file_reference(block) is None
     ]
-    for o in objects:
-        if o.index in mapping:
+
+
+def native_text(line: SessionLine) -> list[str]:
+    message = message_data(line)
+    if message is None:
+        return []
+    content = message.get("content")
+    if not isinstance(content, list):
+        return []
+    return [
+        block["text"]
+        for block in content
+        if isinstance(block, dict)
+        and block.get("type") == "text"
+        and isinstance(block.get("text"), str)
+    ]
+
+
+def map_source_messages(
+    source_messages: list[dict[str, object]],
+    active: list[SessionLine],
+    required_indices: set[int],
+) -> dict[int, SessionLine]:
+    active_by_identifier = {
+        line.identifier: line for line in active if line.identifier is not None
+    }
+    source_by_index = {
+        message["original_index"]: message for message in source_messages
+    }
+    mapped: dict[int, SessionLine] = {}
+    for original_index in required_indices:
+        source_message = source_by_index[original_index]
+        native_entry_id = source_message.get("native_entry_id")
+        if not isinstance(native_entry_id, str):
+            raise fail(
+                f"changed source message {original_index} lacks native_entry_id; "
+                "export it again with the current ch and prune it again"
+            )
+        native_entry = active_by_identifier.get(native_entry_id)
+        if native_entry is None:
+            raise fail(
+                f"changed source message {original_index} names missing native entry "
+                f"{native_entry_id!r}"
+            )
+        mapped[original_index] = native_entry
+    return mapped
+
+
+def apply_text_changes(
+    source_messages: list[dict[str, object]],
+    final_prose_by_index: dict[int, list[str]],
+    mapped_messages: dict[int, SessionLine],
+    changed_indices: set[int],
+) -> None:
+    source_by_index = {
+        message["original_index"]: message for message in source_messages
+    }
+    for original_index in sorted(changed_indices):
+        source_message = source_by_index[original_index]
+        original_prose = source_prose(source_message)
+        final_prose = final_prose_by_index[original_index]
+        if original_prose == final_prose:
             continue
-        low = max((mapping[i][0] for i in mapping if i < o.index), default=-1)
-        high = min((mapping[i][0] for i in mapping if i > o.index), default=10**9)
-        candidates = [l for l in orphans if low < l.lineno < high and l.role == o.role]
-        if not candidates:
-            raise fail(f"object {o.index} ({o.role}) cannot be located in the session")
-        best = candidates[0] if len(candidates) == 1 else max(
-            candidates,
-            key=lambda l: difflib.SequenceMatcher(None, o.text, l.text).ratio(),
+        line = mapped_messages[original_index]
+        message = message_data(line)
+        if message is None or message.get("role") not in {"user", "assistant"}:
+            raise fail(f"changed source message {original_index} is not native conversation text")
+        content = message.get("content")
+        if not isinstance(content, list):
+            raise fail(f"native entry {line.identifier!r} has no content array")
+        native_prose = native_text(line)
+        original_joined = "".join(original_prose)
+        native_joined = "".join(native_prose)
+        if native_joined != original_joined and not native_joined.endswith(original_joined):
+            raise fail(
+                f"native text at source message {original_index} differs from the reviewed source"
+            )
+
+        changed_content: list[object] = []
+        final_cursor = 0
+        if native_prose == original_prose:
+            for block in content:
+                if not (
+                    isinstance(block, dict)
+                    and block.get("type") == "text"
+                    and isinstance(block.get("text"), str)
+                ):
+                    changed_content.append(block)
+                    continue
+                if (
+                    final_cursor < len(final_prose)
+                    and block["text"] == final_prose[final_cursor]
+                ):
+                    changed_content.append(block)
+                    final_cursor += 1
+        else:
+            first_text_written = False
+            for block in content:
+                if not (isinstance(block, dict) and block.get("type") == "text"):
+                    changed_content.append(block)
+                    continue
+                if first_text_written:
+                    continue
+                changed_content.extend(
+                    {"type": "text", "text": text} for text in final_prose
+                )
+                final_cursor = len(final_prose)
+                first_text_written = True
+        if final_cursor != len(final_prose):
+            raise fail(
+                f"plan text replacement at message {original_index} cannot be placed safely"
+            )
+        message["content"] = changed_content
+        line.changed = True
+
+
+def thinking_blocks(line: SessionLine) -> list[dict[str, object]]:
+    message = message_data(line)
+    if message is None:
+        return []
+    content = message.get("content")
+    if not isinstance(content, list):
+        return []
+    return [
+        block
+        for block in content
+        if isinstance(block, dict) and block.get("type") == "thinking"
+    ]
+
+
+def apply_tool_changes(
+    active: list[SessionLine],
+    events: list[SourceToolEvent],
+    calls: list[NativeToolCall],
+    results: dict[str, SessionLine],
+    original_thinking: dict[str, list[dict[str, object]]],
+) -> tuple[list[SessionLine], int]:
+    mapped = {
+        event.native_call.identifier: event
+        for event in events
+        if event.native_call is not None
+    }
+    unmatched = [call for call in calls if call.identifier not in mapped]
+    removable_unmatched = [
+        call
+        for call in unmatched
+        if canonical_tool_name(call.name) == "todo"
+        or (
+            canonical_tool_name(call.name)
+            in {canonical_tool_name(name) for name in transcript_common.FILE_TOOLS}
+            and call.identifier not in results
         )
-        mapping[o.index] = [best.lineno]
-        orphans = [l for l in orphans if l.lineno != best.lineno]
+    ]
+    unsafe_unmatched = [call for call in unmatched if call not in removable_unmatched]
+    if unsafe_unmatched:
+        rendered = [
+            f"{call.name} {call.identifier!r}" for call in unsafe_unmatched[:8]
+        ]
+        raise fail(f"native tools are absent from the pruned source: {rendered}")
 
-    # totality + injectivity
-    unmapped = [o.index for o in objects if o.index not in mapping]
-    if unmapped:
-        raise fail(f"{len(unmapped)} object(s) could not be mapped: {unmapped[:10]}")
-    claims: dict[int, list[int]] = defaultdict(list)
-    for index, linenos in mapping.items():
-        for lineno in linenos:
-            claims[lineno].append(index)
-    collisions = {k: v for k, v in claims.items() if len(v) > 1}
-    if collisions:
-        raise fail(f"line(s) claimed by multiple objects: {dict(list(collisions.items())[:5])}")
-    return mapping
+    removed_call_ids = set(mapped) | {
+        call.identifier for call in removable_unmatched
+    }
+    removed_entry_ids = {
+        result.identifier
+        for identifier, result in results.items()
+        if identifier in removed_call_ids and result.identifier is not None
+    }
+
+    for line in active:
+        message = message_data(line)
+        if message is None or message.get("role") != "assistant":
+            continue
+        content = message.get("content")
+        if not isinstance(content, list):
+            continue
+        changed_content: list[object] = []
+        changed = False
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "toolCall":
+                changed_content.append(block)
+                continue
+            identifier = block.get("id")
+            if not isinstance(identifier, str) or identifier not in removed_call_ids:
+                changed_content.append(block)
+                continue
+            event = mapped.get(identifier)
+            if event is not None:
+                changed_content.extend(
+                    {"type": "text", "text": replacement}
+                    for replacement in event.replacements
+                )
+            changed = True
+        if changed:
+            message["content"] = changed_content
+            line.changed = True
+
+    for line in active:
+        message = message_data(line)
+        content = message.get("content") if message is not None else None
+        if line.changed and isinstance(content, list) and not content:
+            identifier = line.identifier
+            if identifier is not None:
+                removed_entry_ids.add(identifier)
+
+    survivors = [
+        line for line in active if line.identifier not in removed_entry_ids
+    ]
+    if not survivors:
+        raise fail("compaction removed every native tree entry")
+    removed_thinking = {
+        identifier
+        for identifier in removed_entry_ids
+        if original_thinking.get(identifier)
+    }
+    if removed_thinking:
+        raise fail(f"compaction would remove thinking entries: {sorted(removed_thinking)}")
+    for line in survivors:
+        identifier = line.identifier
+        if identifier is None:
+            continue
+        if thinking_blocks(line) != original_thinking[identifier]:
+            raise fail(f"thinking blocks changed in native entry {identifier!r}")
+    return survivors, len(removed_entry_ids)
 
 
-def _prove_output(o: CompactedObject, tool_id: str, line: SessionLine) -> None:
-    expected_name = o.output_names[tool_id].lower()
-    if expected_name and line.tool_name.lower() != expected_name:
+def render_rechained(header: SessionLine, survivors: list[SessionLine]) -> list[str]:
+    rendered = [header.raw]
+    previous_identifier: str | None = None
+    for line in survivors:
+        expected_parent = previous_identifier
+        if line.data.get("parentId") != expected_parent:
+            line.data["parentId"] = expected_parent
+            line.changed = True
+        rendered.append(
+            json.dumps(line.data, ensure_ascii=False) if line.changed else line.raw
+        )
+        previous_identifier = line.identifier
+    return rendered
+
+
+def validate_result(lines: list[str]) -> None:
+    parsed = [json.loads(line) for line in lines]
+    if len(parsed) < 2 or parsed[0].get("type") != "session":
+        raise fail("output has no session header or tree")
+    tree = parsed[1:]
+    roots = [entry for entry in tree if entry.get("parentId") is None]
+    if len(roots) != 1:
+        raise fail(f"output has {len(roots)} roots instead of one")
+    previous_identifier: str | None = None
+    calls: set[str] = set()
+    results: set[str] = set()
+    for entry in tree:
+        if entry.get("parentId") != previous_identifier:
+            raise fail(f"output chain breaks at entry {entry.get('id')!r}")
+        identifier = entry.get("id")
+        if not isinstance(identifier, str):
+            raise fail("output tree entry has no string id")
+        previous_identifier = identifier
+        if entry.get("type") != "message" or not isinstance(entry.get("message"), dict):
+            continue
+        message = entry["message"]
+        if message.get("role") == "toolResult":
+            tool_call_id = message.get("toolCallId")
+            if isinstance(tool_call_id, str):
+                results.add(tool_call_id)
+        elif message.get("role") == "assistant":
+            content = message.get("content", [])
+            if isinstance(content, list):
+                calls.update(
+                    block["id"]
+                    for block in content
+                    if isinstance(block, dict)
+                    and block.get("type") == "toolCall"
+                    and isinstance(block.get("id"), str)
+                )
+    if calls != results:
         raise fail(
-            f"object {o.index}: tool name mismatch on {tool_id!r} "
-            f"({expected_name!r} vs {line.tool_name!r})"
-        )
-    expected = normalize(o.output_texts[tool_id])[:100]
-    actual = normalize(line.text)[:100]
-    if expected != actual:
-        raise fail(
-            f"object {o.index}: output content mismatch on {tool_id!r} "
-            f"({expected[:60]!r} vs {actual[:60]!r})"
+            f"tool pairing is broken: {len(calls - results)} calls without results, "
+            f"{len(results - calls)} results without calls"
         )
 
-
-# -------------------------------- applying ---------------------------------
 
 def next_backup_path(jsonl_path: Path) -> Path:
-    for n in range(1000):
-        candidate = jsonl_path.with_name(jsonl_path.name + f".backup-{n}")
+    for number in range(1000):
+        candidate = jsonl_path.with_name(jsonl_path.name + f".backup-{number}")
         if not candidate.exists():
             return candidate
     raise fail("more than 1000 backups exist")
 
 
-def apply_removals(session: list[SessionLine], removed: set[int]) -> list[str]:
-    parent_of = {
-        l.obj["id"]: l.obj.get("parentId") for l in session if "id" in l.obj
+def atomic_write(path: Path, lines: list[str]) -> None:
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            output.write("\n".join(lines) + "\n")
+            output.flush()
+            os.fsync(output.fileno())
+        os.chmod(temporary_path, path.stat().st_mode)
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
+def apply_native_plan(
+    source_bytes: bytes,
+    manifest: dict[str, object],
+    session_path: Path,
+) -> tuple[list[str], dict[str, int]]:
+    source_messages = apply_compaction_plan.load_messages(source_bytes)
+    compacted_messages = apply_compaction_plan.apply_plan(source_bytes, manifest)
+    header, active = parse_session(session_path)
+    calls, results = native_tools(active)
+    original_thinking = {
+        line.identifier: thinking_blocks(line)
+        for line in active
+        if line.identifier is not None
     }
-    removed_ids = {l.obj["id"] for l in session if l.lineno in removed and "id" in l.obj}
-
-    def surviving_ancestor(parent_id: str | None) -> str | None:
-        while parent_id in removed_ids:
-            parent_id = parent_of.get(parent_id)
-        return parent_id
-
-    output: list[str] = []
-    for line in session:
-        if line.lineno in removed:
-            continue
-        parent_id = line.obj.get("parentId")
-        if parent_id in removed_ids:
-            spliced = surviving_ancestor(parent_id)
-            if spliced is None:
-                raise fail(f"line {line.lineno}: no surviving ancestor after splice")
-            line.obj["parentId"] = spliced
-            output.append(json.dumps(line.obj, ensure_ascii=False))
-        else:
-            output.append(line.raw)
-    return output
-
-
-def validate_result(new_lines: list[str], expected_count: int) -> None:
-    parsed = [json.loads(line) for line in new_lines]
-    if len(parsed) != expected_count:
-        raise fail(f"expected {expected_count} surviving lines, got {len(parsed)}")
-    ids = {o["id"] for o in parsed if "id" in o}
-    dangling = [
-        o.get("parentId") for o in parsed
-        if o.get("parentId") and o["parentId"] not in ids
-    ]
-    if dangling:
-        raise fail(f"{len(dangling)} dangling parentId(s) after splice")
-    calls, results = set(), set()
-    for o in parsed:
-        if o.get("type") != "message":
-            continue
-        message = o["message"]
-        if message.get("role") == "toolResult":
-            results.add(short_tool_id(message["toolCallId"]))
-        elif message.get("role") == "assistant":
-            calls.update(
-                short_tool_id(block["id"])
-                for block in message.get("content", [])
-                if isinstance(block, dict) and block.get("type") == "toolCall"
-            )
-    if calls != results:
-        raise fail(
-            f"tool pairing broken after removal: {len(calls - results)} calls without "
-            f"results, {len(results - calls)} results without calls"
-        )
+    events, final_prose_by_index = source_tool_events(
+        source_messages, compacted_messages, manifest
+    )
+    map_source_tools(events, calls)
+    verify_source_outputs(source_messages, events, results)
+    drop_messages = manifest.get("drop_messages", [])
+    replace_messages = manifest.get("replace_messages", [])
+    if not isinstance(drop_messages, list) or not isinstance(replace_messages, list):
+        raise fail("compaction plan drop_messages or replace_messages is malformed")
+    changed_indices = {
+        index for index in drop_messages if isinstance(index, int)
+    } | {
+        replacement["original_index"]
+        for replacement in replace_messages
+        if isinstance(replacement, dict)
+        and isinstance(replacement.get("original_index"), int)
+    }
+    source_by_index = {
+        message["original_index"]: message for message in source_messages
+    }
+    text_changed_indices = {
+        index
+        for index in changed_indices
+        if source_prose(source_by_index[index]) != final_prose_by_index[index]
+    }
+    mapped_messages = map_source_messages(
+        source_messages,
+        active,
+        text_changed_indices,
+    )
+    apply_text_changes(
+        source_messages,
+        final_prose_by_index,
+        mapped_messages,
+        text_changed_indices,
+    )
+    survivors, removed_entries = apply_tool_changes(
+        active, events, calls, results, original_thinking
+    )
+    rendered = render_rechained(header, survivors)
+    validate_result(rendered)
+    return rendered, {
+        "active_entries": len(active),
+        "tool_calls_replaced": sum(bool(event.replacements) for event in events),
+        "tool_calls_dropped": sum(not event.replacements for event in events),
+        "entries_removed": removed_entries,
+        "survivors": len(survivors),
+    }
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("compacted_json", type=Path)
-    parser.add_argument("session_jsonl", type=Path)
-    args = parser.parse_args()
+    parser.add_argument("pruned_json", type=Path)
+    parser.add_argument("compaction_plan_json", type=Path)
+    parser.add_argument("session_copy_jsonl", type=Path)
+    arguments = parser.parse_args()
 
-    compacted = json.loads(args.compacted_json.read_text(encoding="utf-8"))
-    if not isinstance(compacted, list):
-        raise fail(f"{args.compacted_json} is not a JSON array")
-    objects = [CompactedObject(i, o) for i, o in enumerate(compacted)]
-    marked = [o for o in objects if o.marked]
-    if not marked:
-        raise fail("no objects carry remove:true — nothing to transfer")
+    source_bytes = arguments.pruned_json.read_bytes()
+    manifest_raw = json.loads(
+        arguments.compaction_plan_json.read_text(encoding="utf-8")
+    )
+    if not isinstance(manifest_raw, dict):
+        raise fail("compaction plan must be a JSON object")
+    original_bytes = arguments.session_copy_jsonl.read_bytes()
+    rendered, stats = apply_native_plan(
+        source_bytes, manifest_raw, arguments.session_copy_jsonl
+    )
+    if arguments.session_copy_jsonl.read_bytes() != original_bytes:
+        raise fail("native target changed during validation; rerun against a stable copy")
 
-    check_input_pairing(objects)
-    check_pair_closure(objects)
+    backup = next_backup_path(arguments.session_copy_jsonl)
+    backup.write_bytes(original_bytes)
+    if backup.read_bytes() != original_bytes:
+        raise fail("backup verification failed")
+    atomic_write(arguments.session_copy_jsonl, rendered)
 
-    session = parse_session(args.session_jsonl)
-    mapping = cross_reference(objects, session)
-
-    removed_lines = {
-        lineno for o in marked for lineno in mapping[o.index]
-    }
-    new_lines = apply_removals(session, removed_lines)
-    validate_result(new_lines, len(session) - len(removed_lines))
-
-    backup = next_backup_path(args.session_jsonl)
-    backup.write_bytes(args.session_jsonl.read_bytes())
-    args.session_jsonl.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-
-    size_before = backup.stat().st_size
-    size_after = args.session_jsonl.stat().st_size
-    print(f"backup        : {backup}")
-    print(f"marked objects: {len(marked)} -> {len(removed_lines)} JSONL lines removed")
-    print(f"lines         : {len(session)} -> {len(new_lines)}")
-    print(f"bytes         : {size_before} -> {size_after} "
-          f"({100 * (1 - size_after / size_before):.1f}% smaller)")
+    output_bytes = arguments.session_copy_jsonl.stat().st_size
+    print(
+        json.dumps(
+            {
+                "backup": str(backup),
+                "source_bytes": len(original_bytes),
+                "output_bytes": output_bytes,
+                "stats": stats,
+            }
+        )
+    )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

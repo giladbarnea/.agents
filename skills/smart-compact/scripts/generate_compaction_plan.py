@@ -150,8 +150,16 @@ def parse_decisions(raw: dict[str, object]) -> Decisions:
             skeletons.append(SkeletonDeclaration(**entry))
         except TypeError as error:
             raise ValueError(f"invalid skeleton entry {entry!r}: {error}") from error
+        if not isinstance(entry.get("original_index"), int):
+            raise ValueError(f"skeleton entry needs an integer original_index: {entry!r}")
+        if entry.get("tool_id") is not None and (
+            not isinstance(entry["tool_id"], str) or not entry["tool_id"]
+        ):
+            raise ValueError(
+                f"skeleton at index {entry.get('original_index')!r} has invalid tool_id"
+            )
         for field in ("command", "purpose", "outcome"):
-            if not entry.get(field):
+            if not isinstance(entry.get(field), str) or not entry[field]:
                 raise ValueError(f"skeleton at index {entry.get('original_index')!r} missing {field}")
 
     for key in ("scratchpad_paths", "opaque_artifacts"):
@@ -188,7 +196,10 @@ def resolve_anchors(
         if not tool_inputs:
             raise ValueError(f"skeleton anchor {declaration.original_index} has no tool-input block")
         if declaration.tool_id is None and len(tool_inputs) > 1:
-            available = [block.get("id") for block in tool_inputs]
+            available = [
+                block.get("native_tool_call_id") or block.get("id")
+                for block in tool_inputs
+            ]
             raise ValueError(
                 f"skeleton anchor {declaration.original_index} is ambiguous; "
                 f"specify tool_id from {available}"
@@ -196,7 +207,12 @@ def resolve_anchors(
         if declaration.tool_id is None:
             block = tool_inputs[0]
         else:
-            matches = [b for b in tool_inputs if b.get("id") == declaration.tool_id]
+            matches = [
+                block
+                for block in tool_inputs
+                if declaration.tool_id
+                in {block.get("id"), block.get("native_tool_call_id")}
+            ]
             if len(matches) != 1:
                 raise ValueError(
                     f"skeleton anchor {declaration.original_index} tool_id "
@@ -318,6 +334,7 @@ def generate_plan(
             raise ValueError(f"message {index} has no content array")
 
         new_content: list[str] = []
+        tool_skeletons: list[dict[str, str]] = []
         changed = False
         had_prose = False
         had_tools = False
@@ -356,15 +373,20 @@ def generate_plan(
             if declaration is None:
                 dropped_tool_counts[str(block["name"])] += 1
                 continue
-            new_content.append(
-                render_skeleton({
+            skeleton = render_skeleton({
                     "name": declaration.name or str(block["name"]),
                     "command": declaration.command,
                     "purpose": declaration.purpose,
                     "outcome": declaration.outcome,
                     "meaning": declaration.meaning or "",
                 })
-            )
+            new_content.append(skeleton)
+            tool_identifier = block.get("native_tool_call_id") or block.get("id")
+            if not isinstance(tool_identifier, str) or not tool_identifier:
+                raise ValueError(
+                    f"skeleton anchor {index} has no tool identifier"
+                )
+            tool_skeletons.append({"tool_id": tool_identifier, "content": skeleton})
 
         if not new_content:
             drop_messages.append(index)
@@ -374,11 +396,14 @@ def generate_plan(
             continue
         if had_prose and had_tools:
             mixed_normalized.append(index)
-        replace_messages.append({
+        replacement: dict[str, object] = {
             "original_index": index,
             "expected_tool_ids": sorted(apply_compaction_plan.tool_ids(message)),
             "content": new_content,
-        })
+        }
+        if tool_skeletons:
+            replacement["tool_skeletons"] = tool_skeletons
+        replace_messages.append(replacement)
 
     invalid_file_reference_drops = [
         (decision, matched_file_reference_drops[decision])

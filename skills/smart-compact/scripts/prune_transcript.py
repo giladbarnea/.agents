@@ -19,7 +19,9 @@ import transcript_common
 
 
 NOISE_TOOL_NAMES = frozenset({"todo"})
-EMPTY_ORPHAN_KEYS = frozenset({"type", "name", "id"})
+EMPTY_ORPHAN_KEYS = frozenset(
+    {"type", "name", "id", "native_tool_call_id", "native_content_index"}
+)
 
 
 @dataclasses.dataclass
@@ -171,8 +173,23 @@ def prune(data: list[dict[str, object]]) -> list[dict[str, object]]:
 
             references = transcript_common.file_references(block)
             if references:
+                native_tool_call_id = block.get("native_tool_call_id")
+                native_content_index = block.get("native_content_index")
                 pruned_blocks.extend(
-                    transcript_common.render_reference(*reference) for reference in references
+                    transcript_common.render_reference(
+                        *reference,
+                        native_tool_call_id=(
+                            native_tool_call_id
+                            if isinstance(native_tool_call_id, str)
+                            else None
+                        ),
+                        native_content_index=(
+                            native_content_index
+                            if isinstance(native_content_index, int)
+                            else None
+                        ),
+                    )
+                    for reference in references
                 )
                 continue
             pruned_blocks.append(block)

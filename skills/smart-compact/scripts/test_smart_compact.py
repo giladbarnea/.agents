@@ -145,7 +145,14 @@ skeletons:
     def test_pruner_handles_multi_read_delete_and_mixed_order(self) -> None:
         mixed = [
             "before",
-            {"type": "tool-input", "name": "read_many_files", "id": "many", "paths": ["a", "b"]},
+            {
+                "type": "tool-input",
+                "name": "read_many_files",
+                "id": "many",
+                "paths": ["a", "b"],
+                "native_tool_call_id": "call_many-full",
+                "native_content_index": 1,
+            },
             {"type": "tool-input", "name": "Bash", "id": "bash", "command": "pytest"},
             {"type": "tool-input", "name": "Delete", "id": "delete", "path": "old"},
             "after",
@@ -166,8 +173,8 @@ skeletons:
             pruned[0]["content"],
             [
                 "before",
-                '<Read path="a" id="many"/>',
-                '<Read path="b" id="many"/>',
+                '<Read path="a" id="many" native_tool_call_id="call_many-full" native_content_index="1"/>',
+                '<Read path="b" id="many" native_tool_call_id="call_many-full" native_content_index="1"/>',
                 mixed[2],
                 '<Delete path="old" id="delete"/>',
                 "after",
@@ -179,7 +186,13 @@ skeletons:
     def test_pruner_drops_explicit_empty_orphan_and_audits_it(self) -> None:
         source = [
             message(46, "user", ["keep"]),
-            message(47, "assistant", [{"type": "tool-input", "name": "Edit", "id": "01CC"}]),
+            message(47, "assistant", [{
+                "type": "tool-input",
+                "name": "Edit",
+                "id": "01CC",
+                "native_tool_call_id": "call_01CC-full",
+                "native_content_index": 0,
+            }]),
         ]
         with tempfile.TemporaryDirectory() as temporary_directory:
             source_path = pathlib.Path(temporary_directory, "transcript.json")
@@ -467,6 +480,39 @@ skeletons:
                 {"version": 1, "source_sha256": "0" * 64},
             )
 
+    def test_manifest_refuses_a_stale_skeleton_tool_id(self) -> None:
+        skeleton = (
+            '<tool-skeleton name="Bash" command="pytest" purpose="Validate" '
+            'outcome="12 passed"/>'
+        )
+        source = [message(2, "assistant", [{
+            "type": "tool-input",
+            "name": "Bash",
+            "id": "01AB",
+            "native_tool_call_id": "toolu_current-full",
+            "native_content_index": 0,
+            "command": "pytest",
+        }])]
+        source_bytes = json.dumps(source).encode()
+        manifest = {
+            "version": 1,
+            "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+            "drop_messages": [],
+            "replace_messages": [{
+                "original_index": 2,
+                "expected_tool_ids": ["01AB"],
+                "content": [skeleton],
+                "tool_skeletons": [{
+                    "tool_id": "toolu_stale-full",
+                    "content": skeleton,
+                }],
+            }],
+            "affected_files_extra": [],
+        }
+
+        with self.assertRaisesRegex(ValueError, "tool_skeleton IDs do not match source"):
+            apply_compaction_plan.apply_plan(source_bytes, manifest)
+
     def test_generator_infers_drops_and_places_skeletons(self) -> None:
         source = [
             message(1, "user", ["Investigate the failure"]),
@@ -667,6 +713,683 @@ skeletons:
             generate_compaction_plan.generate_plan(
                 artifact_without_path, generate_compaction_plan.parse_decisions({})
             )
+
+    def test_annotation_to_native_plan_maps_same_name_skeletons_by_full_tool_id(self) -> None:
+        source = [
+            message(8, "assistant", [
+                {
+                    "type": "tool-input",
+                    "name": "Bash",
+                    "id": "01AA",
+                    "native_tool_call_id": "toolu_first-full",
+                    "native_content_index": 1,
+                    "command": "same command",
+                },
+                {
+                    "type": "tool-input",
+                    "name": "Bash",
+                    "id": "01BB",
+                    "native_tool_call_id": "toolu_second-full",
+                    "native_content_index": 2,
+                    "command": "same command",
+                },
+            ]),
+            message(9, "user", [{
+                "type": "tool-output",
+                "name": "Bash",
+                "id": "01AA",
+                "native_tool_call_id": "toolu_first-full",
+                "content": "first result",
+            }]),
+            message(10, "user", [{
+                "type": "tool-output",
+                "name": "Bash",
+                "id": "01BB",
+                "native_tool_call_id": "toolu_second-full",
+                "content": "second result",
+            }]),
+            message(11, "assistant", ["Done"]),
+        ]
+        source[0]["native_entry_id"] = "assistant-tools"
+        source[1]["native_entry_id"] = "result-first"
+        source[2]["native_entry_id"] = "result-second"
+        source[3]["native_entry_id"] = "done"
+        source_bytes = json.dumps(source).encode()
+        decisions_raw = compile_annotations.compile_annotations(
+            source_bytes,
+            {
+                "skeletons": [
+                    {
+                        "original_index": 8,
+                        "tool_id": "toolu_second-full",
+                        "command": "same command",
+                        "purpose": "Keep the second result",
+                        "outcome": "second result",
+                    },
+                    {
+                        "original_index": 8,
+                        "tool_id": "toolu_first-full",
+                        "command": "same command",
+                        "purpose": "Keep the first result",
+                        "outcome": "first result",
+                    },
+                ],
+            },
+        )
+        plan, _ = generate_compaction_plan.generate_plan(
+            source_bytes,
+            generate_compaction_plan.parse_decisions(decisions_raw),
+        )
+        replacement = plan["replace_messages"][0]
+        first_skeleton, second_skeleton = replacement["content"]
+
+        self.assertEqual(
+            replacement.get("tool_skeletons"),
+            [
+                {"tool_id": "toolu_first-full", "content": first_skeleton},
+                {"tool_id": "toolu_second-full", "content": second_skeleton},
+            ],
+            f"The plan lost each skeleton's full tool ID: {replacement!r}",
+        )
+
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {
+                "type": "message",
+                "id": "assistant-tools",
+                "parentId": None,
+                "timestamp": "now",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "thinking", "thinking": "Keep this"},
+                        {"type": "toolCall", "id": "toolu_first-full", "name": "Bash", "arguments": {"command": "same command"}},
+                        {"type": "toolCall", "id": "toolu_second-full", "name": "Bash", "arguments": {"command": "same command"}},
+                    ],
+                },
+            },
+            {
+                "type": "message",
+                "id": "result-first",
+                "parentId": "assistant-tools",
+                "timestamp": "now",
+                "message": {
+                    "role": "toolResult",
+                    "toolCallId": "toolu_first-full",
+                    "toolName": "Bash",
+                    "content": [{"type": "text", "text": "first result"}],
+                },
+            },
+            {
+                "type": "message",
+                "id": "result-second",
+                "parentId": "result-first",
+                "timestamp": "now",
+                "message": {
+                    "role": "toolResult",
+                    "toolCallId": "toolu_second-full",
+                    "toolName": "Bash",
+                    "content": [{"type": "text", "text": "second result"}],
+                },
+            },
+            {
+                "type": "message",
+                "id": "done",
+                "parentId": "result-second",
+                "timestamp": "now",
+                "message": {"role": "assistant", "content": [{"type": "text", "text": "Done"}]},
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = pathlib.Path(temporary_directory)
+            source_path = directory / "pruned.json"
+            plan_path = directory / "compaction-plan.json"
+            session_path = directory / "target.jsonl"
+            source_path.write_bytes(source_bytes)
+            plan_path.write_text(json.dumps(plan))
+            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(pathlib.Path(__file__).with_name("transfer_to_pi_session.py")),
+                    str(source_path),
+                    str(plan_path),
+                    str(session_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            output = [json.loads(line) for line in session_path.read_text().splitlines()]
+
+        self.assertEqual(result.returncode, 0, f"Exact skeleton mapping failed: {result.stderr}")
+        self.assertEqual(
+            output[1]["message"]["content"],
+            [
+                {"type": "thinking", "thinking": "Keep this"},
+                {"type": "text", "text": first_skeleton},
+                {"type": "text", "text": second_skeleton},
+            ],
+            f"Same-name skeletons mapped to the wrong full tool IDs: {output!r}",
+        )
+
+    def test_native_plan_application_preserves_thinking_and_replaces_tools_atomically(self) -> None:
+        source = [
+            message(10, "assistant", [
+                "Before tools",
+                {"type": "tool-input", "name": "Bash", "id": "01AB", "command": "false", "native_tool_call_id": "toolu_01AB-full", "native_content_index": 2},
+                {"type": "tool-input", "name": "Bash", "id": "01CD", "command": "pytest", "native_tool_call_id": "toolu_01CD-full", "native_content_index": 4},
+                "After tools",
+            ]),
+            message(11, "user", [
+                {"type": "tool-output", "name": "Bash", "id": "01AB", "native_tool_call_id": "toolu_01AB-full", "content": "failed"}
+            ]),
+            message(12, "user", [
+                {"type": "tool-output", "name": "Bash", "id": "01CD", "native_tool_call_id": "toolu_01CD-full", "content": "12 passed"}
+            ]),
+            message(13, "assistant", ["Done"]),
+        ]
+        source[0]["native_entry_id"] = "entry-a"
+        source[1]["native_entry_id"] = "entry-b"
+        source[2]["native_entry_id"] = "entry-c"
+        source_bytes = json.dumps(source).encode()
+        skeleton = (
+            '<tool-skeleton name="Bash" command="pytest" purpose="Validate" '
+            'outcome="12 passed"/>'
+        )
+        plan = {
+            "version": 1,
+            "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+            "drop_messages": [11, 12],
+            "replace_messages": [{
+                "original_index": 10,
+                "expected_tool_ids": ["01AB", "01CD"],
+                "content": ["Before tools", skeleton, "After tools"],
+                "tool_skeletons": [
+                    {"tool_id": "toolu_01CD-full", "content": skeleton}
+                ],
+            }],
+            "affected_files_extra": [],
+        }
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {
+                "type": "message",
+                "id": "entry-a",
+                "parentId": None,
+                "timestamp": "now",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "thinking", "thinking": "Keep this reasoning"},
+                        {"type": "text", "text": "Before tools"},
+                        {"type": "toolCall", "id": "toolu_01AB-full", "name": "Bash", "arguments": {"command": "false"}},
+                        {"type": "thinking", "thinking": "Keep this too"},
+                        {"type": "toolCall", "id": "toolu_01CD-full", "name": "Bash", "arguments": {"command": "pytest"}},
+                        {"type": "text", "text": "After tools"},
+                    ],
+                },
+            },
+            {
+                "type": "message",
+                "id": "entry-b",
+                "parentId": "entry-a",
+                "timestamp": "now",
+                "message": {
+                    "role": "toolResult",
+                    "toolCallId": "toolu_01AB-full",
+                    "toolName": "Bash",
+                    "content": [{"type": "text", "text": "failed"}],
+                },
+            },
+            {
+                "type": "message",
+                "id": "entry-c",
+                "parentId": "entry-b",
+                "timestamp": "now",
+                "message": {
+                    "role": "toolResult",
+                    "toolCallId": "toolu_01CD-full",
+                    "toolName": "Bash",
+                    "content": [{"type": "text", "text": "12 passed"}],
+                },
+            },
+            {
+                "type": "message",
+                "id": "entry-d",
+                "parentId": "entry-c",
+                "timestamp": "now",
+                "message": {"role": "assistant", "content": [{"type": "text", "text": "Done"}]},
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = pathlib.Path(temporary_directory)
+            source_path = directory / "pruned.json"
+            plan_path = directory / "compaction-plan.json"
+            session_path = directory / "target.jsonl"
+            source_path.write_bytes(source_bytes)
+            plan_path.write_text(json.dumps(plan))
+            original_session_bytes = b"".join(
+                json.dumps(line).encode() + b"\n" for line in native_lines
+            )
+            session_path.write_bytes(original_session_bytes)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(pathlib.Path(__file__).with_name("transfer_to_pi_session.py")),
+                    str(source_path),
+                    str(plan_path),
+                    str(session_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            output = [json.loads(line) for line in session_path.read_text().splitlines()]
+            backups = list(directory.glob("target.jsonl.backup-*"))
+            backup_bytes = backups[0].read_bytes() if len(backups) == 1 else None
+            goldload = subprocess.run(
+                [
+                    "node",
+                    str(pathlib.Path(__file__).with_name("pi-goldload.mjs")),
+                    str(session_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(result.returncode, 0, f"Native plan application failed: {result.stderr}")
+        self.assertEqual(goldload.returncode, 0, f"Pi could not load the output: {goldload.stderr}")
+        self.assertIn("PASS=true", goldload.stdout, f"Pi did not reach the full output chain: {goldload.stdout}")
+        self.assertEqual(len(backups), 1, f"Expected one safety backup. Got: {backups!r}")
+        self.assertEqual(backup_bytes, original_session_bytes, "The safety backup changed")
+        self.assertEqual(
+            [line.get("id") for line in output[1:]],
+            ["entry-a", "entry-d"],
+            f"Paired tool results survived: {output!r}",
+        )
+        content = output[1]["message"]["content"]
+        self.assertEqual(
+            content,
+            [
+                {"type": "thinking", "thinking": "Keep this reasoning"},
+                {"type": "text", "text": "Before tools"},
+                {"type": "thinking", "thinking": "Keep this too"},
+                {"type": "text", "text": skeleton},
+                {"type": "text", "text": "After tools"},
+            ],
+            f"Thinking moved or the skeleton was placed at the wrong tool block: {content!r}",
+        )
+        self.assertFalse(
+            any(block.get("type") == "toolCall" for block in content),
+            f"Raw tool calls survived: {content!r}",
+        )
+        self.assertEqual(
+            output[2].get("parentId"),
+            "entry-a",
+            f"The survivor chain was not repaired: {output!r}",
+        )
+
+    def test_native_plan_application_applies_text_replacements_and_message_drops(self) -> None:
+        source = [
+            message(20, "assistant", ["Keep this", "Drop this murmur"]),
+            message(21, "user", ["Drop this whole turn"]),
+            message(22, "assistant", ["Done"]),
+        ]
+        source[0]["native_entry_id"] = "entry-a"
+        source[1]["native_entry_id"] = "entry-b"
+        source[2]["native_entry_id"] = "entry-c"
+        source_bytes = json.dumps(source).encode()
+        plan = {
+            "version": 1,
+            "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+            "drop_messages": [21],
+            "replace_messages": [{
+                "original_index": 20,
+                "expected_tool_ids": [],
+                "content": ["Keep this"],
+            }],
+            "affected_files_extra": [],
+        }
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {
+                "type": "message",
+                "id": "entry-a",
+                "parentId": None,
+                "timestamp": "now",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "thinking", "thinking": "Preserve me"},
+                        {"type": "text", "text": "Keep this"},
+                        {"type": "text", "text": "Drop this murmur"},
+                    ],
+                },
+            },
+            {
+                "type": "message",
+                "id": "entry-b",
+                "parentId": "entry-a",
+                "timestamp": "now",
+                "message": {"role": "user", "content": [{"type": "text", "text": "Drop this whole turn"}]},
+            },
+            {
+                "type": "message",
+                "id": "entry-c",
+                "parentId": "entry-b",
+                "timestamp": "now",
+                "message": {"role": "assistant", "content": [{"type": "text", "text": "Done"}]},
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = pathlib.Path(temporary_directory)
+            source_path = directory / "pruned.json"
+            plan_path = directory / "compaction-plan.json"
+            session_path = directory / "target.jsonl"
+            source_path.write_bytes(source_bytes)
+            plan_path.write_text(json.dumps(plan))
+            session_path.write_text(
+                "".join(json.dumps(line) + "\n" for line in native_lines)
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(pathlib.Path(__file__).with_name("transfer_to_pi_session.py")),
+                    str(source_path),
+                    str(plan_path),
+                    str(session_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            output = [json.loads(line) for line in session_path.read_text().splitlines()]
+
+        self.assertEqual(result.returncode, 0, f"Native text application failed: {result.stderr}")
+        self.assertEqual(
+            [line.get("id") for line in output[1:]],
+            ["entry-a", "entry-c"],
+            f"The dropped user message survived: {output!r}",
+        )
+        self.assertEqual(
+            output[1]["message"]["content"],
+            [
+                {"type": "thinking", "thinking": "Preserve me"},
+                {"type": "text", "text": "Keep this"},
+            ],
+            f"The text replacement did not preserve adjacent thinking: {output!r}",
+        )
+        self.assertEqual(
+            output[2].get("parentId"),
+            "entry-a",
+            f"The dropped message was not spliced from the chain: {output!r}",
+        )
+
+    def test_native_plan_application_replaces_multi_file_read_from_pruned_references(self) -> None:
+        first_reference = '<Read path="a.md" id="01RF" native_tool_call_id="toolu_01RF-complete" native_content_index="1"/>'
+        second_reference = '<Read path="b.md" id="01RF" native_tool_call_id="toolu_01RF-complete" native_content_index="1"/>'
+        source = [
+            message(30, "assistant", [first_reference, second_reference]),
+            message(31, "assistant", ["Done"]),
+        ]
+        source[0]["native_entry_id"] = "entry-a"
+        source[1]["native_entry_id"] = "entry-c"
+        source_bytes = json.dumps(source).encode()
+        plan = {
+            "version": 1,
+            "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+            "drop_messages": [],
+            "replace_messages": [{
+                "original_index": 30,
+                "expected_tool_ids": [],
+                "content": [second_reference],
+            }],
+            "affected_files_extra": ["b.md"],
+        }
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {
+                "type": "message",
+                "id": "entry-a",
+                "parentId": None,
+                "timestamp": "now",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "thinking", "thinking": "Read both files"},
+                        {
+                            "type": "toolCall",
+                            "id": "toolu_01RF-complete",
+                            "name": "read_many_files",
+                            "arguments": {"paths": ["a.md", "b.md"]},
+                        },
+                    ],
+                },
+            },
+            {
+                "type": "message",
+                "id": "entry-b",
+                "parentId": "entry-a",
+                "timestamp": "now",
+                "message": {
+                    "role": "toolResult",
+                    "toolCallId": "toolu_01RF-complete",
+                    "toolName": "read_many_files",
+                    "content": [{"type": "text", "text": "large file contents"}],
+                },
+            },
+            {
+                "type": "message",
+                "id": "entry-c",
+                "parentId": "entry-b",
+                "timestamp": "now",
+                "message": {"role": "assistant", "content": [{"type": "text", "text": "Done"}]},
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = pathlib.Path(temporary_directory)
+            source_path = directory / "pruned.json"
+            plan_path = directory / "compaction-plan.json"
+            session_path = directory / "target.jsonl"
+            source_path.write_bytes(source_bytes)
+            plan_path.write_text(json.dumps(plan))
+            session_path.write_text(
+                "".join(json.dumps(line) + "\n" for line in native_lines)
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(pathlib.Path(__file__).with_name("transfer_to_pi_session.py")),
+                    str(source_path),
+                    str(plan_path),
+                    str(session_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            output = [json.loads(line) for line in session_path.read_text().splitlines()]
+
+        self.assertEqual(result.returncode, 0, f"Native file-reference application failed: {result.stderr}")
+        self.assertEqual(
+            [line.get("id") for line in output[1:]],
+            ["entry-a", "entry-c"],
+            f"The read result survived its replaced call: {output!r}",
+        )
+        self.assertEqual(
+            output[1]["message"]["content"],
+            [
+                {"type": "thinking", "thinking": "Read both files"},
+                {"type": "text", "text": second_reference},
+            ],
+            f"The selected file reference was not applied at block level: {output!r}",
+        )
+
+    def test_native_plan_application_maps_repeated_short_ids_by_full_id(self) -> None:
+        first_skeleton = '<tool-skeleton name="Bash" command="first" purpose="Check first" outcome="first result"/>'
+        second_skeleton = '<tool-skeleton name="Bash" command="second" purpose="Check second" outcome="second result"/>'
+        source = [
+            message(40, "assistant", [{"type": "tool-input", "name": "Bash", "id": "01CN", "native_tool_call_id": "toolu_01CN-first", "native_content_index": 0, "command": "first"}]),
+            message(41, "user", [{"type": "tool-output", "name": "Bash", "id": "01CN", "native_tool_call_id": "toolu_01CN-first", "content": "first result"}]),
+            message(42, "assistant", [{"type": "tool-input", "name": "Bash", "id": "01CN", "native_tool_call_id": "toolu_01CN-second", "native_content_index": 0, "command": "second"}]),
+            message(43, "user", [{"type": "tool-output", "name": "Bash", "id": "01CN", "native_tool_call_id": "toolu_01CN-second", "content": "second result"}]),
+            message(44, "assistant", ["Done"]),
+        ]
+        source[0]["native_entry_id"] = "assistant-first"
+        source[1]["native_entry_id"] = "result-first"
+        source[2]["native_entry_id"] = "assistant-second"
+        source[3]["native_entry_id"] = "result-second"
+        source[4]["native_entry_id"] = "done"
+        source_bytes = json.dumps(source).encode()
+        plan = {
+            "version": 1,
+            "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+            "drop_messages": [41, 43],
+            "replace_messages": [
+                {"original_index": 40, "expected_tool_ids": ["01CN"], "content": [first_skeleton]},
+                {"original_index": 42, "expected_tool_ids": ["01CN"], "content": [second_skeleton]},
+            ],
+            "affected_files_extra": [],
+        }
+        native_lines: list[dict[str, object]] = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+        ]
+        parent_identifier: str | None = None
+        for suffix, command, result_text in (
+            ("first", "first", "first result"),
+            ("second", "second", "second result"),
+        ):
+            assistant_identifier = f"assistant-{suffix}"
+            result_identifier = f"result-{suffix}"
+            full_call_id = f"toolu_01CN-{suffix}"
+            native_lines.extend([
+                {
+                    "type": "message",
+                    "id": assistant_identifier,
+                    "parentId": parent_identifier,
+                    "timestamp": "now",
+                    "message": {
+                        "role": "assistant",
+                        "content": [{"type": "toolCall", "id": full_call_id, "name": "Bash", "arguments": {"command": command}}],
+                    },
+                },
+                {
+                    "type": "message",
+                    "id": result_identifier,
+                    "parentId": assistant_identifier,
+                    "timestamp": "now",
+                    "message": {
+                        "role": "toolResult",
+                        "toolCallId": full_call_id,
+                        "toolName": "Bash",
+                        "content": [{"type": "text", "text": result_text}],
+                    },
+                },
+            ])
+            parent_identifier = result_identifier
+        native_lines.append({
+            "type": "message",
+            "id": "done",
+            "parentId": parent_identifier,
+            "timestamp": "now",
+            "message": {"role": "assistant", "content": [{"type": "text", "text": "Done"}]},
+        })
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = pathlib.Path(temporary_directory)
+            source_path = directory / "pruned.json"
+            plan_path = directory / "compaction-plan.json"
+            session_path = directory / "target.jsonl"
+            source_path.write_bytes(source_bytes)
+            plan_path.write_text(json.dumps(plan))
+            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(pathlib.Path(__file__).with_name("transfer_to_pi_session.py")),
+                    str(source_path),
+                    str(plan_path),
+                    str(session_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            output = [json.loads(line) for line in session_path.read_text().splitlines()]
+
+        self.assertEqual(result.returncode, 0, f"Repeated short IDs were not resolved: {result.stderr}")
+        self.assertEqual(
+            [line.get("id") for line in output[1:]],
+            ["assistant-first", "assistant-second", "done"],
+            f"Repeated-ID tool results survived: {output!r}",
+        )
+        self.assertEqual(
+            [output[1]["message"]["content"][0]["text"], output[2]["message"]["content"][0]["text"]],
+            [first_skeleton, second_skeleton],
+            f"The skeletons crossed repeated short IDs: {output!r}",
+        )
+
+    def test_native_plan_application_leaves_target_untouched_when_plan_is_stale(self) -> None:
+        source_bytes = json.dumps([message(50, "assistant", ["Done"])]).encode()
+        stale_plan = {
+            "version": 1,
+            "source_sha256": "0" * 64,
+            "drop_messages": [],
+            "replace_messages": [],
+            "affected_files_extra": [],
+        }
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {
+                "type": "message",
+                "id": "entry-a",
+                "parentId": None,
+                "timestamp": "now",
+                "message": {"role": "assistant", "content": [{"type": "text", "text": "Done"}]},
+            },
+        ]
+        original_session_bytes = b"".join(
+            json.dumps(line).encode() + b"\n" for line in native_lines
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = pathlib.Path(temporary_directory)
+            source_path = directory / "pruned.json"
+            plan_path = directory / "compaction-plan.json"
+            session_path = directory / "target.jsonl"
+            source_path.write_bytes(source_bytes)
+            plan_path.write_text(json.dumps(stale_plan))
+            session_path.write_bytes(original_session_bytes)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(pathlib.Path(__file__).with_name("transfer_to_pi_session.py")),
+                    str(source_path),
+                    str(plan_path),
+                    str(session_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            final_session_bytes = session_path.read_bytes()
+            backups = list(directory.glob("target.jsonl.backup-*"))
+
+        self.assertNotEqual(result.returncode, 0, "A stale plan unexpectedly succeeded")
+        self.assertIn("checksum mismatch", result.stderr, f"The failure was not specific: {result.stderr}")
+        self.assertEqual(
+            final_session_bytes,
+            original_session_bytes,
+            "A stale plan changed the native target",
+        )
+        self.assertFalse(backups, f"Validation failure created a misleading backup: {backups!r}")
 
 if __name__ == "__main__":
     unittest.main()
