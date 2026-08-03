@@ -513,6 +513,28 @@ skeletons:
         with self.assertRaisesRegex(ValueError, "tool_skeleton IDs do not match source"):
             apply_compaction_plan.apply_plan(source_bytes, manifest)
 
+    def test_manifest_refuses_changed_structured_blocks(self) -> None:
+        thinking = {"type": "thinking", "content": "Original reasoning"}
+        source = [message(2, "assistant", [thinking, "Done"])]
+        source_bytes = json.dumps(source).encode()
+        manifest = {
+            "version": 1,
+            "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+            "drop_messages": [],
+            "replace_messages": [{
+                "original_index": 2,
+                "expected_tool_ids": [],
+                "content": [
+                    {"type": "thinking", "content": "Altered reasoning"},
+                    "Done",
+                ],
+            }],
+            "affected_files_extra": [],
+        }
+
+        with self.assertRaisesRegex(ValueError, "structured blocks changed"):
+            apply_compaction_plan.apply_plan(source_bytes, manifest)
+
     def test_generator_infers_drops_and_places_skeletons(self) -> None:
         source = [
             message(1, "user", ["Investigate the failure"]),
@@ -564,6 +586,72 @@ skeletons:
             f"Got: {compacted!r}",
         )
         self.assertTrue(any("skeleton anchors: 2" in line for line in audit), f"Got: {audit!r}")
+
+    def test_semantic_pipeline_preserves_structured_blocks(self) -> None:
+        thinking = {"type": "thinking", "content": "Keep this reasoning"}
+        subagent_task = {"type": "subagent-task", "content": "Inspect the parser"}
+        source = [
+            message(1, "assistant", [
+                thinking,
+                "Before validation",
+                {
+                    "type": "tool-input",
+                    "name": "Bash",
+                    "id": "01AB",
+                    "native_tool_call_id": "toolu_01AB-full",
+                    "native_content_index": 2,
+                    "command": "pytest",
+                },
+            ]),
+            message(2, "user", [{
+                "type": "tool-output",
+                "name": "Bash",
+                "id": "01AB",
+                "native_tool_call_id": "toolu_01AB-full",
+                "content": "12 passed",
+            }]),
+            {
+                "type": "agent",
+                "role": "agent",
+                "original_index": 3,
+                "agent_id": "agent-1",
+                "content": [subagent_task, "The parser is sound"],
+            },
+            message(4, "assistant", ["Done"]),
+        ]
+        pruned = prune_transcript.prune(source)
+        source_bytes = json.dumps(pruned).encode()
+        decisions = generate_compaction_plan.parse_decisions({
+            "skeletons": [{
+                "original_index": 1,
+                "tool_id": "toolu_01AB-full",
+                "command": "pytest",
+                "purpose": "Validate",
+                "outcome": "12 passed",
+            }],
+        })
+
+        plan, _ = generate_compaction_plan.generate_plan(source_bytes, decisions)
+        compacted = apply_compaction_plan.apply_plan(source_bytes, plan)
+        content_by_index = {
+            item["original_index"]: item["content"]
+            for item in compacted
+        }
+
+        self.assertEqual(
+            content_by_index.get(1),
+            [
+                thinking,
+                "Before validation",
+                '<tool-skeleton name="Bash" command="pytest" purpose="Validate" outcome="12 passed"/>',
+            ],
+            f"Thinking did not survive tool compaction in place. Got: {compacted!r}",
+        )
+        self.assertEqual(
+            content_by_index.get(3),
+            [subagent_task, "The parser is sound"],
+            f"The sub-agent block did not survive unchanged. Got: {compacted!r}",
+        )
 
     def test_generator_drops_one_file_reference_by_index_operation_and_path(self) -> None:
         main_path = "/Users/giladbarnea/dev/tractor-ami/main.js"

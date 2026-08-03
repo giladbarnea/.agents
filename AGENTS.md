@@ -93,7 +93,7 @@ Then run the script with `uv run script.py`. No need to specify the Python versi
 <using-sub-agents>
 
 
-- Always load the `instruct-another-ai` skill before launching a subagent or writing Markdown docs.
+- Always load the `ai-to-ai` skill before launching a subagent or writing Markdown docs.
 - When a forked subagent returns, do not replay its journey upon its return "just to verify it": do not re-read the files it read or created, do not run the same commands it did. Instead, trust what it told you and move on. The purpose of forking background subagents is to protect your context window. Going through what the subagent did beats that purpose.
 
 </using-sub-agents>
@@ -277,5 +277,9 @@ The way to keep output short is to be selective about what you include (drop det
 </adhd.required-writing-style.work-summaries>
 </adhd.required-writing-style>
 </adhd>
+
+---
+
+Relative to this skill is a `./references/` for special-cases. Don’t load unless instructed to.
 
 </communication-style>

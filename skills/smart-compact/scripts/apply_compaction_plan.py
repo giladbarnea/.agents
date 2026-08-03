@@ -157,7 +157,7 @@ def apply_plan(
     if missing_drops:
         raise ValueError(f"drop_messages references missing indices: {missing_drops}")
 
-    replacements: dict[int, list[str]] = {}
+    replacements: dict[int, list[object]] = {}
     for item in replace_raw:
         original_index = item.get("original_index")
         expected_tool_ids = item.get("expected_tool_ids", [])
@@ -173,16 +173,18 @@ def apply_plan(
         if set(expected_tool_ids) != tool_ids(messages_by_index[original_index]):
             raise ValueError(f"replacement {original_index} tool IDs do not match source")
         if not isinstance(content, list) or not content or not all(
-            isinstance(block, str) for block in content
+            isinstance(block, (str, dict)) for block in content
         ):
-            raise ValueError(f"replacement {original_index} content must be non-empty strings")
+            raise ValueError(
+                f"replacement {original_index} content must contain strings or structured blocks"
+            )
         replacement_tool_skeletons(
             item,
             messages_by_index[original_index],
             original_index,
         )
         replacements[original_index] = [
-            block for block in content if isinstance(block, str) and not is_footer(block)
+            block for block in content if not is_footer(block)
         ]
 
     compacted: list[dict[str, object]] = []
@@ -196,7 +198,11 @@ def apply_plan(
         content = [block for block in content if not is_footer(block)]
         if not content:
             continue
-        if not all(isinstance(block, str) for block in content):
+        if any(
+            isinstance(block, dict)
+            and block.get("type") in {"tool-input", "tool-output"}
+            for block in content
+        ):
             raise ValueError(f"message {original_index} still contains raw tool blocks")
         message = dict(source_message)
         message.pop("remove", None)
@@ -209,6 +215,7 @@ def apply_plan(
         path
         for message in compacted
         for block in message["content"]
+        if isinstance(block, str)
         for path in [transcript_common.reference_path(block)]
         if path is not None
     ]

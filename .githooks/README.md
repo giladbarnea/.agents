@@ -1,6 +1,6 @@
 ---
 description: Hub ownership model and current instruction and skill materialization behavior
-last_updated: 2026-07-31 14:35
+last_updated: 2026-08-03 15:34
 ---
 # Hub materialization
 
@@ -64,30 +64,24 @@ It sets provider-specific variables and overrides Jinja blocks such as `communic
 `common.sh` stores the downstream template paths in `TARGETS`.
 The hub hooks call `render.py` for the local template and every downstream template.
 
-## Shared communication rules come from the `comms` skill
+## Shared communication rules come from the `interaction` plugin
 
-The shared communication rules live in `~/.agents/skills/comms/SKILL.md`.
+The shared communication rules live in `~/.agents/plugins/interaction/skills/ai-to-user/SKILL.md`.
 The base template inserts them with:
 
 ```jinja2
-{{ skill_body("skills/comms/SKILL.md") | trim }}
+{{ skill_body("plugins/interaction/skills/ai-to-user/SKILL.md") | trim }}
 ```
 
 `render.py` creates one Jinja loader for each rendered template.
-The loader searches the rendered template's directory first, then the filesystem root.
+The loader searches the rendered template's directory first, the hub directory second, and the filesystem root last.
 
-The relative skill path therefore resolves differently by render target:
+For a hub render, the first search root finds the canonical plugin source.
+For a consumer render, a matching consumer file can override it.
+Otherwise, the hub search root finds the same canonical plugin source.
 
-```text
-Hub render       → ~/.agents/skills/comms/SKILL.md
-Claude render    → ~/.claude/skills/comms/SKILL.md
-Codex render     → ~/.codex/skills/comms/SKILL.md
-Gemini render    → ~/.gemini/skills/comms/SKILL.md
-Pi render        → ~/.pi/agent/skills/comms/SKILL.md
-```
-
-Each downstream path is currently a symlink back to the hub skill.
-The links must exist before downstream instruction rendering can resolve the import.
+The base template therefore names the plugin source without knowing any consumer's plugin layout.
+The `interaction` plugin owns the content, while the plugin materialization code owns each consumer-specific layout.
 
 `skill_body` reads through the active Jinja loader.
 It removes leading YAML frontmatter when present and preserves frontmatter-free Markdown unchanged.
@@ -121,7 +115,7 @@ No interactive terminal
 └── Fail without rendering
 ```
 
-## Hooks run rendering before skill materialization
+## Hooks render instructions before materializing skills and plugins
 
 `post-merge` runs this pipeline:
 
@@ -129,16 +123,18 @@ No interactive terminal
 Align the pinned claude-plugins submodule
 → Render the hub and downstream instruction files
 → Validate and generate runtime skills
-→ Link every hub skill into every consumer skill root
+→ Link bare hub skills into every consumer skill root
+→ Link plugin skills into Pi's skill root
 → Inspect broken consumer skill links
+→ Synchronize Claude and Codex plugins
 ```
 
 `pre-commit` runs the same pipeline without submodule alignment.
 It stages the local `AGENTS.md` and generated runtime `SKILL.md` files.
 It cannot stage rendered files or skill links inside downstream repositories.
 
-Because rendering runs first, a new imported skill link must already exist in each consumer.
-The current pipeline cannot bootstrap such an import on a fresh clone by itself.
+Rendering does not require existing consumer links.
+When a consumer-relative import is absent, the loader falls back to the canonical hub source.
 
 ## Setup only enables the hooks
 
@@ -170,12 +166,15 @@ After generation, the hook traverses every directory under `~/.agents/skills`.
 Static skills must contain `SKILL.md`.
 Directories without a skill file or a registered generator are skipped.
 
+<!-- Stale
 Two hub skill paths resolve through the pinned `claude-plugins` submodule:
 
 ```text
 skills/in-html              → plugins/claude-plugins/plugins/in-html
 skills/instruct-another-ai  → plugins/claude-plugins/plugins/instruct-another-ai
 ```
+
+/Stale -->
 
 Every participating skill directory is linked into:
 
@@ -187,6 +186,19 @@ Every participating skill directory is linked into:
 ```
 
 The whole directory is linked, so its references, scripts, and other files remain available.
+
+## Plugin skills use three consumer-specific layouts
+
+`~/.agents/plugins` is the canonical source tree for virtual plugin packages.
+Each plugin contains a `skills` directory, but consumers do not receive this source tree unchanged.
+
+Claude sync generates a local Claude marketplace, a proper plugin, and its cache entry.
+Codex sync generates the equivalent Codex marketplace, plugin, and cache entry.
+Pi has no matching plugin package flow, so `render_skills` links each plugin skill directly into `~/.pi/agent/skills`.
+Gemini receives no plugin materialization.
+
+These layouts serve consumer discovery only.
+Instruction rendering reads canonical plugin content through the hub loader instead of reconstructing consumer-specific paths.
 
 ## Link handling can cross ownership boundaries
 
@@ -213,7 +225,7 @@ Its result does not control the final hook exit status.
 
 ---
 
-## Future overloads should emerge from ordinary lookup
+## Relative imports now prefer consumer content
 
 <pseudocode>
 Render each consumer template with the consumer directory before the hub directory in Jinja’s lookup roots.
@@ -221,7 +233,12 @@ Render each consumer template with the consumer directory before the hub directo
 For every relative skill import, let Jinja select the first matching file.
 
 Load the selected file through the same active Jinja loader. Remove leading frontmatter when present. Preserve the content unchanged when frontmatter is absent.
+</pseudocode>
 
+The ordered lookup is active.
+Non-destructive skill materialization remains future work:
+
+<pseudocode>
 For skill discovery, create a hub link only when the consumer destination is empty. Keep an existing correct hub link. Preserve every other existing destination as consumer-owned.
 
 Keep overload knowledge out of the ownership manifest. The manifest supplies source-to-destination mappings. Ordered lookup and non-destructive materialization produce overload behavior generically.
@@ -230,7 +247,7 @@ Keep overload knowledge out of the ownership manifest. The manifest supplies sou
 ```text
 Consumer template
         │
-        │ skill_body("skills/comms/SKILL.md")
+        │ skill_body("plugins/interaction/skills/ai-to-user/SKILL.md")
         ▼
 Jinja lookup, first match wins
         │
@@ -242,7 +259,7 @@ Jinja lookup, first match wins
         │
         ├── 2. Hub root
         │       │
-        │       └── Shared skill exists ─────> use shared default
+        │       └── Canonical source exists ─> use shared default
         │
         └── No match ────────────────────────> fail clearly
 

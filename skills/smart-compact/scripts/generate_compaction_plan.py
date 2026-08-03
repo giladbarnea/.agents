@@ -333,7 +333,7 @@ def generate_plan(
         if not isinstance(original_content, list):
             raise ValueError(f"message {index} has no content array")
 
-        new_content: list[str] = []
+        new_content: list[object] = []
         tool_skeletons: list[dict[str, str]] = []
         changed = False
         had_prose = False
@@ -365,7 +365,12 @@ def generate_plan(
                     continue
                 new_content.append(block)
                 continue
-            if not isinstance(block, dict) or block.get("type") not in {"tool-input", "tool-output"} or not block.get("name"):
+            if not isinstance(block, dict) or not isinstance(block.get("type"), str):
+                raise ValueError(f"message {index} contains an unresolved structured block: {block!r}")
+            if block["type"] not in {"tool-input", "tool-output"}:
+                new_content.append(block)
+                continue
+            if not block.get("name"):
                 raise ValueError(f"message {index} contains an unresolved structured block: {block!r}")
             had_tools = True
             changed = True

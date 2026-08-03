@@ -46,8 +46,11 @@ def skill_body(environment: Environment, template_name: str) -> str:
 
 def render_j2(j2_path: Path) -> str:
     """Render a Jinja2 template file to string."""
-    template_dir = str(j2_path.parent)
-    env = Environment(loader=FileSystemLoader([template_dir, "/"]))
+    template_directory = str(j2_path.parent)
+    hub_directory = str(Path(__file__).resolve().parent)
+    env = Environment(
+        loader=FileSystemLoader([template_directory, hub_directory, "/"])
+    )
     env.globals["skill_body"] = skill_body
     template = env.get_template(j2_path.name)
     return template.render()

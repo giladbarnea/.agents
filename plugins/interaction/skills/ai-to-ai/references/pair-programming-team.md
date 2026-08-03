@@ -44,7 +44,7 @@ Write to them the way you would talk to a colleague, not as a spec. A strict, cl
 ## Team prompt template
 
 ```text
-Load the project context skill with the same arguments I used, then load `instruct-another-ai` and `peer-review`. Reviewer: also load the tone-softening skill if there is one.
+Load the project context skill with the same arguments I used, then load `ai-to-ai` and `peer-review`. Reviewer: also load the tone-softening skill if there is one.
 
 You two are a pair-programming team. The goal is: <goal in the user's framing>.
 Avoid <ruled-out approach>, we already decided against it.

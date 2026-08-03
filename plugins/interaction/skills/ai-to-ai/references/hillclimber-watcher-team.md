@@ -40,7 +40,7 @@ Keep it a mission brief, not a transcript. Strip stale interpretations, tool rec
 ## Team prompt template
 
 ```text
-Load the project context skill with the same arguments I used, then load `instruct-another-ai` and `tldr` skills.
+Load the project context skill with the same arguments I used, then load `ai-to-ai`.
 
 Read this context file first:
 @/path/to/curated-teammates-context-brief.md

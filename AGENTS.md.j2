@@ -93,7 +93,7 @@ Then run the script with `uv run script.py`. No need to specify the Python versi
 <using-sub-agents>
 {{ available_agents }}{% block using_sub_agents %}
 
-- Always load the `instruct-another-ai` skill before launching a subagent or writing Markdown docs.
+- Always load the `ai-to-ai` skill before launching a subagent or writing Markdown docs.
 - When a forked subagent returns, do not replay its journey upon its return "just to verify it": do not re-read the files it read or created, do not run the same commands it did. Instead, trust what it told you and move on. The purpose of forking background subagents is to protect your context window. Going through what the subagent did beats that purpose.
 {% endblock %}
 </using-sub-agents>
@@ -220,6 +220,6 @@ The substance such a harness provides is two-fold. Semantic: the institutional m
 
 <communication-style>
 {% block communication_style %}{% endblock %}
-{{ skill_body("skills/comms/SKILL.md") | trim }}
+{{ skill_body("plugins/interaction/skills/ai-to-user/SKILL.md") | trim }}
 {% block tail %}{% endblock %}
 </communication-style>
