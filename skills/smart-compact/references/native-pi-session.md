@@ -155,6 +155,25 @@ where tool-call blocks were, and removes paired tool-result entries. It preserve
 surrounding text, keeps native Pi thinking blocks at their exact positions, keeps only
 the active path, and re-chains the survivors.
 
+Each completed pass appends a hidden `smart-compact-watermark` custom entry. The watermark
+records the last surviving exported message, the last reviewed source message, the pass number,
+and compact stats. On the next pass, both the pruner and this applier use the latest watermark
+automatically. The pruner filters the export to the native active path before pruning, so rewound
+branches never enter the reviewed tail.
+
+For an explicit boundary, pass the same stable native message ID to both stages. The boundary
+message itself is excluded:
+```bash
+uv run scripts/prune_transcript.py transcription.json \
+  --native-session session-copy.jsonl \
+  --from-entry-id <native-id> > pruned.json
+uv run scripts/transfer_to_pi_session.py \
+  pruned.json compaction-plan.json session-copy.jsonl \
+  --from-entry-id <native-id>
+```
+The applier rejects sources outside the resolved tail, incomplete or stale tails, off-path
+boundaries, and boundaries that split a tool call from its result before it creates a backup.
+
 Each planned skeleton has an exact association in its replacement entry:
 ```json
 {

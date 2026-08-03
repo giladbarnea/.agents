@@ -1,7 +1,7 @@
 ---
 name: smart-compact
 description: Instructions for tree-shaking a user-provided AI session transcript
-last_updated: 2026-08-03 17:15
+last_updated: 2026-08-03 18:03
 ---
 This Skill's purpose is to compact an AI session transcription by removing redundant-information messages and keeping the contentful ones intact.
 
@@ -153,6 +153,23 @@ Removes todos and raw outputs for Read/read_many_files/Write/Edit/Patch/Delete,
 expands multi-file reads, and replaces file inputs in place without reordering mixed blocks.
 It also separates a leading `<skill>…</skill>` body from that invocation's trailing user
 instruction, retaining the first byte-identical body and every invocation-specific instruction.
+
+To compact only a transcript tail, use the last already-reviewed stable index. The boundary
+message itself is excluded:
+```bash
+uv run python3 scripts/prune_transcript.py transcription.json \
+  --from-index 194 > pruned.json
+```
+For a native Pi target, let the pruner validate the active path and read the latest completed
+boundary automatically:
+```bash
+uv run python3 scripts/prune_transcript.py transcription.json \
+  --native-session session-copy.jsonl > pruned.json
+```
+On the first native pass this selects the full active path. A later pass selects only messages
+after the latest smart-compact watermark. Use `--from-entry-id <native-id>` with
+`--native-session` to set an explicit native boundary. If the selected tail is empty, stop;
+do not create a plan, backup, or another watermark.
 
 An interrupted file-tool call with no path fails loudly rather than disappearing silently.
 After inspecting it, authorize a provably empty orphan by its exact tool ID:

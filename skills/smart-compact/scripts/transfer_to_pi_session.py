@@ -16,15 +16,19 @@ Usage:
 
 import argparse
 import dataclasses
+import datetime
 import json
 import os
 import re
+import secrets
 import tempfile
 import xml.etree.ElementTree
 from pathlib import Path
 
 import apply_compaction_plan
 import transcript_common
+
+WATERMARK_TYPE = "smart-compact-watermark"
 
 
 def fail(message: str) -> SystemExit:
@@ -64,6 +68,21 @@ class SourceToolEvent:
     native_identifier: str
     native_content_index: int
     native_call: NativeToolCall | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class Watermark:
+    entry: SessionLine
+    resume_after_entry_id: str
+    source_through_entry_id: str
+    pass_number: int
+
+
+@dataclasses.dataclass(frozen=True)
+class TailBoundary:
+    resume_after_entry_id: str | None
+    native_cutoff_index: int
+    next_pass_number: int
 
 
 def parse_session(path: Path) -> tuple[SessionLine, list[SessionLine]]:
@@ -111,6 +130,100 @@ def parse_session(path: Path) -> tuple[SessionLine, list[SessionLine]]:
     return header, active
 
 
+def watermarks(header: SessionLine, active: list[SessionLine]) -> list[Watermark]:
+    """Return validated smart-compaction watermarks on the active path."""
+    session_id = header.data.get("id")
+    positions = {
+        line.identifier: index
+        for index, line in enumerate(active)
+        if line.identifier is not None
+    }
+    found: list[Watermark] = []
+    for index, line in enumerate(active):
+        if line.data.get("customType") != WATERMARK_TYPE:
+            continue
+        data = line.data.get("data")
+        if (
+            line.data.get("type") != "custom"
+            or line.data.get("display") is not False
+            or not isinstance(data, dict)
+            or data.get("version") != 1
+            or data.get("session_id") != session_id
+        ):
+            raise fail(f"entry {line.identifier!r} is a malformed smart-compact watermark")
+        resume_after_entry_id = data.get("resume_after_entry_id")
+        source_through_entry_id = data.get("source_through_entry_id")
+        pass_number = data.get("pass")
+        stats = data.get("stats")
+        if (
+            not isinstance(resume_after_entry_id, str)
+            or not isinstance(source_through_entry_id, str)
+            or not isinstance(pass_number, int)
+            or pass_number < 1
+            or not isinstance(stats, dict)
+        ):
+            raise fail(f"entry {line.identifier!r} has invalid watermark data")
+        resume_position = positions.get(resume_after_entry_id)
+        if resume_position is None or resume_position >= index:
+            raise fail(
+                f"watermark {line.identifier!r} has an invalid resume anchor "
+                f"{resume_after_entry_id!r}"
+            )
+        found.append(
+            Watermark(
+                line,
+                resume_after_entry_id,
+                source_through_entry_id,
+                pass_number,
+            )
+        )
+    pass_numbers = [watermark.pass_number for watermark in found]
+    if pass_numbers != sorted(set(pass_numbers)):
+        raise fail("active smart-compact watermark pass numbers are not strictly increasing")
+    return found
+
+
+def resolve_tail_boundary(
+    header: SessionLine,
+    active: list[SessionLine],
+    from_entry_id: str | None,
+) -> TailBoundary:
+    """Resolve an explicit entry or the latest watermark to one exclusive cutoff."""
+    positions = {
+        line.identifier: index
+        for index, line in enumerate(active)
+        if line.identifier is not None
+    }
+    found_watermarks = watermarks(header, active)
+    latest = found_watermarks[-1] if found_watermarks else None
+    next_pass_number = latest.pass_number + 1 if latest is not None else 1
+    if from_entry_id is None:
+        if latest is None:
+            return TailBoundary(None, -1, next_pass_number)
+        return TailBoundary(
+            latest.resume_after_entry_id,
+            positions[latest.entry.identifier],
+            next_pass_number,
+        )
+
+    explicit_position = positions.get(from_entry_id)
+    if explicit_position is None:
+        raise fail(f"boundary entry {from_entry_id!r} is not on the native active path")
+    if latest is not None and from_entry_id == latest.resume_after_entry_id:
+        return TailBoundary(
+            from_entry_id,
+            positions[latest.entry.identifier],
+            next_pass_number,
+        )
+    if latest is not None and explicit_position <= positions[latest.entry.identifier]:
+        raise fail(
+            f"boundary entry {from_entry_id!r} is not after the latest smart-compact watermark"
+        )
+    if active[explicit_position].data.get("customType") == WATERMARK_TYPE:
+        raise fail("use a watermark's resume_after_entry_id, not its custom entry id")
+    return TailBoundary(from_entry_id, explicit_position, next_pass_number)
+
+
 def message_data(line: SessionLine) -> dict[str, object] | None:
     if line.data.get("type") != "message":
         return None
@@ -150,6 +263,83 @@ def native_tools(
     if len({call.identifier for call in calls}) != len(calls):
         raise fail("native active path contains duplicate full toolCall ids")
     return calls, results
+
+
+def is_default_export_entry(line: SessionLine) -> bool:
+    """Return whether default `ch` exports account for this native entry type.
+
+    >>> is_default_export_entry(SessionLine('', {'type': 'message'}))
+    True
+    >>> is_default_export_entry(SessionLine('', {'type': 'custom'}))
+    False
+    """
+    return line.data.get("type") in {"message", "compaction"}
+
+
+def validate_source_tail(
+    source_messages: list[dict[str, object]],
+    active_tail: list[SessionLine],
+) -> tuple[dict[int, SessionLine], set[str]]:
+    """Map every source message to the ordered native active tail."""
+    tail_by_identifier = {
+        line.identifier: line
+        for line in active_tail
+        if line.identifier is not None
+    }
+    positions = {
+        line.identifier: index
+        for index, line in enumerate(active_tail)
+        if line.identifier is not None
+    }
+    mapped: dict[int, SessionLine] = {}
+    native_entry_ids: list[str] = []
+    for message in source_messages:
+        original_index = message.get("original_index")
+        native_entry_id = message.get("native_entry_id")
+        if not isinstance(original_index, int) or not isinstance(native_entry_id, str):
+            raise fail(
+                "every pruned Pi source message needs original_index and native_entry_id; "
+                "export and prune the active tail again"
+            )
+        native_entry = tail_by_identifier.get(native_entry_id)
+        if native_entry is None:
+            raise fail(
+                f"source message {original_index} is not after the resolved native boundary: "
+                f"{native_entry_id!r}"
+            )
+        mapped[original_index] = native_entry
+        native_entry_ids.append(native_entry_id)
+    if len(native_entry_ids) != len(set(native_entry_ids)):
+        raise fail("pruned Pi source repeats native_entry_id values")
+    source_positions = [positions[identifier] for identifier in native_entry_ids]
+    if source_positions != sorted(source_positions):
+        raise fail("pruned Pi source messages do not follow native active-path order")
+    return mapped, set(native_entry_ids)
+
+
+def unmatched_tool_calls(
+    events: list[SourceToolEvent],
+    calls: list[NativeToolCall],
+    results: dict[str, SessionLine],
+) -> tuple[list[NativeToolCall], list[NativeToolCall]]:
+    mapped_identifiers = {
+        event.native_call.identifier
+        for event in events
+        if event.native_call is not None
+    }
+    unmatched = [call for call in calls if call.identifier not in mapped_identifiers]
+    removable = [
+        call
+        for call in unmatched
+        if canonical_tool_name(call.name) == "todo"
+        or (
+            canonical_tool_name(call.name)
+            in {canonical_tool_name(name) for name in transcript_common.FILE_TOOLS}
+            and call.identifier not in results
+        )
+    ]
+    unsafe = [call for call in unmatched if call not in removable]
+    return removable, unsafe
 
 
 def parse_file_reference(
@@ -520,36 +710,6 @@ def native_text(line: SessionLine) -> list[str]:
     ]
 
 
-def map_source_messages(
-    source_messages: list[dict[str, object]],
-    active: list[SessionLine],
-    required_indices: set[int],
-) -> dict[int, SessionLine]:
-    active_by_identifier = {
-        line.identifier: line for line in active if line.identifier is not None
-    }
-    source_by_index = {
-        message["original_index"]: message for message in source_messages
-    }
-    mapped: dict[int, SessionLine] = {}
-    for original_index in required_indices:
-        source_message = source_by_index[original_index]
-        native_entry_id = source_message.get("native_entry_id")
-        if not isinstance(native_entry_id, str):
-            raise fail(
-                f"changed source message {original_index} lacks native_entry_id; "
-                "export it again with the current ch and prune it again"
-            )
-        native_entry = active_by_identifier.get(native_entry_id)
-        if native_entry is None:
-            raise fail(
-                f"changed source message {original_index} names missing native entry "
-                f"{native_entry_id!r}"
-            )
-        mapped[original_index] = native_entry
-    return mapped
-
-
 def apply_text_changes(
     source_messages: list[dict[str, object]],
     final_prose_by_index: dict[int, list[str]],
@@ -644,18 +804,11 @@ def apply_tool_changes(
         for event in events
         if event.native_call is not None
     }
-    unmatched = [call for call in calls if call.identifier not in mapped]
-    removable_unmatched = [
-        call
-        for call in unmatched
-        if canonical_tool_name(call.name) == "todo"
-        or (
-            canonical_tool_name(call.name)
-            in {canonical_tool_name(name) for name in transcript_common.FILE_TOOLS}
-            and call.identifier not in results
-        )
-    ]
-    unsafe_unmatched = [call for call in unmatched if call not in removable_unmatched]
+    removable_unmatched, unsafe_unmatched = unmatched_tool_calls(
+        events,
+        calls,
+        results,
+    )
     if unsafe_unmatched:
         rendered = [
             f"{call.name} {call.identifier!r}" for call in unsafe_unmatched[:8]
@@ -743,6 +896,103 @@ def render_rechained(header: SessionLine, survivors: list[SessionLine]) -> list[
     return rendered
 
 
+def verify_complete_reviewed_tail(
+    active_tail: list[SessionLine],
+    source_entry_ids: set[str],
+    events: list[SourceToolEvent],
+    removable_unmatched: list[NativeToolCall],
+    results: dict[str, SessionLine],
+) -> str:
+    """Require the pruned source to account for every export-visible tail entry."""
+    reviewed_entry_ids = set(source_entry_ids)
+    for event in events:
+        result = results.get(event.native_identifier)
+        if result is not None and result.identifier is not None:
+            reviewed_entry_ids.add(result.identifier)
+    for call in removable_unmatched:
+        if call.entry.identifier is not None:
+            reviewed_entry_ids.add(call.entry.identifier)
+        result = results.get(call.identifier)
+        if result is not None and result.identifier is not None:
+            reviewed_entry_ids.add(result.identifier)
+
+    visible_tail = [
+        line.identifier
+        for line in active_tail
+        if line.identifier is not None
+        and (is_default_export_entry(line) or line.identifier in source_entry_ids)
+    ]
+    unreviewed = [
+        identifier
+        for identifier in visible_tail
+        if identifier not in reviewed_entry_ids
+    ]
+    if unreviewed:
+        raise fail(
+            "pruned source does not cover the complete native tail; re-export and prune: "
+            f"{unreviewed[:8]}"
+        )
+    if not visible_tail:
+        raise fail("native tail has no export-visible messages to compact")
+    return visible_tail[-1]
+
+
+def latest_resume_anchor(
+    survivors: list[SessionLine],
+    source_entry_ids: set[str],
+    prior_resume_after_entry_id: str | None,
+) -> str:
+    for line in reversed(survivors):
+        identifier = line.identifier
+        if identifier in source_entry_ids:
+            return identifier
+    if prior_resume_after_entry_id is not None:
+        return prior_resume_after_entry_id
+    for line in reversed(survivors):
+        if is_default_export_entry(line) and line.identifier is not None:
+            return line.identifier
+    raise fail("compaction left no export-visible message for the next tail boundary")
+
+
+def new_watermark(
+    header: SessionLine,
+    survivors: list[SessionLine],
+    resume_after_entry_id: str,
+    source_through_entry_id: str,
+    pass_number: int,
+    stats: dict[str, int],
+) -> SessionLine:
+    existing_identifiers = {
+        line.identifier for line in survivors if line.identifier is not None
+    }
+    identifier = secrets.token_hex(4)
+    while identifier in existing_identifiers:
+        identifier = secrets.token_hex(4)
+    parent_identifier = survivors[-1].identifier
+    if parent_identifier is None:
+        raise fail("cannot attach a watermark to an entry without an id")
+    session_id = header.data.get("id")
+    if not isinstance(session_id, str):
+        raise fail("native session header has no string id")
+    data: dict[str, object] = {
+        "type": "custom",
+        "customType": WATERMARK_TYPE,
+        "display": False,
+        "id": identifier,
+        "parentId": parent_identifier,
+        "timestamp": datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z"),
+        "data": {
+            "version": 1,
+            "session_id": session_id,
+            "resume_after_entry_id": resume_after_entry_id,
+            "source_through_entry_id": source_through_entry_id,
+            "pass": pass_number,
+            "stats": stats,
+        },
+    }
+    return SessionLine("", data, changed=True)
+
+
 def validate_result(lines: list[str]) -> None:
     parsed = [json.loads(line) for line in lines]
     if len(parsed) < 2 or parsed[0].get("type") != "session":
@@ -814,14 +1064,22 @@ def apply_native_plan(
     source_bytes: bytes,
     manifest: dict[str, object],
     session_path: Path,
+    from_entry_id: str | None = None,
 ) -> tuple[list[str], dict[str, int]]:
     source_messages = apply_compaction_plan.load_messages(source_bytes)
     compacted_messages = apply_compaction_plan.apply_plan(source_bytes, manifest)
     header, active = parse_session(session_path)
-    calls, results = native_tools(active)
+    boundary = resolve_tail_boundary(header, active, from_entry_id)
+    prefix = active[: boundary.native_cutoff_index + 1]
+    active_tail = active[boundary.native_cutoff_index + 1 :]
+    mapped_source_messages, source_entry_ids = validate_source_tail(
+        source_messages,
+        active_tail,
+    )
+    calls, results = native_tools(active_tail)
     original_thinking = {
         line.identifier: thinking_blocks(line)
-        for line in active
+        for line in active_tail
         if line.identifier is not None
     }
     events, final_prose_by_index = source_tool_events(
@@ -829,6 +1087,23 @@ def apply_native_plan(
     )
     map_source_tools(events, calls)
     verify_source_outputs(source_messages, events, results)
+    removable_unmatched, unsafe_unmatched = unmatched_tool_calls(
+        events,
+        calls,
+        results,
+    )
+    if unsafe_unmatched:
+        rendered_unsafe = [
+            f"{call.name} {call.identifier!r}" for call in unsafe_unmatched[:8]
+        ]
+        raise fail(f"native tools are absent from the pruned source: {rendered_unsafe}")
+    source_through_entry_id = verify_complete_reviewed_tail(
+        active_tail,
+        source_entry_ids,
+        events,
+        removable_unmatched,
+        results,
+    )
     drop_messages = manifest.get("drop_messages", [])
     replace_messages = manifest.get("replace_messages", [])
     if not isinstance(drop_messages, list) or not isinstance(replace_messages, list):
@@ -849,29 +1124,47 @@ def apply_native_plan(
         for index in changed_indices
         if source_prose(source_by_index[index]) != final_prose_by_index[index]
     }
-    mapped_messages = map_source_messages(
-        source_messages,
-        active,
-        text_changed_indices,
-    )
+    mapped_messages = {
+        index: mapped_source_messages[index]
+        for index in text_changed_indices
+    }
     apply_text_changes(
         source_messages,
         final_prose_by_index,
         mapped_messages,
         text_changed_indices,
     )
-    survivors, removed_entries = apply_tool_changes(
-        active, events, calls, results, original_thinking
+    tail_survivors, removed_entries = apply_tool_changes(
+        active_tail, events, calls, results, original_thinking
     )
-    rendered = render_rechained(header, survivors)
-    validate_result(rendered)
-    return rendered, {
-        "active_entries": len(active),
+    survivors = prefix + tail_survivors
+    stats = {
+        "messages": len(source_messages),
+        "active_entries": len(active_tail),
         "tool_calls_replaced": sum(bool(event.replacements) for event in events),
         "tool_calls_dropped": sum(not event.replacements for event in events),
         "entries_removed": removed_entries,
-        "survivors": len(survivors),
+        "survivors": len(tail_survivors),
     }
+    resume_after_entry_id = latest_resume_anchor(
+        survivors,
+        source_entry_ids,
+        boundary.resume_after_entry_id,
+    )
+    watermark = new_watermark(
+        header,
+        survivors,
+        resume_after_entry_id,
+        source_through_entry_id,
+        boundary.next_pass_number,
+        stats,
+    )
+    rendered = render_rechained(header, survivors + [watermark])
+    protected_raw = [header.raw] + [line.raw for line in prefix]
+    if rendered[: len(protected_raw)] != protected_raw:
+        raise fail("compaction changed native lines at or before the tail boundary")
+    validate_result(rendered)
+    return rendered, stats
 
 
 def main() -> int:
@@ -879,6 +1172,10 @@ def main() -> int:
     parser.add_argument("pruned_json", type=Path)
     parser.add_argument("compaction_plan_json", type=Path)
     parser.add_argument("session_copy_jsonl", type=Path)
+    parser.add_argument(
+        "--from-entry-id",
+        help="compact active Pi entries strictly after this native entry",
+    )
     arguments = parser.parse_args()
 
     source_bytes = arguments.pruned_json.read_bytes()
@@ -889,7 +1186,10 @@ def main() -> int:
         raise fail("compaction plan must be a JSON object")
     original_bytes = arguments.session_copy_jsonl.read_bytes()
     rendered, stats = apply_native_plan(
-        source_bytes, manifest_raw, arguments.session_copy_jsonl
+        source_bytes,
+        manifest_raw,
+        arguments.session_copy_jsonl,
+        arguments.from_entry_id,
     )
     if arguments.session_copy_jsonl.read_bytes() != original_bytes:
         raise fail("native target changed during validation; rerun against a stable copy")

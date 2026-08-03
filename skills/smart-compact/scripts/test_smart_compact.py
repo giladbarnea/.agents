@@ -7,6 +7,7 @@
 import hashlib
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -282,6 +283,106 @@ skeletons:
             content_by_index.get(196),
             [changed_skill, changed_instruction],
             f"A nonidentical same-named skill body must remain intact. Got: {pruned!r}",
+        )
+
+    def test_pruner_uses_latest_native_watermark_and_excludes_off_path_messages(self) -> None:
+        source = [
+            {**message(1, "user", ["Processed"]), "native_entry_id": "prefix"},
+            {**message(2, "assistant", ["Abandoned"]), "native_entry_id": "off-path"},
+            {**message(3, "user", ["New work"]), "native_entry_id": "tail-user"},
+            {**message(4, "assistant", ["New result"]), "native_entry_id": "tail-assistant"},
+        ]
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {"type": "message", "id": "prefix", "parentId": None, "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "Processed"}]}},
+            {"type": "message", "id": "off-path", "parentId": "prefix", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "text", "text": "Abandoned"}]}},
+            {
+                "type": "custom",
+                "customType": "smart-compact-watermark",
+                "display": False,
+                "id": "watermark",
+                "parentId": "prefix",
+                "timestamp": "now",
+                "data": {
+                    "version": 1,
+                    "session_id": "target-session",
+                    "resume_after_entry_id": "prefix",
+                    "source_through_entry_id": "off-path-before-compaction",
+                    "pass": 1,
+                    "stats": {},
+                },
+            },
+            {"type": "message", "id": "tail-user", "parentId": "watermark", "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "New work"}]}},
+            {"type": "message", "id": "tail-assistant", "parentId": "tail-user", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "text", "text": "New result"}]}},
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = pathlib.Path(temporary_directory)
+            source_path = directory / "transcript.json"
+            session_path = directory / "target.jsonl"
+            source_path.write_text(json.dumps(source))
+            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(pathlib.Path(prune_transcript.__file__)),
+                    str(source_path),
+                    "--native-session",
+                    str(session_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertEqual(result.returncode, 0, f"Native tail selection failed: {result.stderr}")
+        self.assertEqual(
+            [item.get("native_entry_id") for item in json.loads(result.stdout)],
+            ["tail-user", "tail-assistant"],
+            f"The pruner did not select the untouched active tail: {result.stdout}",
+        )
+
+    def test_pruner_refuses_a_native_boundary_that_splits_a_tool_pair(self) -> None:
+        source = [
+            {**message(1, "assistant", [{"type": "tool-input", "name": "Bash", "id": "call", "native_tool_call_id": "call-full", "native_content_index": 0}]), "native_entry_id": "assistant"},
+            {**message(2, "user", [{"type": "tool-output", "name": "Bash", "id": "call", "native_tool_call_id": "call-full", "content": "result"}]), "native_entry_id": "result"},
+        ]
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {"type": "message", "id": "assistant", "parentId": None, "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "toolCall", "id": "call-full", "name": "Bash", "arguments": {}}]}},
+            {"type": "message", "id": "result", "parentId": "assistant", "timestamp": "now", "message": {"role": "toolResult", "toolCallId": "call-full", "toolName": "Bash", "content": [{"type": "text", "text": "result"}]}},
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = pathlib.Path(temporary_directory)
+            session_path = directory / "target.jsonl"
+            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
+            with self.assertRaisesRegex(ValueError, "splits tool call/result pairs"):
+                prune_transcript.native_tail(source, session_path, "assistant")
+
+    def test_transcript_and_native_boundaries_select_the_same_tail(self) -> None:
+        source = [
+            {**message(10, "user", ["First"]), "native_entry_id": "first"},
+            {**message(20, "assistant", ["Boundary"]), "native_entry_id": "boundary"},
+            {**message(30, "user", ["Tail"]), "native_entry_id": "tail"},
+        ]
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {"type": "message", "id": "first", "parentId": None, "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "First"}]}},
+            {"type": "message", "id": "boundary", "parentId": "first", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "text", "text": "Boundary"}]}},
+            {"type": "message", "id": "tail", "parentId": "boundary", "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "Tail"}]}},
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            session_path = pathlib.Path(temporary_directory, "target.jsonl")
+            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
+            transcript_tail = prune_transcript.after_original_index(source, 20)
+            native_tail, _ = prune_transcript.native_tail(source, session_path, "boundary")
+
+        self.assertEqual(
+            [item.get("native_entry_id") for item in transcript_tail],
+            [item.get("native_entry_id") for item in native_tail],
+            f"The transcript and native boundary contracts disagree: {transcript_tail!r}, {native_tail!r}",
         )
 
     def test_review_view_elides_only_identical_skill_bodies(self) -> None:
@@ -643,6 +744,7 @@ skeletons:
             result_message,
             message(4, "assistant", ["Done"]),
         ]
+        source[3]["native_entry_id"] = "done-entry"
         pruned = prune_transcript.prune(source)
         source_bytes = json.dumps(pruned).encode()
         decisions = generate_compaction_plan.parse_decisions({
@@ -1119,6 +1221,7 @@ skeletons:
         source[0]["native_entry_id"] = "entry-a"
         source[1]["native_entry_id"] = "entry-b"
         source[2]["native_entry_id"] = "entry-c"
+        source[3]["native_entry_id"] = "entry-d"
         source_bytes = json.dumps(source).encode()
         skeleton = (
             '<tool-skeleton name="Bash" command="pytest" purpose="Validate" '
@@ -1234,7 +1337,7 @@ skeletons:
         self.assertEqual(len(backups), 1, f"Expected one safety backup. Got: {backups!r}")
         self.assertEqual(backup_bytes, original_session_bytes, "The safety backup changed")
         self.assertEqual(
-            [line.get("id") for line in output[1:]],
+            [line.get("id") for line in output[1:] if line.get("type") != "custom"],
             ["entry-a", "entry-d"],
             f"Paired tool results survived: {output!r}",
         )
@@ -1339,7 +1442,7 @@ skeletons:
 
         self.assertEqual(result.returncode, 0, f"Native text application failed: {result.stderr}")
         self.assertEqual(
-            [line.get("id") for line in output[1:]],
+            [line.get("id") for line in output[1:] if line.get("type") != "custom"],
             ["entry-a", "entry-c"],
             f"The dropped user message survived: {output!r}",
         )
@@ -1356,6 +1459,239 @@ skeletons:
             "entry-a",
             f"The dropped message was not spliced from the chain: {output!r}",
         )
+
+    def test_native_plan_application_watermarks_each_pass_and_protects_the_prior_prefix(self) -> None:
+        first_source = [
+            {**message(1, "user", ["First request"]), "native_entry_id": "first-user"},
+            {**message(2, "assistant", ["First answer"]), "native_entry_id": "first-answer"},
+        ]
+        first_source_bytes = json.dumps(first_source).encode()
+        first_plan = {
+            "version": 1,
+            "source_sha256": hashlib.sha256(first_source_bytes).hexdigest(),
+            "drop_messages": [],
+            "replace_messages": [],
+            "affected_files_extra": [],
+        }
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {"type": "message", "id": "first-user", "parentId": None, "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "First request"}]}},
+            {"type": "message", "id": "first-answer", "parentId": "first-user", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "text", "text": "First answer"}]}},
+        ]
+        second_source = [
+            {**message(3, "user", ["Second request"]), "native_entry_id": "second-user"},
+            {**message(4, "assistant", ["Second answer"]), "native_entry_id": "second-answer"},
+        ]
+        second_source_bytes = json.dumps(second_source).encode()
+        second_plan = {
+            "version": 1,
+            "source_sha256": hashlib.sha256(second_source_bytes).hexdigest(),
+            "drop_messages": [],
+            "replace_messages": [],
+            "affected_files_extra": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            session_path = pathlib.Path(temporary_directory, "target.jsonl")
+            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
+            first_rendered, _ = transfer_to_pi_session.apply_native_plan(
+                first_source_bytes,
+                first_plan,
+                session_path,
+            )
+            first_watermark = json.loads(first_rendered[-1])
+            session_path.write_text("\n".join(first_rendered) + "\n")
+            with session_path.open("a", encoding="utf-8") as session_file:
+                session_file.write(json.dumps({"type": "message", "id": "second-user", "parentId": first_watermark["id"], "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "Second request"}]}}) + "\n")
+                session_file.write(json.dumps({"type": "message", "id": "second-answer", "parentId": "second-user", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "text", "text": "Second answer"}]}}) + "\n")
+            selected_second_tail, _ = prune_transcript.native_tail(
+                first_source + second_source,
+                session_path,
+                None,
+            )
+            second_rendered, _ = transfer_to_pi_session.apply_native_plan(
+                second_source_bytes,
+                second_plan,
+                session_path,
+            )
+            session_path.write_text("\n".join(second_rendered) + "\n")
+            goldload = subprocess.run(
+                [
+                    "node",
+                    str(pathlib.Path(__file__).with_name("pi-goldload.mjs")),
+                    str(session_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        second_watermark = json.loads(second_rendered[-1])
+        self.assertEqual(
+            first_watermark.get("customType"),
+            "smart-compact-watermark",
+            f"The first pass did not add a watermark: {first_watermark!r}",
+        )
+        self.assertEqual(
+            first_watermark.get("data", {}).get("resume_after_entry_id"),
+            "first-answer",
+            f"The first watermark does not anchor its surviving tail: {first_watermark!r}",
+        )
+        self.assertEqual(
+            [item.get("native_entry_id") for item in selected_second_tail],
+            ["second-user", "second-answer"],
+            f"The second pass did not select only the new tail: {selected_second_tail!r}",
+        )
+        self.assertEqual(
+            second_rendered[: len(first_rendered)],
+            first_rendered,
+            "The second pass changed raw lines from the first completed pass",
+        )
+        self.assertEqual(
+            second_watermark.get("data", {}).get("pass"),
+            2,
+            f"The second pass number is wrong: {second_watermark!r}",
+        )
+        self.assertEqual(
+            second_watermark.get("data", {}).get("resume_after_entry_id"),
+            "second-answer",
+            f"The second watermark does not anchor the second tail: {second_watermark!r}",
+        )
+        self.assertEqual(goldload.returncode, 0, f"Pi could not load pass two: {goldload.stderr}")
+        self.assertIn("PASS=true", goldload.stdout, f"Pi did not reach pass two: {goldload.stdout}")
+
+    def test_native_watermark_keeps_a_surviving_anchor_when_source_through_is_removed(self) -> None:
+        source = [
+            {**message(1, "user", ["Keep"]), "native_entry_id": "survivor"},
+            {**message(2, "assistant", ["Drop"]), "native_entry_id": "reviewed-last"},
+        ]
+        source_bytes = json.dumps(source).encode()
+        plan = {
+            "version": 1,
+            "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+            "drop_messages": [2],
+            "replace_messages": [],
+            "affected_files_extra": [],
+        }
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {"type": "message", "id": "survivor", "parentId": None, "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "Keep"}]}},
+            {"type": "message", "id": "reviewed-last", "parentId": "survivor", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "text", "text": "Drop"}]}},
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            session_path = pathlib.Path(temporary_directory, "target.jsonl")
+            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
+            rendered, _ = transfer_to_pi_session.apply_native_plan(
+                source_bytes,
+                plan,
+                session_path,
+            )
+
+        watermark_data = json.loads(rendered[-1]).get("data", {})
+        self.assertEqual(
+            watermark_data.get("resume_after_entry_id"),
+            "survivor",
+            f"The next pass cannot resolve the surviving boundary: {watermark_data!r}",
+        )
+        self.assertEqual(
+            watermark_data.get("source_through_entry_id"),
+            "reviewed-last",
+            f"The watermark lost the reviewed source extent: {watermark_data!r}",
+        )
+
+    def test_native_watermark_is_hidden_from_default_and_all_ch_exports(self) -> None:
+        ch_path = shutil.which("ch")
+        if ch_path is None:
+            self.skipTest("ch is unavailable")
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "2026-08-03T00:00:00Z", "cwd": "/tmp"},
+            {"type": "message", "id": "visible", "parentId": None, "timestamp": "2026-08-03T00:00:01Z", "message": {"role": "user", "content": [{"type": "text", "text": "Visible"}]}},
+            {
+                "type": "custom",
+                "customType": "smart-compact-watermark",
+                "display": False,
+                "id": "watermark",
+                "parentId": "visible",
+                "timestamp": "2026-08-03T00:00:02Z",
+                "data": {
+                    "version": 1,
+                    "session_id": "target-session",
+                    "resume_after_entry_id": "visible",
+                    "source_through_entry_id": "visible",
+                    "pass": 1,
+                    "stats": {},
+                },
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            session_path = pathlib.Path(temporary_directory, "target.jsonl")
+            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
+            exports = [
+                subprocess.run(
+                    [ch_path, str(session_path), "-t:s", "-f", "json", *flags],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                for flags in ([], ["--all"])
+            ]
+
+        for export in exports:
+            self.assertEqual(export.returncode, 0, f"ch export failed: {export.stderr}")
+            self.assertNotIn(
+                "smart-compact-watermark",
+                export.stdout,
+                f"A hidden watermark leaked into ch output: {export.stdout}",
+            )
+
+    def test_native_plan_application_refuses_an_incomplete_tail_before_backup(self) -> None:
+        source = [
+            {**message(1, "user", ["Reviewed"]), "native_entry_id": "reviewed"},
+        ]
+        source_bytes = json.dumps(source).encode()
+        plan = {
+            "version": 1,
+            "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+            "drop_messages": [],
+            "replace_messages": [],
+            "affected_files_extra": [],
+        }
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {"type": "message", "id": "reviewed", "parentId": None, "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "Reviewed"}]}},
+            {"type": "message", "id": "newer", "parentId": "reviewed", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "text", "text": "Added after export"}]}},
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = pathlib.Path(temporary_directory)
+            source_path = directory / "pruned.json"
+            plan_path = directory / "plan.json"
+            session_path = directory / "target.jsonl"
+            source_path.write_bytes(source_bytes)
+            plan_path.write_text(json.dumps(plan))
+            original_bytes = "".join(json.dumps(line) + "\n" for line in native_lines).encode()
+            session_path.write_bytes(original_bytes)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(pathlib.Path(transfer_to_pi_session.__file__)),
+                    str(source_path),
+                    str(plan_path),
+                    str(session_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            backups = list(directory.glob("target.jsonl.backup-*"))
+            final_bytes = session_path.read_bytes()
+
+        self.assertNotEqual(result.returncode, 0, "An incomplete native tail was accepted")
+        self.assertIn("complete native tail", result.stderr, f"The failure was unclear: {result.stderr}")
+        self.assertFalse(backups, f"A failed preflight created a backup: {backups!r}")
+        self.assertEqual(final_bytes, original_bytes, "A failed preflight changed the target")
 
     def test_native_plan_application_replaces_multi_file_read_from_pruned_references(self) -> None:
         first_reference = '<Read path="a.md" id="01RF" native_tool_call_id="toolu_01RF-complete" native_content_index="1"/>'
@@ -1445,7 +1781,7 @@ skeletons:
 
         self.assertEqual(result.returncode, 0, f"Native file-reference application failed: {result.stderr}")
         self.assertEqual(
-            [line.get("id") for line in output[1:]],
+            [line.get("id") for line in output[1:] if line.get("type") != "custom"],
             ["entry-a", "entry-c"],
             f"The read result survived its replaced call: {output!r}",
         )
@@ -1552,7 +1888,7 @@ skeletons:
 
         self.assertEqual(result.returncode, 0, f"Repeated short IDs were not resolved: {result.stderr}")
         self.assertEqual(
-            [line.get("id") for line in output[1:]],
+            [line.get("id") for line in output[1:] if line.get("type") != "custom"],
             ["assistant-first", "assistant-second", "done"],
             f"Repeated-ID tool results survived: {output!r}",
         )

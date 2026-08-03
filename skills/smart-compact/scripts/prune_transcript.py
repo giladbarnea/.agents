@@ -16,7 +16,7 @@ import pathlib
 import sys
 
 import transcript_common
-
+import transfer_to_pi_session
 
 NOISE_TOOL_NAMES = frozenset({"todo"})
 EMPTY_ORPHAN_KEYS = frozenset(
@@ -30,6 +30,101 @@ class EmptyOrphan:
     tool_name: str
     tool_id: str
     block: dict[str, object]
+
+
+def after_original_index(
+    data: list[dict[str, object]], from_index: int
+) -> list[dict[str, object]]:
+    """Return messages strictly after one stable transcript index.
+
+    >>> [message['original_index'] for message in after_original_index(
+    ...     [{'original_index': 4}, {'original_index': 9}], 4
+    ... )]
+    [9]
+    """
+    matches = [
+        position
+        for position, message in enumerate(data)
+        if message.get("original_index") == from_index
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"--from-index must match exactly one message, got {len(matches)} for {from_index}"
+        )
+    return data[matches[0] + 1 :]
+
+
+def tool_identifiers(messages: list[dict[str, object]], block_type: str) -> set[str]:
+    return {
+        identifier
+        for message in messages
+        for block in message.get("content", [])
+        if isinstance(block, dict) and block.get("type") == block_type
+        for identifier in [block.get("native_tool_call_id")]
+        if isinstance(identifier, str)
+    }
+
+
+def native_tail(
+    data: list[dict[str, object]],
+    session_path: pathlib.Path,
+    from_entry_id: str | None,
+) -> tuple[list[dict[str, object]], transfer_to_pi_session.TailBoundary]:
+    """Select active Pi messages strictly after the resolved native boundary."""
+    header, active = transfer_to_pi_session.parse_session(session_path)
+    boundary = transfer_to_pi_session.resolve_tail_boundary(
+        header,
+        active,
+        from_entry_id,
+    )
+    positions = {
+        line.identifier: index
+        for index, line in enumerate(active)
+        if line.identifier is not None
+    }
+    native_entry_ids = [message.get("native_entry_id") for message in data]
+    if not all(isinstance(identifier, str) for identifier in native_entry_ids):
+        raise ValueError(
+            "Pi boundary selection requires native_entry_id on every exported message"
+        )
+    if len(native_entry_ids) != len(set(native_entry_ids)):
+        raise ValueError("Pi export repeats native_entry_id values")
+
+    active_messages = [
+        message
+        for message, identifier in zip(data, native_entry_ids, strict=True)
+        if identifier in positions
+    ]
+    selected = [
+        message
+        for message in active_messages
+        if positions[message["native_entry_id"]] > boundary.native_cutoff_index
+    ]
+    active_positions = [
+        positions[message["native_entry_id"]] for message in active_messages
+    ]
+    if active_positions != sorted(active_positions):
+        raise ValueError("Pi export messages do not follow native active-path order")
+    selected_entry_ids = {
+        message["native_entry_id"] for message in selected
+    }
+    prefix = [
+        message
+        for message in active_messages
+        if message["native_entry_id"] not in selected_entry_ids
+    ]
+    split_tool_ids = (
+        tool_identifiers(prefix, "tool-input")
+        & tool_identifiers(selected, "tool-output")
+    ) | (
+        tool_identifiers(prefix, "tool-output")
+        & tool_identifiers(selected, "tool-input")
+    )
+    if split_tool_ids:
+        raise ValueError(
+            f"native boundary splits tool call/result pairs: {sorted(split_tool_ids)}"
+        )
+    return selected, boundary
 
 
 def find_empty_orphans(data: list[dict[str, object]]) -> list[EmptyOrphan]:
@@ -212,12 +307,47 @@ def main() -> int:
         metavar="TOOL_ID",
         help="drop one inspected payload-free file-tool call with no matching output",
     )
+    parser.add_argument(
+        "--from-index",
+        type=int,
+        help="process transcript messages strictly after this original_index",
+    )
+    parser.add_argument(
+        "--from-entry-id",
+        help="process active Pi messages strictly after this native entry",
+    )
+    parser.add_argument(
+        "--native-session",
+        type=pathlib.Path,
+        help="validate the Pi active path and use its latest smart-compact watermark",
+    )
     arguments = parser.parse_args()
+
+    if arguments.from_index is not None and arguments.native_session is not None:
+        parser.error("--from-index cannot be combined with --native-session")
+    if arguments.from_entry_id is not None and arguments.native_session is None:
+        parser.error("--from-entry-id requires --native-session")
 
     with arguments.transcript_json.open(encoding="utf-8") as transcript_file:
         data = json.load(transcript_file)
     if not isinstance(data, list) or not all(isinstance(message, dict) for message in data):
         raise ValueError("expected a top-level JSON array of message objects")
+
+    boundary_description = None
+    if arguments.from_index is not None:
+        data = after_original_index(data, arguments.from_index)
+        boundary_description = f"original_index {arguments.from_index}"
+    if arguments.native_session is not None:
+        data, boundary = native_tail(
+            data,
+            arguments.native_session,
+            arguments.from_entry_id,
+        )
+        boundary_description = (
+            f"native entry {boundary.resume_after_entry_id}"
+            if boundary.resume_after_entry_id is not None
+            else "native session start"
+        )
 
     cleaned, dropped_orphans = drop_authorized_empty_orphans(
         data, set(arguments.drop_orphan_tool_id)
@@ -231,6 +361,8 @@ def main() -> int:
             for orphan in dropped_orphans
         )
         print(f"Dropped empty orphan tool calls: {rendered_orphans}", file=sys.stderr)
+    if boundary_description is not None:
+        print(f"Tail boundary: after {boundary_description}", file=sys.stderr)
     print(f"Input: {len(data)} messages  →  Output: {len(pruned)} messages", file=sys.stderr)
     return 0
 
