@@ -35,8 +35,9 @@ One JSON object per line (strict LF framing).
   `compaction`, `branch_summary`, `label`.
 - Assistant message content blocks: `text`, `thinking`, `toolCall{id,name,arguments}`.
   A `toolResult` entry links back via `.message.toolCallId` == the toolCall block's `.id`
-  (this pairing is content-level and independent of the tree). Result payloads live in
-  `.message.content[]` text blocks.
+  (this pairing is content-level and independent of the tree). Pi can reuse that ID for a
+  later retry. Pair each result with its one unmatched preceding call on the active path.
+  Result payloads live in `.message.content[]` text blocks.
 
 ## The five invariants of a resumable file
 
@@ -173,26 +174,31 @@ uv run scripts/transfer_to_pi_session.py \
 ```
 The applier rejects sources outside the resolved tail, incomplete or stale tails, off-path
 boundaries, and boundaries that split a tool call from its result before it creates a backup.
+Completed retry pairs may use the same tool ID on both sides of a boundary.
 
 Each planned skeleton has an exact association in its replacement entry:
 ```json
 {
   "tool_skeletons": [
-    {"tool_id": "toolu_full-native-id", "content": "<tool-skeleton .../>"}
+    {
+      "source_content_index": 2,
+      "tool_id": "toolu_full-native-id",
+      "native_entry_id": "native-assistant-entry",
+      "native_content_index": 4,
+      "content": "<tool-skeleton .../>"
+    }
   ]
 }
 ```
-The generator derives this full ID from the selected source block. The native applier maps
-the skeleton by this ID only. It never infers the target from a command or tool name.
+The generator derives these coordinates from the selected source block. The native applier
+maps the skeleton by the native entry and content position. It checks the tool ID and name,
+but does not use them as occurrence identity.
 
 After all checks pass, it writes a verified sibling `<target>.backup-N` and atomically
 replaces the target. It does not mint or rewrite the session ID. Prepare the target copy
 with its intended identity before running it.
 
-For compatibility, an older plan without `tool_skeletons` remains safe only when its message
-has exactly one skeleton and one source tool input. The applier binds that pair through the
-source input's full native provenance. It refuses every ambiguous older plan before writing
-and asks for a regenerated plan.
+The applier accepts version-2 plans only. Regenerate older plans from the current pruned export.
 
 `compact_native_pi_session.py` does not subsume this applier. The native compactor creates
 a new session using its fixed decisions schema. The native plan applier transfers the
@@ -220,8 +226,8 @@ the target is not the original and may be edited in place.
 ## Verification (do all three)
 
 1. Structural: one root; every `parentId` resolves; chain from last line reaches every
-   tree entry; toolCall ids == toolResult toolCallIds as sets; active-path user+assistant
-   text byte-identical to the original's active path.
+   tree entry; every call occurrence has one result occurrence in active-path order;
+   active-path user+assistant text byte-identical to the original's active path.
 2. Gold standard — load through pi's own code (note: `leafId` must be `undefined`,
    NOT `null`, which means "empty"):
    ```js

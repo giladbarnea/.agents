@@ -130,6 +130,7 @@ skeletons:
         decisions = generate_compaction_plan.parse_decisions(raw_decisions)
         plan, _ = generate_compaction_plan.generate_plan(source_bytes, decisions)
         compacted = apply_compaction_plan.apply_plan(source_bytes, plan)
+        generic_skeleton = plan["replace_messages"][0]["tool_skeletons"][0]
 
         self.assertEqual(
             [item["original_index"] for item in compacted],
@@ -142,6 +143,15 @@ skeletons:
                 '<tool-skeleton name="Bash" command="pytest" purpose="Validate" outcome="12 passed"/>'
             ],
             f"Skeleton annotations were not preserved: {compacted!r}",
+        )
+        self.assertEqual(
+            generic_skeleton,
+            {
+                "source_content_index": 0,
+                "tool_id": "test",
+                "content": compacted[1]["content"][0],
+            },
+            f"A non-Pi plan gained invalid native occurrence fields: {plan!r}",
         )
 
     def test_pruner_handles_multi_read_delete_and_mixed_order(self) -> None:
@@ -360,6 +370,48 @@ skeletons:
             with self.assertRaisesRegex(ValueError, "splits tool call/result pairs"):
                 prune_transcript.native_tail(source, session_path, "assistant")
 
+    def test_pruner_accepts_reused_full_ids_wholly_on_each_side_of_boundary(self) -> None:
+        source = [
+            {
+                **message(1, "assistant", [{"type": "tool-input", "name": "Bash", "id": "call", "native_tool_call_id": "call-full", "native_content_index": 0}]),
+                "native_entry_id": "first-call",
+            },
+            {
+                **message(2, "user", [{"type": "tool-output", "name": "Bash", "id": "call", "native_tool_call_id": "call-full", "content": "failed"}]),
+                "native_entry_id": "first-result",
+            },
+            {
+                **message(3, "assistant", [{"type": "tool-input", "name": "Bash", "id": "call", "native_tool_call_id": "call-full", "native_content_index": 0}]),
+                "native_entry_id": "retry-call",
+            },
+            {
+                **message(4, "user", [{"type": "tool-output", "name": "Bash", "id": "call", "native_tool_call_id": "call-full", "content": "passed"}]),
+                "native_entry_id": "retry-result",
+            },
+        ]
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {"type": "message", "id": "first-call", "parentId": None, "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "toolCall", "id": "call-full", "name": "Bash", "arguments": {}}]}},
+            {"type": "message", "id": "first-result", "parentId": "first-call", "timestamp": "now", "message": {"role": "toolResult", "toolCallId": "call-full", "toolName": "Bash", "content": [{"type": "text", "text": "failed"}]}},
+            {"type": "message", "id": "retry-call", "parentId": "first-result", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "toolCall", "id": "call-full", "name": "Bash", "arguments": {}}]}},
+            {"type": "message", "id": "retry-result", "parentId": "retry-call", "timestamp": "now", "message": {"role": "toolResult", "toolCallId": "call-full", "toolName": "Bash", "content": [{"type": "text", "text": "passed"}]}},
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            session_path = pathlib.Path(temporary_directory, "target.jsonl")
+            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
+            selected, _ = prune_transcript.native_tail(
+                source,
+                session_path,
+                "first-result",
+            )
+
+        self.assertEqual(
+            [item.get("native_entry_id") for item in selected],
+            ["retry-call", "retry-result"],
+            f"A completed earlier occurrence blocked a safe retry tail: {selected!r}",
+        )
+
     def test_transcript_and_native_boundaries_select_the_same_tail(self) -> None:
         source = [
             {**message(10, "user", ["First"]), "native_entry_id": "first"},
@@ -552,7 +604,7 @@ skeletons:
         ]
         source_bytes = (json.dumps(source) + "\n").encode()
         manifest: dict[str, object] = {
-            "version": 1,
+            "version": 2,
             "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
             "drop_messages": [3],
             "replace_messages": [{
@@ -596,7 +648,22 @@ skeletons:
         with self.assertRaisesRegex(ValueError, "checksum mismatch"):
             apply_compaction_plan.apply_plan(
                 b'[{"original_index":1,"content":["x"]}]',
-                {"version": 1, "source_sha256": "0" * 64},
+                {"version": 2, "source_sha256": "0" * 64},
+            )
+
+    def test_manifest_requires_the_occurrence_anchored_plan_contract(self) -> None:
+        source_bytes = b'[{"original_index":1,"content":["x"]}]'
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "manifest version must be 2; regenerate the compaction plan",
+        ):
+            apply_compaction_plan.apply_plan(
+                source_bytes,
+                {
+                    "version": 1,
+                    "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+                },
             )
 
     def test_manifest_refuses_a_stale_skeleton_tool_id(self) -> None:
@@ -614,7 +681,7 @@ skeletons:
         }])]
         source_bytes = json.dumps(source).encode()
         manifest = {
-            "version": 1,
+            "version": 2,
             "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
             "drop_messages": [],
             "replace_messages": [{
@@ -622,6 +689,7 @@ skeletons:
                 "expected_tool_ids": ["01AB"],
                 "content": [skeleton],
                 "tool_skeletons": [{
+                    "source_content_index": 0,
                     "tool_id": "toolu_stale-full",
                     "content": skeleton,
                 }],
@@ -629,7 +697,7 @@ skeletons:
             "affected_files_extra": [],
         }
 
-        with self.assertRaisesRegex(ValueError, "tool_skeleton IDs do not match source"):
+        with self.assertRaisesRegex(ValueError, "tool_skeleton occurrence changed tool ID"):
             apply_compaction_plan.apply_plan(source_bytes, manifest)
 
     def test_manifest_refuses_changed_structured_blocks(self) -> None:
@@ -637,7 +705,7 @@ skeletons:
         source = [message(2, "assistant", [thinking, "Done"])]
         source_bytes = json.dumps(source).encode()
         manifest = {
-            "version": 1,
+            "version": 2,
             "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
             "drop_messages": [],
             "replace_messages": [{
@@ -1114,10 +1182,22 @@ skeletons:
         self.assertEqual(
             replacement.get("tool_skeletons"),
             [
-                {"tool_id": "toolu_first-full", "content": first_skeleton},
-                {"tool_id": "toolu_second-full", "content": second_skeleton},
+                {
+                    "source_content_index": 0,
+                    "tool_id": "toolu_first-full",
+                    "native_entry_id": "assistant-tools",
+                    "native_content_index": 1,
+                    "content": first_skeleton,
+                },
+                {
+                    "source_content_index": 1,
+                    "tool_id": "toolu_second-full",
+                    "native_entry_id": "assistant-tools",
+                    "native_content_index": 2,
+                    "content": second_skeleton,
+                },
             ],
-            f"The plan lost each skeleton's full tool ID: {replacement!r}",
+            f"The plan lost each skeleton's exact native occurrence: {replacement!r}",
         )
 
         native_lines = [
@@ -1228,7 +1308,7 @@ skeletons:
             'outcome="12 passed"/>'
         )
         plan = {
-            "version": 1,
+            "version": 2,
             "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
             "drop_messages": [11, 12],
             "replace_messages": [{
@@ -1236,7 +1316,13 @@ skeletons:
                 "expected_tool_ids": ["01AB", "01CD"],
                 "content": ["Before tools", skeleton, "After tools"],
                 "tool_skeletons": [
-                    {"tool_id": "toolu_01CD-full", "content": skeleton}
+                    {
+                        "source_content_index": 2,
+                        "tool_id": "toolu_01CD-full",
+                        "native_entry_id": "entry-a",
+                        "native_content_index": 4,
+                        "content": skeleton,
+                    }
                 ],
             }],
             "affected_files_extra": [],
@@ -1374,7 +1460,7 @@ skeletons:
         source[2]["native_entry_id"] = "entry-c"
         source_bytes = json.dumps(source).encode()
         plan = {
-            "version": 1,
+            "version": 2,
             "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
             "drop_messages": [21],
             "replace_messages": [{
@@ -1467,7 +1553,7 @@ skeletons:
         ]
         first_source_bytes = json.dumps(first_source).encode()
         first_plan = {
-            "version": 1,
+            "version": 2,
             "source_sha256": hashlib.sha256(first_source_bytes).hexdigest(),
             "drop_messages": [],
             "replace_messages": [],
@@ -1484,7 +1570,7 @@ skeletons:
         ]
         second_source_bytes = json.dumps(second_source).encode()
         second_plan = {
-            "version": 1,
+            "version": 2,
             "source_sha256": hashlib.sha256(second_source_bytes).hexdigest(),
             "drop_messages": [],
             "replace_messages": [],
@@ -1567,7 +1653,7 @@ skeletons:
         ]
         source_bytes = json.dumps(source).encode()
         plan = {
-            "version": 1,
+            "version": 2,
             "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
             "drop_messages": [2],
             "replace_messages": [],
@@ -1652,7 +1738,7 @@ skeletons:
         ]
         source_bytes = json.dumps(source).encode()
         plan = {
-            "version": 1,
+            "version": 2,
             "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
             "drop_messages": [],
             "replace_messages": [],
@@ -1704,7 +1790,7 @@ skeletons:
         source[1]["native_entry_id"] = "entry-c"
         source_bytes = json.dumps(source).encode()
         plan = {
-            "version": 1,
+            "version": 2,
             "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
             "drop_messages": [],
             "replace_messages": [{
@@ -1811,12 +1897,34 @@ skeletons:
         source[4]["native_entry_id"] = "done"
         source_bytes = json.dumps(source).encode()
         plan = {
-            "version": 1,
+            "version": 2,
             "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
             "drop_messages": [41, 43],
             "replace_messages": [
-                {"original_index": 40, "expected_tool_ids": ["01CN"], "content": [first_skeleton]},
-                {"original_index": 42, "expected_tool_ids": ["01CN"], "content": [second_skeleton]},
+                {
+                    "original_index": 40,
+                    "expected_tool_ids": ["01CN"],
+                    "content": [first_skeleton],
+                    "tool_skeletons": [{
+                        "source_content_index": 0,
+                        "tool_id": "toolu_01CN-first",
+                        "native_entry_id": "assistant-first",
+                        "native_content_index": 0,
+                        "content": first_skeleton,
+                    }],
+                },
+                {
+                    "original_index": 42,
+                    "expected_tool_ids": ["01CN"],
+                    "content": [second_skeleton],
+                    "tool_skeletons": [{
+                        "source_content_index": 0,
+                        "tool_id": "toolu_01CN-second",
+                        "native_entry_id": "assistant-second",
+                        "native_content_index": 0,
+                        "content": second_skeleton,
+                    }],
+                },
             ],
             "affected_files_extra": [],
         }
@@ -1898,10 +2006,275 @@ skeletons:
             f"The skeletons crossed repeated short IDs: {output!r}",
         )
 
+    def test_native_plan_application_maps_reused_full_ids_by_occurrence(self) -> None:
+        thinking = {"type": "thinking", "thinking": "Retry after the failed command"}
+        source = [
+            {
+                **message(50, "assistant", [{
+                    "type": "tool-input",
+                    "name": "Bash",
+                    "id": "01RT",
+                    "native_tool_call_id": "toolu_reused-full",
+                    "native_content_index": 0,
+                    "command": "false",
+                }]),
+                "native_entry_id": "failed-call",
+            },
+            {
+                **message(51, "user", [{
+                    "type": "tool-output",
+                    "name": "Bash",
+                    "id": "01RT",
+                    "native_tool_call_id": "toolu_reused-full",
+                    "content": "exit 1",
+                }]),
+                "native_entry_id": "failed-result",
+            },
+            {
+                **message(52, "assistant", [{
+                    "type": "tool-input",
+                    "name": "Bash",
+                    "id": "01RT",
+                    "native_tool_call_id": "toolu_reused-full",
+                    "native_content_index": 1,
+                    "command": "pytest",
+                }]),
+                "native_entry_id": "successful-call",
+            },
+            {
+                **message(53, "user", [{
+                    "type": "tool-output",
+                    "name": "Bash",
+                    "id": "01RT",
+                    "native_tool_call_id": "toolu_reused-full",
+                    "content": "12 passed",
+                }]),
+                "native_entry_id": "successful-result",
+            },
+            {**message(54, "assistant", ["Done"]), "native_entry_id": "done"},
+        ]
+        source_bytes = json.dumps(source).encode()
+        decisions = generate_compaction_plan.parse_decisions({
+            "skeletons": [{
+                "original_index": 52,
+                "tool_id": "toolu_reused-full",
+                "command": "pytest",
+                "purpose": "Validate the retry",
+                "outcome": "12 passed",
+            }],
+        })
+        plan, _ = generate_compaction_plan.generate_plan(source_bytes, decisions)
+        successful_replacement = next(
+            replacement
+            for replacement in plan["replace_messages"]
+            if replacement.get("original_index") == 52
+        )
+        skeleton = successful_replacement["content"][0]
+        native_lines = [
+            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
+            {
+                "type": "message",
+                "id": "failed-call",
+                "parentId": None,
+                "timestamp": "now",
+                "message": {
+                    "role": "assistant",
+                    "content": [{"type": "toolCall", "id": "toolu_reused-full", "name": "Bash", "arguments": {"command": "false"}}],
+                },
+            },
+            {
+                "type": "message",
+                "id": "failed-result",
+                "parentId": "failed-call",
+                "timestamp": "now",
+                "message": {
+                    "role": "toolResult",
+                    "toolCallId": "toolu_reused-full",
+                    "toolName": "Bash",
+                    "content": [{"type": "text", "text": "exit 1"}],
+                },
+            },
+            {
+                "type": "message",
+                "id": "successful-call",
+                "parentId": "failed-result",
+                "timestamp": "now",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        thinking,
+                        {"type": "toolCall", "id": "toolu_reused-full", "name": "Bash", "arguments": {"command": "pytest"}},
+                    ],
+                },
+            },
+            {
+                "type": "message",
+                "id": "successful-result",
+                "parentId": "successful-call",
+                "timestamp": "now",
+                "message": {
+                    "role": "toolResult",
+                    "toolCallId": "toolu_reused-full",
+                    "toolName": "Bash",
+                    "content": [{"type": "text", "text": "12 passed"}],
+                },
+            },
+            {
+                "type": "message",
+                "id": "done",
+                "parentId": "successful-result",
+                "timestamp": "now",
+                "message": {"role": "assistant", "content": [{"type": "text", "text": "Done"}]},
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = pathlib.Path(temporary_directory)
+            source_path = directory / "pruned.json"
+            plan_path = directory / "compaction-plan.json"
+            session_path = directory / "target.jsonl"
+            source_path.write_bytes(source_bytes)
+            plan_path.write_text(json.dumps(plan))
+            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(pathlib.Path(transfer_to_pi_session.__file__)),
+                    str(source_path),
+                    str(plan_path),
+                    str(session_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            goldload = subprocess.run(
+                [
+                    "node",
+                    str(pathlib.Path(__file__).with_name("pi-goldload.mjs")),
+                    str(session_path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            output = [json.loads(line) for line in session_path.read_text().splitlines()]
+
+        self.assertEqual(result.returncode, 0, f"Retry-safe native transfer failed: {result.stderr}")
+        self.assertEqual(goldload.returncode, 0, f"Pi could not load the retry-safe output: {goldload.stderr}")
+        self.assertEqual(
+            [line.get("id") for line in output[1:] if line.get("type") != "custom"],
+            ["successful-call", "done"],
+            f"The applier removed the wrong retry occurrences: {output!r}",
+        )
+        self.assertEqual(
+            output[1].get("message", {}).get("content"),
+            [thinking, {"type": "text", "text": skeleton}],
+            f"The skeleton did not replace the successful occurrence exactly: {output!r}",
+        )
+
+    def test_native_retry_tail_preserves_a_completed_duplicate_id_prefix(self) -> None:
+        source = [
+            {
+                **message(60, "assistant", [{
+                    "type": "tool-input",
+                    "name": "Bash",
+                    "id": "01RT",
+                    "native_tool_call_id": "toolu_reused-full",
+                    "native_content_index": 1,
+                    "command": "pytest",
+                }]),
+                "native_entry_id": "retry-call",
+            },
+            {
+                **message(61, "user", [{
+                    "type": "tool-output",
+                    "name": "Bash",
+                    "id": "01RT",
+                    "native_tool_call_id": "toolu_reused-full",
+                    "content": "12 passed",
+                }]),
+                "native_entry_id": "retry-result",
+            },
+            {**message(62, "assistant", ["Done"]), "native_entry_id": "done"},
+        ]
+        source_bytes = json.dumps(source).encode()
+        plan, _ = generate_compaction_plan.generate_plan(
+            source_bytes,
+            generate_compaction_plan.parse_decisions({
+                "skeletons": [{
+                    "original_index": 60,
+                    "tool_id": "toolu_reused-full",
+                    "command": "pytest",
+                    "purpose": "Validate the retry",
+                    "outcome": "12 passed",
+                }],
+            }),
+        )
+        raw_lines = [
+            '{ "type":"session", "version":3, "id":"target-session", "timestamp":"now", "cwd":"/tmp" }',
+            '{ "type":"message", "id":"failed-call", "parentId":null, "timestamp":"now", "message":{"role":"assistant","content":[{"type":"toolCall","id":"toolu_reused-full","name":"Bash","arguments":{"command":"false"}}]} }',
+            '{ "type":"message", "id":"failed-result", "parentId":"failed-call", "timestamp":"now", "message":{"role":"toolResult","toolCallId":"toolu_reused-full","toolName":"Bash","content":[{"type":"text","text":"exit 1"}]} }',
+            json.dumps({
+                "type": "message",
+                "id": "retry-call",
+                "parentId": "failed-result",
+                "timestamp": "now",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "thinking", "thinking": "Retry"},
+                        {"type": "toolCall", "id": "toolu_reused-full", "name": "Bash", "arguments": {"command": "pytest"}},
+                    ],
+                },
+            }),
+            json.dumps({
+                "type": "message",
+                "id": "retry-result",
+                "parentId": "retry-call",
+                "timestamp": "now",
+                "message": {
+                    "role": "toolResult",
+                    "toolCallId": "toolu_reused-full",
+                    "toolName": "Bash",
+                    "content": [{"type": "text", "text": "12 passed"}],
+                },
+            }),
+            json.dumps({
+                "type": "message",
+                "id": "done",
+                "parentId": "retry-result",
+                "timestamp": "now",
+                "message": {"role": "assistant", "content": [{"type": "text", "text": "Done"}]},
+            }),
+        ]
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            session_path = pathlib.Path(temporary_directory, "target.jsonl")
+            session_path.write_text("\n".join(raw_lines) + "\n")
+            rendered, _ = transfer_to_pi_session.apply_native_plan(
+                source_bytes,
+                plan,
+                session_path,
+                "failed-result",
+            )
+
+        self.assertEqual(
+            rendered[:3],
+            raw_lines[:3],
+            "Compacting the retry tail changed the completed duplicate-ID prefix",
+        )
+        output = [json.loads(line) for line in rendered]
+        self.assertEqual(
+            [line.get("id") for line in output[1:] if line.get("type") != "custom"],
+            ["failed-call", "failed-result", "retry-call", "done"],
+            f"The tail applier removed the wrong duplicate-ID result: {output!r}",
+        )
+
     def test_native_plan_application_leaves_target_untouched_when_plan_is_stale(self) -> None:
         source_bytes = json.dumps([message(50, "assistant", ["Done"])]).encode()
         stale_plan = {
-            "version": 1,
+            "version": 2,
             "source_sha256": "0" * 64,
             "drop_messages": [],
             "replace_messages": [],

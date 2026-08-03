@@ -259,10 +259,11 @@ Non-tool structured blocks, including `thinking` and `subagent-task`, pass throu
 Transcript strings may be grouped because `ch parse` rejects non-adjacent strings. Native Pi
 thinking blocks keep their exact positions.
 
-The generated plan is a plain, inspectable JSON artifact (`drop_messages`,
+The generated version-2 plan is a plain, inspectable JSON artifact (`drop_messages`,
 `replace_messages`, `affected_files_extra`, `source_sha256`). Each replacement carries
-`expected_tool_ids`; a skeleton replacement also carries `tool_skeletons`, with the skeleton
-text beside its exact full `tool_id`.
+`expected_tool_ids`. A skeleton replacement also carries `tool_skeletons`, with its source
+block position and, for Pi, its native entry and content position. Version-1 plans must be
+regenerated.
 The apply stage retains its own validation: stale checksums, missing indices, mismatched
 tool IDs, surviving raw blocks, and duplicate footers are refused.
 This apply stage writes a compacted **transcription**. It removes dropped messages and

@@ -349,11 +349,11 @@ def generate_plan(
             raise ValueError(f"message {index} has no content array")
 
         new_content: list[object] = []
-        tool_skeletons: list[dict[str, str]] = []
+        tool_skeletons: list[dict[str, object]] = []
         changed = False
         had_prose = False
         had_tools = False
-        for block in original_content:
+        for source_content_index, block in enumerate(original_content):
             if isinstance(block, str):
                 had_prose = True
                 if drop_message_text:
@@ -414,6 +414,29 @@ def generate_plan(
                     f"skeleton anchor {index} has no tool identifier"
                 )
             tool_skeletons.append({"tool_id": tool_identifier, "content": skeleton})
+            tool_skeleton = tool_skeletons[-1]
+            tool_skeleton["source_content_index"] = source_content_index
+            native_entry_id = message.get("native_entry_id")
+            native_content_index = block.get("native_content_index")
+            has_native_provenance = any(
+                value is not None
+                for value in (
+                    block.get("native_tool_call_id"),
+                    native_entry_id,
+                    native_content_index,
+                )
+            )
+            if has_native_provenance and not (
+                isinstance(block.get("native_tool_call_id"), str)
+                and isinstance(native_entry_id, str)
+                and isinstance(native_content_index, int)
+            ):
+                raise ValueError(
+                    f"skeleton anchor {index} has incomplete native occurrence provenance"
+                )
+            if has_native_provenance:
+                tool_skeleton["native_entry_id"] = native_entry_id
+                tool_skeleton["native_content_index"] = native_content_index
 
         normalized_content = make_text_blocks_adjacent(new_content)
         text_blocks_normalized = normalized_content != new_content
@@ -455,7 +478,7 @@ def generate_plan(
 
     provenance = collect_provenance(messages, decisions)
     plan: dict[str, object] = {
-        "version": 1,
+        "version": 2,
         "source_sha256": source_sha256,
         "drop_messages": sorted(drop_messages),
         "replace_messages": replace_messages,

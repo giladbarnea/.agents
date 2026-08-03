@@ -6,6 +6,7 @@
 """Apply stable-index semantic decisions to a deterministically pruned transcript."""
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import pathlib
@@ -15,6 +16,15 @@ import xml.etree.ElementTree
 import transcript_common
 
 TOOL_BLOCK_TYPES = frozenset({"tool-input", "tool-output"})
+
+
+@dataclasses.dataclass(frozen=True)
+class ToolSkeletonAssociation:
+    source_content_index: int
+    tool_id: str
+    content: str
+    native_entry_id: str | None = None
+    native_content_index: int | None = None
 
 
 def load_messages(data: bytes) -> list[dict[str, object]]:
@@ -81,16 +91,18 @@ def replacement_tool_skeletons(
     replacement: dict[str, object],
     source_message: dict[str, object],
     original_index: int,
-) -> dict[str, str] | None:
+) -> list[ToolSkeletonAssociation] | None:
     """Validate and return exact tool-to-skeleton associations when present.
 
     >>> skeleton = '<tool-skeleton name="Bash" command="pytest" purpose="test" outcome="pass"/>'
     >>> replacement_tool_skeletons(
-    ...     {'content': [skeleton], 'tool_skeletons': [{'tool_id': 'full', 'content': skeleton}]},
+    ...     {'content': [skeleton], 'tool_skeletons': [
+    ...         {'source_content_index': 0, 'tool_id': 'full', 'content': skeleton}
+    ...     ]},
     ...     {'content': [{'type': 'tool-input', 'id': 'short', 'native_tool_call_id': 'full'}]},
     ...     4,
     ... )
-    {'full': '<tool-skeleton name="Bash" command="pytest" purpose="test" outcome="pass"/>'}
+    [ToolSkeletonAssociation(source_content_index=0, tool_id='full', content='<tool-skeleton name="Bash" command="pytest" purpose="test" outcome="pass"/>', native_entry_id=None, native_content_index=None)]
     """
     raw = replacement.get("tool_skeletons")
     if raw is None:
@@ -98,38 +110,73 @@ def replacement_tool_skeletons(
     if not isinstance(raw, list) or not all(isinstance(item, dict) for item in raw):
         raise ValueError(f"replacement {original_index} tool_skeletons must be objects")
 
-    associations: dict[str, str] = {}
-    for item in raw:
-        if set(item) != {"tool_id", "content"}:
-            raise ValueError(
-                f"replacement {original_index} tool_skeletons need exactly tool_id and content"
-            )
-        tool_id = item.get("tool_id")
-        content = item.get("content")
-        if not isinstance(tool_id, str) or not tool_id or not is_tool_skeleton(content):
-            raise ValueError(
-                f"replacement {original_index} has an invalid tool_skeleton association"
-            )
-        if tool_id in associations:
-            raise ValueError(
-                f"replacement {original_index} repeats tool_skeleton id {tool_id!r}"
-            )
-        associations[tool_id] = content
-
     source_content = source_message.get("content")
     if not isinstance(source_content, list):
         raise ValueError(f"message {original_index} has no content array")
-    source_tool_ids = {
-        identifier
-        for block in source_content
-        if isinstance(block, dict) and block.get("type") == "tool-input"
-        for identifier in [block.get("native_tool_call_id") or block.get("id")]
-        if isinstance(identifier, str)
-    }
-    unknown_ids = sorted(set(associations) - source_tool_ids)
-    if unknown_ids:
-        raise ValueError(
-            f"replacement {original_index} tool_skeleton IDs do not match source: {unknown_ids}"
+    source_native_entry_id = source_message.get("native_entry_id")
+    associations: list[ToolSkeletonAssociation] = []
+    seen_source_content_indices: set[int] = set()
+    for item in raw:
+        base_keys = {"source_content_index", "tool_id", "content"}
+        native_keys = {"native_entry_id", "native_content_index"}
+        item_keys = frozenset(item)
+        if item_keys not in {frozenset(base_keys), frozenset(base_keys | native_keys)}:
+            raise ValueError(
+                f"replacement {original_index} has malformed tool_skeleton keys"
+            )
+        source_content_index = item.get("source_content_index")
+        tool_id = item.get("tool_id")
+        content = item.get("content")
+        native_entry_id = item.get("native_entry_id")
+        native_content_index = item.get("native_content_index")
+        has_native_occurrence = item_keys == frozenset(base_keys | native_keys)
+        if (
+            not isinstance(source_content_index, int)
+            or source_content_index < 0
+            or source_content_index >= len(source_content)
+            or not isinstance(tool_id, str)
+            or not tool_id
+            or not isinstance(content, str)
+            or not is_tool_skeleton(content)
+        ):
+            raise ValueError(
+                f"replacement {original_index} has an invalid tool_skeleton association"
+            )
+        if source_content_index in seen_source_content_indices:
+            raise ValueError(
+                f"replacement {original_index} repeats tool_skeleton source content index "
+                f"{source_content_index}"
+            )
+        seen_source_content_indices.add(source_content_index)
+        source_block = source_content[source_content_index]
+        if not isinstance(source_block, dict) or source_block.get("type") != "tool-input":
+            raise ValueError(
+                f"replacement {original_index} tool_skeleton source content index "
+                f"{source_content_index} is not a tool input"
+            )
+        source_tool_id = source_block.get("native_tool_call_id") or source_block.get("id")
+        if tool_id != source_tool_id:
+            raise ValueError(
+                f"replacement {original_index} tool_skeleton occurrence changed tool ID"
+            )
+        if has_native_occurrence and (
+            not isinstance(native_entry_id, str)
+            or not isinstance(native_content_index, int)
+            or native_entry_id != source_native_entry_id
+            or native_content_index != source_block.get("native_content_index")
+        ):
+            raise ValueError(
+                f"replacement {original_index} tool_skeleton native occurrence "
+                "does not match source"
+            )
+        associations.append(
+            ToolSkeletonAssociation(
+                source_content_index,
+                tool_id,
+                content,
+                native_entry_id if isinstance(native_entry_id, str) else None,
+                native_content_index if isinstance(native_content_index, int) else None,
+            )
         )
 
     content = replacement.get("content")
@@ -138,7 +185,9 @@ def replacement_tool_skeletons(
         if isinstance(content, list)
         else []
     )
-    if sorted(skeleton_content) != sorted(associations.values()):
+    if sorted(skeleton_content) != sorted(
+        association.content for association in associations
+    ):
         raise ValueError(
             f"replacement {original_index} tool_skeletons do not match replacement content"
         )
@@ -153,8 +202,8 @@ def footer(paths: list[str]) -> str:
 def apply_plan(
     source_bytes: bytes, manifest: dict[str, object]
 ) -> list[dict[str, object]]:
-    if manifest.get("version") != 1:
-        raise ValueError("manifest version must be 1")
+    if manifest.get("version") != 2:
+        raise ValueError("manifest version must be 2; regenerate the compaction plan")
     expected_checksum = manifest.get("source_sha256")
     actual_checksum = hashlib.sha256(source_bytes).hexdigest()
     if expected_checksum != actual_checksum:

@@ -57,6 +57,27 @@ class NativeToolCall:
     content_index: int
     identifier: str
     name: str
+    block: dict[str, object]
+
+    @property
+    def occurrence_key(self) -> tuple[str, int]:
+        entry_identifier = self.entry.identifier
+        if entry_identifier is None:
+            raise fail("native tool call entry has no string id")
+        return entry_identifier, self.content_index
+
+
+@dataclasses.dataclass(frozen=True)
+class NativeToolResult:
+    entry: SessionLine
+    identifier: str
+    name: str
+
+
+@dataclasses.dataclass(frozen=True)
+class NativeToolOccurrence:
+    call: NativeToolCall
+    result: NativeToolResult | None
 
 
 @dataclasses.dataclass
@@ -67,7 +88,7 @@ class SourceToolEvent:
     native_entry_id: str
     native_identifier: str
     native_content_index: int
-    native_call: NativeToolCall | None = None
+    native_occurrence: NativeToolOccurrence | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -231,11 +252,11 @@ def message_data(line: SessionLine) -> dict[str, object] | None:
     return message if isinstance(message, dict) else None
 
 
-def native_tools(
-    active: list[SessionLine],
-) -> tuple[list[NativeToolCall], dict[str, SessionLine]]:
+def native_tools(active: list[SessionLine]) -> list[NativeToolOccurrence]:
+    """Pair native calls and results through active-path execution order."""
     calls: list[NativeToolCall] = []
-    results: dict[str, SessionLine] = {}
+    pending_calls: dict[str, list[NativeToolCall]] = {}
+    paired_results: dict[tuple[str, int], NativeToolResult] = {}
     for line in active:
         message = message_data(line)
         if message is None:
@@ -243,9 +264,27 @@ def native_tools(
         role = message.get("role")
         if role == "toolResult":
             tool_call_id = message.get("toolCallId")
-            if not isinstance(tool_call_id, str) or tool_call_id in results:
-                raise fail(f"entry {line.identifier!r} has an invalid or duplicate toolCallId")
-            results[tool_call_id] = line
+            tool_name = message.get("toolName")
+            if not isinstance(tool_call_id, str) or not isinstance(tool_name, str):
+                raise fail(f"entry {line.identifier!r} contains a malformed toolResult")
+            candidates = pending_calls.get(tool_call_id, [])
+            if len(candidates) != 1:
+                qualifier = "no" if not candidates else str(len(candidates))
+                raise fail(
+                    f"entry {line.identifier!r} has {qualifier} unmatched preceding "
+                    f"toolCalls for toolCallId {tool_call_id!r}"
+                )
+            call = candidates.pop()
+            if not names_match(call.name, tool_name):
+                raise fail(
+                    f"native tool occurrence {call.occurrence_key!r} changes name "
+                    f"from {call.name!r} to {tool_name!r}"
+                )
+            paired_results[call.occurrence_key] = NativeToolResult(
+                line,
+                tool_call_id,
+                tool_name,
+            )
             continue
         if role != "assistant":
             continue
@@ -259,10 +298,29 @@ def native_tools(
             name = block.get("name")
             if not isinstance(identifier, str) or not isinstance(name, str):
                 raise fail(f"entry {line.identifier!r} contains a malformed toolCall")
-            calls.append(NativeToolCall(line, content_index, identifier, name))
-    if len({call.identifier for call in calls}) != len(calls):
-        raise fail("native active path contains duplicate full toolCall ids")
-    return calls, results
+            call = NativeToolCall(line, content_index, identifier, name, block)
+            calls.append(call)
+            pending_calls.setdefault(identifier, []).append(call)
+    return [
+        NativeToolOccurrence(call, paired_results.get(call.occurrence_key))
+        for call in calls
+    ]
+
+
+def split_tool_occurrence_keys(
+    occurrences: list[NativeToolOccurrence],
+    positions: dict[str, int],
+    cutoff_index: int,
+) -> list[tuple[str, int]]:
+    """Return call occurrences whose paired results fall after the cutoff."""
+    return [
+        occurrence.call.occurrence_key
+        for occurrence in occurrences
+        if occurrence.result is not None
+        and positions[occurrence.call.occurrence_key[0]]
+        <= cutoff_index
+        < positions[occurrence.result.entry.identifier]
+    ]
 
 
 def is_default_export_entry(line: SessionLine) -> bool:
@@ -319,26 +377,36 @@ def validate_source_tail(
 
 def unmatched_tool_calls(
     events: list[SourceToolEvent],
-    calls: list[NativeToolCall],
-    results: dict[str, SessionLine],
-) -> tuple[list[NativeToolCall], list[NativeToolCall]]:
-    mapped_identifiers = {
-        event.native_call.identifier
+    occurrences: list[NativeToolOccurrence],
+) -> tuple[list[NativeToolOccurrence], list[NativeToolOccurrence]]:
+    mapped_occurrence_keys = {
+        event.native_occurrence.call.occurrence_key
         for event in events
-        if event.native_call is not None
+        if event.native_occurrence is not None
     }
-    unmatched = [call for call in calls if call.identifier not in mapped_identifiers]
+    unmatched = [
+        occurrence
+        for occurrence in occurrences
+        if occurrence.call.occurrence_key not in mapped_occurrence_keys
+    ]
     removable = [
-        call
-        for call in unmatched
-        if canonical_tool_name(call.name) == "todo"
+        occurrence
+        for occurrence in unmatched
+        if canonical_tool_name(occurrence.call.name) == "todo"
         or (
-            canonical_tool_name(call.name)
+            canonical_tool_name(occurrence.call.name)
             in {canonical_tool_name(name) for name in transcript_common.FILE_TOOLS}
-            and call.identifier not in results
+            and occurrence.result is None
         )
     ]
-    unsafe = [call for call in unmatched if call not in removable]
+    removable_keys = {
+        occurrence.call.occurrence_key for occurrence in removable
+    }
+    unsafe = [
+        occurrence
+        for occurrence in unmatched
+        if occurrence.call.occurrence_key not in removable_keys
+    ]
     return removable, unsafe
 
 
@@ -413,47 +481,37 @@ def source_tool_events(
             if replacement is not None
             else None
         )
-        source_tool_inputs = [
-            block
-            for block in source_content
-            if isinstance(block, dict) and block.get("type") == "tool-input"
-        ]
         final_skeletons = [
             block for block in final_strings if apply_compaction_plan.is_tool_skeleton(block)
         ]
         if declared_skeletons is None and final_skeletons:
-            if len(source_tool_inputs) != 1 or len(final_skeletons) != 1:
-                raise fail(
-                    f"plan replacement at message {original_index} lacks exact "
-                    "tool_skeletons associations; regenerate the plan"
-                )
-            legacy_tool_id = source_tool_inputs[0].get("native_tool_call_id")
-            if not isinstance(legacy_tool_id, str):
-                raise fail(
-                    f"legacy skeleton at message {original_index} lacks native provenance; "
-                    "regenerate the plan"
-                )
-            declared_skeletons = {legacy_tool_id: final_skeletons[0]}
-        exact_skeletons = declared_skeletons or {}
-        source_native_tool_ids = {
-            identifier
-            for block in source_tool_inputs
-            for identifier in [block.get("native_tool_call_id")]
-            if isinstance(identifier, str)
-        }
-        nonnative_ids = sorted(set(exact_skeletons) - source_native_tool_ids)
-        if nonnative_ids:
             raise fail(
-                f"plan replacement at message {original_index} does not use exact full "
-                f"native tool IDs: {nonnative_ids}"
+                f"plan replacement at message {original_index} lacks exact "
+                "tool_skeletons associations; regenerate the plan"
             )
-        unplaced_skeleton_ids = set(exact_skeletons)
+        exact_skeletons = {
+            association.source_content_index: association
+            for association in declared_skeletons or []
+        }
+        nonnative_occurrences = [
+            association.source_content_index
+            for association in exact_skeletons.values()
+            if association.native_entry_id is None
+            or association.native_content_index is None
+        ]
+        if nonnative_occurrences:
+            raise fail(
+                f"plan replacement at message {original_index} lacks exact native "
+                f"occurrences at source content indices {nonnative_occurrences}; "
+                "regenerate from a current Pi export"
+            )
+        unplaced_skeleton_indices = set(exact_skeletons)
         final_cursor = 0
         native_entry_id = source_message.get("native_entry_id")
         previous_reference_event: SourceToolEvent | None = None
         final_prose: list[str] = []
 
-        for block in source_content:
+        for source_content_index, block in enumerate(source_content):
             if isinstance(block, str):
                 reference = parse_file_reference(block)
                 kept = (
@@ -486,6 +544,9 @@ def source_tool_events(
                 if (
                     previous_reference_event is not None
                     and previous_reference_event.native_identifier == native_identifier
+                    and previous_reference_event.native_entry_id == native_entry_id
+                    and previous_reference_event.native_content_index
+                    == native_content_index
                 ):
                     if kept:
                         previous_reference_event.replacements.append(block)
@@ -520,9 +581,20 @@ def source_tool_events(
                     f"tool-input in source message {original_index} lacks native provenance; "
                     "export it again with the current ch and prune it again"
                 )
-            skeleton = exact_skeletons.get(native_identifier_raw)
+            association = exact_skeletons.get(source_content_index)
+            skeleton = association.content if association is not None else None
             replacements: list[str] = []
             if skeleton is not None:
+                if (
+                    association is None
+                    or association.tool_id != native_identifier_raw
+                    or association.native_entry_id != native_entry_id
+                    or association.native_content_index != native_content_index_raw
+                ):
+                    raise fail(
+                        f"skeleton at message {original_index} source content index "
+                        f"{source_content_index} has stale native occurrence provenance"
+                    )
                 if final_cursor >= len(final_strings) or final_strings[final_cursor] != skeleton:
                     raise fail(
                         f"skeleton for native tool {native_identifier_raw!r} is not at "
@@ -530,7 +602,7 @@ def source_tool_events(
                     )
                 replacements.append(skeleton)
                 final_cursor += 1
-                unplaced_skeleton_ids.remove(native_identifier_raw)
+                unplaced_skeleton_indices.remove(source_content_index)
             events.append(
                 SourceToolEvent(
                     original_index=original_index,
@@ -542,10 +614,10 @@ def source_tool_events(
                 )
             )
 
-        if unplaced_skeleton_ids:
+        if unplaced_skeleton_indices:
             raise fail(
-                f"plan replacement at message {original_index} has unplaced skeleton IDs: "
-                f"{sorted(unplaced_skeleton_ids)}"
+                f"plan replacement at message {original_index} has unplaced skeleton "
+                f"source content indices: {sorted(unplaced_skeleton_indices)}"
             )
         if final_cursor != len(final_strings):
             raise fail(
@@ -569,34 +641,34 @@ def names_match(source_name: str, native_name: str) -> bool:
     return canonical_tool_name(source_name) == canonical_tool_name(native_name)
 
 
-def map_source_tools(events: list[SourceToolEvent], calls: list[NativeToolCall]) -> None:
-    calls_by_identifier = {call.identifier: call for call in calls}
-    source_identifiers = [event.native_identifier for event in events]
-    if len(source_identifiers) != len(set(source_identifiers)):
-        raise fail("pruned source maps more than one tool event to the same native toolCall")
+def map_source_tools(
+    events: list[SourceToolEvent],
+    occurrences: list[NativeToolOccurrence],
+) -> None:
+    occurrences_by_key = {
+        occurrence.call.occurrence_key: occurrence
+        for occurrence in occurrences
+    }
     for event in events:
-        call = calls_by_identifier.get(event.native_identifier)
-        if call is None:
+        occurrence_key = (event.native_entry_id, event.native_content_index)
+        occurrence = occurrences_by_key.get(occurrence_key)
+        if occurrence is None:
             raise fail(
-                f"source message {event.original_index} names missing native toolCall "
-                f"{event.native_identifier!r}"
+                f"source message {event.original_index} names missing native tool "
+                f"occurrence {occurrence_key!r}"
             )
-        if call.entry.identifier != event.native_entry_id:
+        call = occurrence.call
+        if call.identifier != event.native_identifier:
             raise fail(
-                f"source message {event.original_index} points to native entry "
-                f"{event.native_entry_id!r}, but its tool is in {call.entry.identifier!r}"
-            )
-        if call.content_index != event.native_content_index:
-            raise fail(
-                f"source tool {event.native_identifier!r} has stale native_content_index "
-                f"{event.native_content_index}; native value is {call.content_index}"
+                f"source tool occurrence {occurrence_key!r} changed toolCallId from "
+                f"{event.native_identifier!r} to {call.identifier!r}"
             )
         if not names_match(event.name, call.name):
             raise fail(
-                f"source tool {event.native_identifier!r} changed name from "
+                f"source tool occurrence {occurrence_key!r} changed name from "
                 f"{event.name!r} to {call.name!r}"
             )
-        event.native_call = call
+        event.native_occurrence = occurrence
 
 
 def output_text(block: dict[str, object]) -> str:
@@ -629,10 +701,14 @@ def native_result_text(line: SessionLine) -> str:
 def verify_source_outputs(
     source_messages: list[dict[str, object]],
     events: list[SourceToolEvent],
-    results: dict[str, SessionLine],
 ) -> None:
-    events_by_identifier = {event.native_identifier: event for event in events}
-    seen_identifiers: set[str] = set()
+    events_by_result_entry_id = {
+        event.native_occurrence.result.entry.identifier: event
+        for event in events
+        if event.native_occurrence is not None
+        and event.native_occurrence.result is not None
+    }
+    seen_result_entry_ids: set[str] = set()
     for source_message in source_messages:
         original_index = source_message["original_index"]
         content = source_message.get("content", [])
@@ -651,31 +727,35 @@ def verify_source_outputs(
                     f"tool-output in source message {original_index} lacks native provenance; "
                     "export it again with the current ch and prune it again"
                 )
-            event = events_by_identifier.get(native_identifier)
-            if event is None or event.native_call is None:
+            native_entry_id = source_message.get("native_entry_id")
+            if not isinstance(native_entry_id, str):
                 raise fail(
-                    f"source tool-output {name} {identifier!r} has no mapped tool-input"
+                    f"tool-output message {original_index} lacks native_entry_id; "
+                    "export it again with the current ch and prune it again"
                 )
-            if native_identifier in seen_identifiers:
-                raise fail(f"source repeats tool-output {native_identifier!r}")
-            seen_identifiers.add(native_identifier)
+            event = events_by_result_entry_id.get(native_entry_id)
+            if event is None or event.native_occurrence is None:
+                raise fail(
+                    f"source tool-output {name} {identifier!r} has no mapped native occurrence"
+                )
+            if native_entry_id in seen_result_entry_ids:
+                raise fail(f"source repeats native toolResult entry {native_entry_id!r}")
+            seen_result_entry_ids.add(native_entry_id)
+            if native_identifier != event.native_identifier:
+                raise fail(
+                    f"source tool-output occurrence {native_entry_id!r} changed toolCallId "
+                    f"from {event.native_identifier!r} to {native_identifier!r}"
+                )
             if not names_match(event.name, name):
                 raise fail(
-                    f"source tool-output {native_identifier!r} has name {name!r}, "
+                    f"source tool-output occurrence {native_entry_id!r} has name {name!r}, "
                     f"but its input has {event.name!r}"
                 )
-            result = results.get(native_identifier)
+            result = event.native_occurrence.result
             if result is None:
-                raise fail(
-                    f"native toolCall {native_identifier!r} has no toolResult"
-                )
-            native_entry_id = source_message.get("native_entry_id")
-            if not isinstance(native_entry_id, str) or result.identifier != native_entry_id:
-                raise fail(
-                    f"source tool-output message {original_index} has stale native_entry_id"
-                )
+                raise fail(f"native tool occurrence {event.native_occurrence.call.occurrence_key!r} has no toolResult")
             expected = normalize(output_text(block))[:100]
-            actual = normalize(native_result_text(result))[:100]
+            actual = normalize(native_result_text(result.entry))[:100]
             if expected and expected != actual:
                 raise fail(
                     f"tool-output content mismatch at source message {original_index}: "
@@ -795,33 +875,38 @@ def thinking_blocks(line: SessionLine) -> list[dict[str, object]]:
 def apply_tool_changes(
     active: list[SessionLine],
     events: list[SourceToolEvent],
-    calls: list[NativeToolCall],
-    results: dict[str, SessionLine],
+    occurrences: list[NativeToolOccurrence],
     original_thinking: dict[str, list[dict[str, object]]],
 ) -> tuple[list[SessionLine], int]:
     mapped = {
-        event.native_call.identifier: event
+        event.native_occurrence.call.occurrence_key: event
         for event in events
-        if event.native_call is not None
+        if event.native_occurrence is not None
     }
     removable_unmatched, unsafe_unmatched = unmatched_tool_calls(
         events,
-        calls,
-        results,
+        occurrences,
     )
     if unsafe_unmatched:
         rendered = [
-            f"{call.name} {call.identifier!r}" for call in unsafe_unmatched[:8]
+            f"{occurrence.call.name} {occurrence.call.occurrence_key!r}"
+            for occurrence in unsafe_unmatched[:8]
         ]
         raise fail(f"native tools are absent from the pruned source: {rendered}")
 
-    removed_call_ids = set(mapped) | {
-        call.identifier for call in removable_unmatched
+    removed_occurrence_keys = set(mapped) | {
+        occurrence.call.occurrence_key for occurrence in removable_unmatched
     }
     removed_entry_ids = {
-        result.identifier
-        for identifier, result in results.items()
-        if identifier in removed_call_ids and result.identifier is not None
+        occurrence.result.entry.identifier
+        for occurrence in occurrences
+        if occurrence.call.occurrence_key in removed_occurrence_keys
+        and occurrence.result is not None
+        and occurrence.result.entry.identifier is not None
+    }
+    occurrences_by_block_identity = {
+        id(occurrence.call.block): occurrence
+        for occurrence in occurrences
     }
 
     for line in active:
@@ -837,11 +922,14 @@ def apply_tool_changes(
             if not isinstance(block, dict) or block.get("type") != "toolCall":
                 changed_content.append(block)
                 continue
-            identifier = block.get("id")
-            if not isinstance(identifier, str) or identifier not in removed_call_ids:
+            occurrence = occurrences_by_block_identity.get(id(block))
+            if (
+                occurrence is None
+                or occurrence.call.occurrence_key not in removed_occurrence_keys
+            ):
                 changed_content.append(block)
                 continue
-            event = mapped.get(identifier)
+            event = mapped.get(occurrence.call.occurrence_key)
             if event is not None:
                 changed_content.extend(
                     {"type": "text", "text": replacement}
@@ -900,21 +988,23 @@ def verify_complete_reviewed_tail(
     active_tail: list[SessionLine],
     source_entry_ids: set[str],
     events: list[SourceToolEvent],
-    removable_unmatched: list[NativeToolCall],
-    results: dict[str, SessionLine],
+    removable_unmatched: list[NativeToolOccurrence],
 ) -> str:
     """Require the pruned source to account for every export-visible tail entry."""
     reviewed_entry_ids = set(source_entry_ids)
     for event in events:
-        result = results.get(event.native_identifier)
-        if result is not None and result.identifier is not None:
-            reviewed_entry_ids.add(result.identifier)
-    for call in removable_unmatched:
-        if call.entry.identifier is not None:
-            reviewed_entry_ids.add(call.entry.identifier)
-        result = results.get(call.identifier)
-        if result is not None and result.identifier is not None:
-            reviewed_entry_ids.add(result.identifier)
+        occurrence = event.native_occurrence
+        if (
+            occurrence is not None
+            and occurrence.result is not None
+            and occurrence.result.entry.identifier is not None
+        ):
+            reviewed_entry_ids.add(occurrence.result.entry.identifier)
+    for occurrence in removable_unmatched:
+        if occurrence.call.entry.identifier is not None:
+            reviewed_entry_ids.add(occurrence.call.entry.identifier)
+        if occurrence.result is not None and occurrence.result.entry.identifier is not None:
+            reviewed_entry_ids.add(occurrence.result.entry.identifier)
 
     visible_tail = [
         line.identifier
@@ -1002,8 +1092,6 @@ def validate_result(lines: list[str]) -> None:
     if len(roots) != 1:
         raise fail(f"output has {len(roots)} roots instead of one")
     previous_identifier: str | None = None
-    calls: set[str] = set()
-    results: set[str] = set()
     for entry in tree:
         if entry.get("parentId") != previous_identifier:
             raise fail(f"output chain breaks at entry {entry.get('id')!r}")
@@ -1011,28 +1099,17 @@ def validate_result(lines: list[str]) -> None:
         if not isinstance(identifier, str):
             raise fail("output tree entry has no string id")
         previous_identifier = identifier
-        if entry.get("type") != "message" or not isinstance(entry.get("message"), dict):
-            continue
-        message = entry["message"]
-        if message.get("role") == "toolResult":
-            tool_call_id = message.get("toolCallId")
-            if isinstance(tool_call_id, str):
-                results.add(tool_call_id)
-        elif message.get("role") == "assistant":
-            content = message.get("content", [])
-            if isinstance(content, list):
-                calls.update(
-                    block["id"]
-                    for block in content
-                    if isinstance(block, dict)
-                    and block.get("type") == "toolCall"
-                    and isinstance(block.get("id"), str)
-                )
-    if calls != results:
-        raise fail(
-            f"tool pairing is broken: {len(calls - results)} calls without results, "
-            f"{len(results - calls)} results without calls"
-        )
+    session_lines = [
+        SessionLine(lines[index + 1], entry)
+        for index, entry in enumerate(tree)
+    ]
+    unpaired = [
+        occurrence.call.occurrence_key
+        for occurrence in native_tools(session_lines)
+        if occurrence.result is None
+    ]
+    if unpaired:
+        raise fail(f"tool pairing is broken for call occurrences: {unpaired[:8]}")
 
 
 def next_backup_path(jsonl_path: Path) -> Path:
@@ -1070,13 +1147,34 @@ def apply_native_plan(
     compacted_messages = apply_compaction_plan.apply_plan(source_bytes, manifest)
     header, active = parse_session(session_path)
     boundary = resolve_tail_boundary(header, active, from_entry_id)
+    active_positions = {
+        line.identifier: index
+        for index, line in enumerate(active)
+        if line.identifier is not None
+    }
+    all_occurrences = native_tools(active)
+    split_occurrences = split_tool_occurrence_keys(
+        all_occurrences,
+        active_positions,
+        boundary.native_cutoff_index,
+    )
+    if split_occurrences:
+        raise fail(
+            "native boundary splits tool call/result pairs at call occurrences: "
+            f"{split_occurrences}"
+        )
     prefix = active[: boundary.native_cutoff_index + 1]
     active_tail = active[boundary.native_cutoff_index + 1 :]
     mapped_source_messages, source_entry_ids = validate_source_tail(
         source_messages,
         active_tail,
     )
-    calls, results = native_tools(active_tail)
+    occurrences = [
+        occurrence
+        for occurrence in all_occurrences
+        if active_positions[occurrence.call.entry.identifier]
+        > boundary.native_cutoff_index
+    ]
     original_thinking = {
         line.identifier: thinking_blocks(line)
         for line in active_tail
@@ -1085,16 +1183,16 @@ def apply_native_plan(
     events, final_prose_by_index = source_tool_events(
         source_messages, compacted_messages, manifest
     )
-    map_source_tools(events, calls)
-    verify_source_outputs(source_messages, events, results)
+    map_source_tools(events, occurrences)
+    verify_source_outputs(source_messages, events)
     removable_unmatched, unsafe_unmatched = unmatched_tool_calls(
         events,
-        calls,
-        results,
+        occurrences,
     )
     if unsafe_unmatched:
         rendered_unsafe = [
-            f"{call.name} {call.identifier!r}" for call in unsafe_unmatched[:8]
+            f"{occurrence.call.name} {occurrence.call.occurrence_key!r}"
+            for occurrence in unsafe_unmatched[:8]
         ]
         raise fail(f"native tools are absent from the pruned source: {rendered_unsafe}")
     source_through_entry_id = verify_complete_reviewed_tail(
@@ -1102,7 +1200,6 @@ def apply_native_plan(
         source_entry_ids,
         events,
         removable_unmatched,
-        results,
     )
     drop_messages = manifest.get("drop_messages", [])
     replace_messages = manifest.get("replace_messages", [])
@@ -1135,7 +1232,7 @@ def apply_native_plan(
         text_changed_indices,
     )
     tail_survivors, removed_entries = apply_tool_changes(
-        active_tail, events, calls, results, original_thinking
+        active_tail, events, occurrences, original_thinking
     )
     survivors = prefix + tail_survivors
     stats = {

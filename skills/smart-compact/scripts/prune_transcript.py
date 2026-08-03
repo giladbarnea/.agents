@@ -54,17 +54,6 @@ def after_original_index(
     return data[matches[0] + 1 :]
 
 
-def tool_identifiers(messages: list[dict[str, object]], block_type: str) -> set[str]:
-    return {
-        identifier
-        for message in messages
-        for block in message.get("content", [])
-        if isinstance(block, dict) and block.get("type") == block_type
-        for identifier in [block.get("native_tool_call_id")]
-        if isinstance(identifier, str)
-    }
-
-
 def native_tail(
     data: list[dict[str, object]],
     session_path: pathlib.Path,
@@ -77,6 +66,7 @@ def native_tail(
         active,
         from_entry_id,
     )
+    occurrences = transfer_to_pi_session.native_tools(active)
     positions = {
         line.identifier: index
         for index, line in enumerate(active)
@@ -105,24 +95,15 @@ def native_tail(
     ]
     if active_positions != sorted(active_positions):
         raise ValueError("Pi export messages do not follow native active-path order")
-    selected_entry_ids = {
-        message["native_entry_id"] for message in selected
-    }
-    prefix = [
-        message
-        for message in active_messages
-        if message["native_entry_id"] not in selected_entry_ids
-    ]
-    split_tool_ids = (
-        tool_identifiers(prefix, "tool-input")
-        & tool_identifiers(selected, "tool-output")
-    ) | (
-        tool_identifiers(prefix, "tool-output")
-        & tool_identifiers(selected, "tool-input")
+    split_occurrences = transfer_to_pi_session.split_tool_occurrence_keys(
+        occurrences,
+        positions,
+        boundary.native_cutoff_index,
     )
-    if split_tool_ids:
+    if split_occurrences:
         raise ValueError(
-            f"native boundary splits tool call/result pairs: {sorted(split_tool_ids)}"
+            "native boundary splits tool call/result pairs at call occurrences: "
+            f"{split_occurrences}"
         )
     return selected, boundary
 
