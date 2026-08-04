@@ -26,11 +26,11 @@ full_prompt="$(
     "$search_path" \
     "$query"
 )"
-pi_args=(--model openai-codex/gpt-5.6-luna --thinking medium --no-skills -np --no-extensions -e ~/.pi/agent/extensions/read-many-files/index.ts -e ~/.pi/agent/extensions/smart-truncation/index.ts -a --no-session)
+pi_args=(--model openai-codex/gpt-5.6-luna --thinking medium --no-skills -np --no-extensions -e ~/.pi/agent/extensions/read-many-files/index.ts -e ~/.pi/agent/extensions/smart-truncation/index.ts -e npm:@vanillagreen/pi-claude-bridge -a --no-session)
 
 if [[ $interactive = false ]]; then
   pi_args+=(--print)
 fi
 
-printf "[log] Launching ‘pi’ with a fast model prompted well with respect to ‘${search_path}’ and your query. Ignore process init warnings about not finding claude models — these are irrelevant. The search process can take a few long minutes, be patient. It will simply print its results to stdout when it’s done."
+printf "[log] Launching ‘pi’ with a fast model prompted well with respect to ‘${search_path}’ and your query. Ignore warnings (if you see any) about not finding claude models — these are irrelevant. The search process can take a few long minutes, be patient. It will simply print its results to stdout when it’s done."
 pi "${pi_args[@]}" "$full_prompt" 2>&1
