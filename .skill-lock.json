@@ -19,6 +19,15 @@
       "installedAt": "2026-06-11T12:54:16.205Z",
       "updatedAt": "2026-06-11T12:54:16.205Z"
     },
+    "gh-stack": {
+      "source": "github/gh-stack",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/github/gh-stack.git",
+      "skillPath": "skills/gh-stack/SKILL.md",
+      "skillFolderHash": "c95c8b5b4dd850f3fef007b304428f5684f2fb87",
+      "installedAt": "2026-08-04T12:33:12Z",
+      "updatedAt": "2026-08-04T12:33:12Z"
+    },
     "high-end-visual-design": {
       "source": "Leonxlnx/taste-skill",
       "sourceType": "github",
@@ -31,20 +40,5 @@
   },
   "dismissed": {
     "findSkillsPrompt": true
-  },
-  "lastSelectedAgents": [
-    "amp",
-    "antigravity",
-    "antigravity-cli",
-    "cline",
-    "codex",
-    "cursor",
-    "deepagents",
-    "gemini-cli",
-    "github-copilot",
-    "kimi-code-cli",
-    "opencode",
-    "warp",
-    "zed"
-  ]
+  }
 }
