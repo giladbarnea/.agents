@@ -37,7 +37,7 @@ Toy information vector examples include:
 - Every useful vector should have a clear epistemic state: current truth, validated capability, decision, constraint, open question, false claim, superseded claim, historical rationale, or raw evidence.
 - Preserve historical rationale only when it prevents future confusion or repeated mistakes.
 - When a claim's status cannot be established from the corpus, keep the uncertainty visible rather than guessing.
-- A few distinguished vectors never lose relevance, because they are global and permanent — the project's purpose, the durable rules agents work under. The vast majority of vector do lose relevance; controlled forgetting is covered below.
+- A few distinguished vectors never lose relevance, because they are global and permanent — the project's purpose, the durable rules agents work under. The vast majority of vectors do lose relevance; controlled forgetting is covered below.
 
 **Misinformation is worse than missing information. Failure states to avoid:**
 - A proposal is a proposal. It must not quietly read like a decision.
@@ -158,7 +158,7 @@ Small illustrations, to generalize from rather than copy:
 
 **Examples of what ages out; generalize, this is not a recipe:**
 
-- A month-old "path X proved a dead end, so we chose path Y." That mattered a lot while we were still in the maze. Two months on, subsequent decision were built on having walked path Y, so it is ambiently apparent. Remembering that “X = dead end” might still help path Y click -> decay, don’t remove.
+- A month-old "path X proved a dead end, so we chose path Y." That mattered a lot while we were still in the maze. Two months on, subsequent decisions were built on having walked path Y, so it is ambiently apparent. Remembering that “X = dead end” might still help path Y click -> decay, don’t remove.
 - "Windows Vista used to be called Longhorn before the release." Good to know before or at the time of release. A while after the release, it affects no decision and no agent run. It’s just noise -> remove. 
 - A hypothesis that turned out wrong and was superseded by a truer one. Recently wrong, it explains why the new decision was taken; long since wrong, it is only noise -> remove.
 
@@ -169,7 +169,7 @@ A vector can be decayed at most once. There is no second: past some irrelevancy 
 Decay is not a disclaimer placed beside stale text. It means giving obsolete information less weight, attention, and real estate than an ordinary current vector. When even a small footprint is more than the vector is worth, remove it instead.
 When history remains valuable, move it off the current-state surface and compress it to the reason future work still needs.
 
-History earns its place when it explains a current constraint, prevents a likely repeated mistake, or preserves meaningful accountability. It does not survive merely because it once existed. Let project complexity set memory complexity: a small early project usually benefits from direct deletion, since there is little value in preserving the ancestry of every discarded thought, while a mature project may need more decision history, because surprising constraints, reversals, and institutional precedent affect future work.
+History earns its place when it explains a current constraint, prevents a likely repeated mistake, or preserves meaningful accountability. It does not survive merely because it once existed. Let project complexity set memory complexity: a small early project usually benefits from direct removal, since there is little value in preserving the ancestry of every discarded thought, while a mature project may need more decision history, because surprising constraints, reversals, and institutional precedent affect future work.
 
 **Some vectors must never be forgotten.** Durable battle scars and permanent operating context — "verify IAP fails closed before a data-bearing deploy" — are annotated `forget::never` with the user's consent and hold full weight indefinitely. Never decay or remove one. A vector that merely *looks* permanently relevant but carries no such marker is not yours to exempt: surface it to the user and let them decide.
 
@@ -177,7 +177,7 @@ History earns its place when it explains a current constraint, prevents a likely
 
 A yelling contest begins when an agent wants to record a fresh vector, finds several pre-existing vectors that contradict it, and tries to overpower them with more detail, heavier emphasis, repetition, bold text, or all-caps. The corpus quickly becomes a room full of teenagers, each talking louder to become the center of attention.
 
-Do not make the fresh vector louder, and do not out-repeat the old ones. Clear the space first: delete false claims, replace superseded present-state claims, compress valuable history into its proper historical home, and remove obsolete prominence. Then write the fresh vector calmly, at the ordinary length, detail, and emphasis it deserves — as if it had never had to compete.
+Do not make the fresh vector louder, and do not out-repeat the old ones. Clear the space first: remove false claims, replace superseded present-state claims, compress valuable history into its proper historical home, and remove obsolete prominence. Then write the fresh vector calmly, at the ordinary length, detail, and emphasis it deserves — as if it had never had to compete.
 
 ## Evidence remains as narrow as the test  <!-- this section should be shortened. less text -->
 
@@ -265,7 +265,7 @@ Maintenance is semantic before it is editorial. Decide what the project should c
 
 Prefer direct observation and explicit user decisions over earlier proposals or agent inferences. Preserve the boundary of each validation. When two credible sources still conflict and the resolution would materially change the project, surface the conflict to the user instead of choosing the more convenient story.
 
-Decide per stale vector: delete, decay, or mark `forget::never` — the last is rare, and belongs to the user. Concretely:
+Decide per stale vector: remove, decay, or mark `forget::never` — the last is rare, and belongs to the user. Concretely:
 
 1. Remove a false claim.
 2. Replace a superseded present-state claim.
@@ -297,4 +297,4 @@ For a large memory surface, delegate bounded reading or comparison to subagents,
 
 "Whole body of knowledge" = controlled-forgetting at a sub-corpus scale, not individual docs.
 
-When an entire plan, approach, or design era has been superseded and its documentation must be removed as a stratum rather than edited item by item, that is a distinct procedure — itemize across the affected docs, collapse near-duplicates so each idea has exactly one home, then delete or salvage against an explicit criterion. It is covered by the separate `deprecating-knowledge-body` reference, which is loaded only on explicit instruction.
+When an entire plan, approach, or design era has been superseded and its documentation must be removed as a stratum rather than edited item by item, that is a distinct procedure — itemize across the affected docs, collapse near-duplicates so each idea has exactly one home, then remove or salvage against an explicit criterion. It is covered by the separate `deprecating-knowledge-body` reference, which is loaded only on explicit instruction.
