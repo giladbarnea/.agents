@@ -13,12 +13,14 @@ import sys
 import tempfile
 import unittest
 
-import analyze_transcript_json
+TOOLKIT_ROOT = pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(TOOLKIT_ROOT / "scripts"))
+sys.path.insert(0, str(TOOLKIT_ROOT / "smart-compact" / "scripts"))
+
 import apply_compaction_plan
 import compile_annotations
 import generate_compaction_plan
 import prune_transcript
-import render_review_view
 import transfer_to_pi_session
 
 
@@ -176,10 +178,6 @@ skeletons:
         ]
 
         pruned = prune_transcript.prune(source)
-        diagnostics = analyze_transcript_json.build_report(
-            [analyze_transcript_json.Message(1, "assistant", "assistant-response", mixed)], 8
-        )
-
         self.assertEqual([item["original_index"] for item in pruned], [1], f"Got: {pruned!r}")
         self.assertEqual(
             pruned[0]["content"],
@@ -193,7 +191,6 @@ skeletons:
             ],
             f"Block order changed: {pruned!r}",
         )
-        self.assertEqual(diagnostics["files"]["unique_affected_files"], 3, f"Got: {diagnostics!r}")
 
     def test_pruner_drops_explicit_empty_orphan_and_audits_it(self) -> None:
         source = [
@@ -437,160 +434,8 @@ skeletons:
             f"The transcript and native boundary contracts disagree: {transcript_tail!r}, {native_tail!r}",
         )
 
-    def test_review_view_elides_only_identical_skill_bodies(self) -> None:
-        shared_skill = (
-            '<skill name="in-html" location="/skills/in-html/SKILL.md">'
-            "Shared decision-board instructions"
-            "</skill>"
-        )
-        changed_skill = (
-            '<skill name="in-html" location="/skills/in-html/SKILL.md">'
-            "Changed decision-board instructions"
-            "</skill>"
-        )
-        source = [
-            message(94, "user", [shared_skill + "\n\nread the decision-board reference"]),
-            message(100, "user", [shared_skill + "\n\nmake the decision board"]),
-            message(101, "user", [changed_skill + "\n\nuse the changed skill"]),
-        ]
 
-        rendered = render_review_view.render(source)
 
-        self.assertEqual(
-            rendered.count(shared_skill),
-            1,
-            f"The identical skill body should be rendered once. Got:\n{rendered}",
-        )
-        self.assertIn(
-            '<skill-body-elided duplicate-of="94"/>',
-            rendered,
-            f"The repeated invocation was not marked as elided. Got:\n{rendered}",
-        )
-        self.assertIn(
-            changed_skill,
-            rendered,
-            f"A nonidentical same-named skill must remain intact. Got:\n{rendered}",
-        )
-        instructions = [
-            "read the decision-board reference",
-            "make the decision board",
-            "use the changed skill",
-        ]
-        positions = [rendered.find(instruction) for instruction in instructions]
-        self.assertTrue(
-            all(position >= 0 for position in positions),
-            f"Every user instruction must survive. Got positions {positions}:\n{rendered}",
-        )
-        self.assertEqual(
-            positions,
-            sorted(positions),
-            f"User instructions must retain chronological order. Got:\n{rendered}",
-        )
-
-    def test_review_view_renders_compaction_as_a_boundary(self) -> None:
-        summary = "This summary captures work done before the most recent messages."
-        source = [
-            message(78, "assistant", ["Before compaction"]),
-            {
-                "type": "compaction",
-                "role": "user",
-                "original_index": 79,
-                "content": [summary],
-            },
-            message(80, "assistant", ["After compaction"]),
-        ]
-
-        rendered = render_review_view.render(source)
-
-        expected_fragments = [
-            "## Assistant [i=78]",
-            "## Compaction boundary [i=79]",
-            summary,
-            "## Assistant [i=80]",
-        ]
-        positions = [rendered.find(fragment) for fragment in expected_fragments]
-        self.assertTrue(
-            all(position >= 0 for position in positions),
-            f"The boundary and accessible summary must all be present. Got {positions}:\n{rendered}",
-        )
-        self.assertEqual(
-            positions,
-            sorted(positions),
-            f"The compaction boundary must preserve chronology. Got:\n{rendered}",
-        )
-        self.assertNotIn(
-            "## User [i=79]",
-            rendered,
-            f"A compaction must not masquerade as a user turn. Got:\n{rendered}",
-        )
-
-    def test_review_view_pairs_tools_by_id_and_flags_orphans(self) -> None:
-        source = [
-            message(1, "assistant", [
-                {"type": "tool-input", "name": "Bash", "id": "call-a", "command": "echo A"},
-                {"type": "tool-input", "name": "Bash", "id": "call-b", "command": "echo B"},
-                {"type": "tool-input", "name": "Bash", "id": "input-only", "command": "echo orphan"},
-            ]),
-            message(2, "user", [{
-                "type": "tool-output",
-                "name": "Bash",
-                "id": "call-b",
-                "content": "B result arrived first",
-            }]),
-            message(3, "user", [{
-                "type": "tool-output",
-                "name": "Bash",
-                "id": "call-a",
-                "content": "A result arrived second",
-            }]),
-            message(4, "user", [{
-                "type": "tool-output",
-                "name": "Bash",
-                "id": "output-only",
-                "content": "stray result",
-            }]),
-        ]
-
-        rendered = render_review_view.render(source)
-
-        headings = [
-            "### Tool event `call-a` — paired",
-            "### Tool event `call-b` — paired",
-            "### Tool event `input-only` — unmatched input",
-            "### Tool event `output-only` — unmatched output",
-        ]
-        positions = [rendered.find(heading) for heading in headings]
-        self.assertTrue(
-            all(position >= 0 for position in positions),
-            f"Every paired or unmatched event must be explicit. Got {positions}:\n{rendered}",
-        )
-        call_a_section = rendered[positions[0] : positions[1]]
-        call_b_section = rendered[positions[1] : positions[2]]
-        self.assertIn(
-            "A result arrived second",
-            call_a_section,
-            f"call-a was not paired with its own result. Got:\n{call_a_section}",
-        )
-        self.assertNotIn(
-            "B result arrived first",
-            call_a_section,
-            f"call-a was paired by proximity instead of ID. Got:\n{call_a_section}",
-        )
-        self.assertIn(
-            "B result arrived first",
-            call_b_section,
-            f"call-b was not paired with its own result. Got:\n{call_b_section}",
-        )
-        self.assertEqual(
-            rendered.count("A result arrived second"),
-            1,
-            f"A paired output must be rendered exactly once. Got:\n{rendered}",
-        )
-        self.assertEqual(
-            rendered.count("B result arrived first"),
-            1,
-            f"A paired output must be rendered exactly once. Got:\n{rendered}",
-        )
 
     def test_manifest_replaces_by_stable_index_and_builds_footer(self) -> None:
         source = [
@@ -1260,7 +1105,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(pathlib.Path(__file__).with_name("transfer_to_pi_session.py")),
+                    str(TOOLKIT_ROOT / "scripts" / "transfer_to_pi_session.py"),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
@@ -1394,7 +1239,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(pathlib.Path(__file__).with_name("transfer_to_pi_session.py")),
+                    str(TOOLKIT_ROOT / "scripts" / "transfer_to_pi_session.py"),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
@@ -1409,7 +1254,7 @@ skeletons:
             goldload = subprocess.run(
                 [
                     "node",
-                    str(pathlib.Path(__file__).with_name("pi-goldload.mjs")),
+                    str(TOOLKIT_ROOT / "scripts" / "pi-goldload.mjs"),
                     str(session_path),
                 ],
                 check=False,
@@ -1515,7 +1360,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(pathlib.Path(__file__).with_name("transfer_to_pi_session.py")),
+                    str(TOOLKIT_ROOT / "scripts" / "transfer_to_pi_session.py"),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
@@ -1604,7 +1449,7 @@ skeletons:
             goldload = subprocess.run(
                 [
                     "node",
-                    str(pathlib.Path(__file__).with_name("pi-goldload.mjs")),
+                    str(TOOLKIT_ROOT / "scripts" / "pi-goldload.mjs"),
                     str(session_path),
                 ],
                 check=False,
@@ -1854,7 +1699,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(pathlib.Path(__file__).with_name("transfer_to_pi_session.py")),
+                    str(TOOLKIT_ROOT / "scripts" / "transfer_to_pi_session.py"),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
@@ -1983,7 +1828,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(pathlib.Path(__file__).with_name("transfer_to_pi_session.py")),
+                    str(TOOLKIT_ROOT / "scripts" / "transfer_to_pi_session.py"),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
@@ -2151,7 +1996,7 @@ skeletons:
             goldload = subprocess.run(
                 [
                     "node",
-                    str(pathlib.Path(__file__).with_name("pi-goldload.mjs")),
+                    str(TOOLKIT_ROOT / "scripts" / "pi-goldload.mjs"),
                     str(session_path),
                 ],
                 check=False,
@@ -2305,7 +2150,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(pathlib.Path(__file__).with_name("transfer_to_pi_session.py")),
+                    str(TOOLKIT_ROOT / "scripts" / "transfer_to_pi_session.py"),
                     str(source_path),
                     str(plan_path),
                     str(session_path),

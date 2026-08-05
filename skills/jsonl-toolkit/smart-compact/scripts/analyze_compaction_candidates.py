@@ -13,6 +13,7 @@ import dataclasses
 import pathlib
 import re
 import sys
+from collections.abc import Callable
 
 import yaml
 
@@ -101,11 +102,9 @@ def is_scratchpad_path(path: str) -> bool:
 
 def collect_snippets(
     messages: list[analyze_transcript_json.Message],
-    predicate: object,
+    predicate: Callable[[analyze_transcript_json.Message], bool],
 ) -> list[IndexedSnippet]:
     """Collect indexed excerpts from messages accepted by a predicate."""
-    if not callable(predicate):
-        raise TypeError("predicate must be callable")
     return [
         IndexedSnippet(
             message.index,

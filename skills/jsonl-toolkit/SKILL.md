@@ -4,146 +4,159 @@ description: Tools and workflows for inspecting large JSONL files and AI session
 last_updated: 2026-08-05
 ---
 
-Use this skill for large JSONL files, exported AI transcripts, and native Pi session files.
+Use this skill to inspect, search, summarize, or transform large JSONL files without loading unwieldy lines into the terminal.
 
-The parent toolkit makes no smart-compaction decisions. Load [`smart-compact/SKILL.md`](smart-compact/SKILL.md) only when the task is session compaction.
+The toolkit also has specialized support for AI session collections, exported transcripts, and native Pi sessions.
 
-## Choose the correct file contract first
+Load [`smart-compact/SKILL.md`](smart-compact/SKILL.md) only when the task is session compaction.
 
-The toolkit handles two related formats:
+## Identify the file format
 
-1. Native session files use one JSON object per line and end in `.jsonl`.
-2. `ch -f json` exports use one top-level JSON array and usually end in `.json`.
+The toolkit handles three formats:
 
-Do not pass one format to a script that expects the other.
+1. Ordinary JSONL contains one JSON value per line. Its schema can be arbitrary.
+2. A native AI session is JSONL with a provider-specific session schema.
+3. An exported transcript is usually one top-level JSON array stored in a `.json` file.
 
-## Sample huge JSONL lines without flooding the terminal
+Do not use JSON-array commands on JSONL. Avoid commands that slurp a large JSONL file into memory.
 
-Use `scripts/rgjsonl.sh` when ordinary `rg` prints hundreds of kilobytes per matching line.
+When the format is unknown, inspect only a bounded prefix first:
 
 ```bash
-scripts/rgjsonl.sh session.jsonl '"toolName":"Bash"'
-scripts/rgjsonl.sh session.jsonl query='"role":"user"' span=40:120 rows=1
-scripts/rgjsonl.sh session.jsonl query=162 200 1 -m5
+scripts/filestats.sh path/to/file
+head -c 300 path/to/file
 ```
 
-The script finds a literal anchor through PCRE2. It prints a bounded character window and clipped context rows.
+Then choose only the sections below that match the file and task.
+
+## Inspect any large JSONL file
+
+Start by measuring the file:
+
+```bash
+scripts/filestats.sh data.jsonl
+```
+
+The report includes bytes, lines, words, and token estimates. It also accepts ordinary text and binary files.
+
+Inspect the first few object shapes without printing full values:
+
+```bash
+jq -c 'keys_unsorted' data.jsonl | head -20
+```
+
+Count a known discriminator when the schema has one:
+
+```bash
+jq -r '.type // "NO_TYPE"' data.jsonl | sort | uniq -c | sort -nr
+```
+
+Use streaming processing for aggregate work. In Python, parse and process one line at a time rather than building one list of every object.
+
+## Search huge JSONL lines safely
+
+Plain `rg` can print hundreds of kilobytes for one matching line. Use `scripts/rgjsonl.sh` to print a bounded window around a literal match.
+
+```bash
+scripts/rgjsonl.sh data.jsonl 'search text'
+scripts/rgjsonl.sh data.jsonl query='"role":"user"' span=40:120 rows=1
+scripts/rgjsonl.sh data.jsonl query=162 200 1 -m5
+```
+
+The script uses PCRE2 literal quoting. It clips match and context lines to the requested width.
 
 Use `query=TEXT` when the query looks like a number or an existing path.
 
-## Measure files before choosing an inspection strategy
-
-```bash
-scripts/filestats.sh path/to/file.jsonl path/to/export.json
-```
-
-The report includes bytes, lines, words, and token estimates. It also handles arbitrary text and binary files.
-
 ## Probe collections of session JSONL files
 
-Load `scripts/stats_toolkit.py` in IPython when the task spans many sessions.
+Load `scripts/stats_toolkit.py` in IPython when the task spans many AI sessions.
 
-Its workflow has five phases:
+Its functions support:
 
-1. Probe unknown schemas without printing private content.
-2. Collect per-session size, line, role, project, and entry-type statistics.
-3. Filter and inspect distributions.
-4. Label sessions through a selected Pi model when structure cannot answer the question.
-5. Delete selected paths only after a dry-run.
+- Schema probes that omit content values
+- Entry-type counts
+- Per-session size, line, role, project, and modification statistics
+- Collection filtering and distributions
+- Optional model-based session labels
+- Dry-run deletion of selected paths
 
-The module runs nothing at import time.
+The module runs nothing at import time. Start with `probe_schema`, `probe_type_counts`, or `probe_sample` when the provider schema is unknown.
 
-## Export and parse supported AI sessions with `ch`
+## Work with an exported AI transcript
+
+A `ch -f json` export is a JSON array, not JSONL.
+
+Export a supported session with:
 
 ```bash
 ch <session-id> -t:s -f json > transcription.json
 ch <session-id> -t:s > transcription.md
 ```
 
-Treat the structured JSON as the source of truth.
-
-Convert in either direction with:
+Treat the structured JSON as the source of truth. Convert between the structured export and rendered Markdown with:
 
 ```bash
 ch parse transcription.json > transcription.md
 ch parse -f json transcription.md > transcription.json
 ```
 
-For Pi exports, `ch -f json` adds native provenance:
-
-- Messages carry `native_entry_id`.
-- Tool inputs carry `native_tool_call_id` and `native_content_index`.
-- Tool outputs carry `native_tool_call_id`.
-
-`ch parse` accepts these JSON-only fields and omits them from XML output.
-
 A Markdown round trip can merge adjacent text blocks and normalize timestamp precision. Compare rendered Markdown rather than raw JSON bytes.
 
-## Analyze an exported transcript without compaction assumptions
+Analyze transcript structure with:
 
 ```bash
 uv run --script scripts/analyze_transcript_json.py transcription.json
 ```
 
-The report includes:
+The report covers messages, roles, tool pairing, failures, output indices, repeated operations, file touches, and validation commands.
 
-- Message and role counts
-- Tool-call pairing and failures
-- Tool-output indices
-- Repeated tools and duplicate Bash commands
-- File touches, repeated reads, and repeated mutations
-- Build, lint, and test command runs
-
-The analyzer uses deterministic structure and configured error markers. Read source content when semantic conclusions matter.
-
-## Render a chronological transcript review
+Render a chronological review with:
 
 ```bash
 uv run --script scripts/render_transcript_review.py transcription.json > review.md
 ```
 
-The renderer:
+The renderer preserves chronology, pairs tools by exact ID, flags unmatched events, and elides only byte-identical repeated skill bodies.
 
-- Preserves message and prose order
-- Pairs tool inputs and outputs by exact ID
-- Flags unmatched calls and results
-- Emits repeated skill bodies once while preserving each invocation instruction
-- Labels native compaction entries as boundaries
+## Work with a native Pi session
 
-## Work with native Pi session trees through one parent module
+Read [`references/pi-session-jsonl.md`](references/pi-session-jsonl.md) before changing a native Pi session.
 
-Read [`references/pi-session-jsonl.md`](references/pi-session-jsonl.md) before changing a native Pi file.
+Use `scripts/pi_session.py` for session resolution, JSONL loading, active-path extraction, identity work, and loader checks.
 
-Use `scripts/pi_session.py` for:
-
-- Session ID and path resolution
-- Native JSONL loading
-- Active-path extraction
-- Session ID audits and rewrites
-- New session path generation
-- Pi loader and `ch` discovery checks
-
-Run Pi's own loader directly with:
+Run Pi's own loader with:
 
 ```bash
 node scripts/pi-goldload.mjs session.jsonl
 ```
 
-## Use stable identities before transforming data
+A current Pi transcript export includes exact native provenance:
 
-Back up a source before an in-place transformation:
+- Messages have `native_entry_id`.
+- Tool inputs have `native_tool_call_id` and `native_content_index`.
+- Tool outputs have `native_tool_call_id`.
+
+Keep these fields when work must map an exported transcript back to native session entries.
+
+## Transform data through stable identities
+
+Back up a file before changing it in place:
 
 ```bash
-cp transcription.json transcription.backup.json
+cp source.jsonl source.backup.jsonl
 ```
 
-Use a stable identifier such as `original_index`, `native_entry_id`, or an exact tool occurrence. Do not use a shifting array position after removals.
+Address records through stable identifiers rather than positions that shift after removal. Transcript examples include `original_index`, `native_entry_id`, and exact tool occurrences.
 
-Bind a transformation plan to the exact source checksum when stale decisions could corrupt output.
+When decisions are stored separately from their source, bind them to the source checksum. Reject stale decisions before writing.
 
-## Useful inspection recipes
+After a transformation, compare stable identifier sets and count remaining record or block types. This reveals unintended removals and residues without comparing full payloads.
 
-A flat inventory reveals message shape before content analysis:
+## JSON-array inspection recipes
+
+These commands apply to exported transcript arrays, not JSONL.
+
+Print a flat message inventory:
 
 ```bash
 jq -r '.[] | "\(.original_index) | \(.type) | \(.role) | \(if .content[0] | type == "object" then .content[0].type + " " + (.content[0].name // "") else "text" end)"' transcription.json
@@ -155,27 +168,11 @@ Find messages with unusually many content blocks:
 jq '[.[] | {index: .original_index, blocks: (.content | length)}] | sort_by(-.blocks) | .[0:10]' transcription.json
 ```
 
-Compare stable index sets before and after a transformation:
+Compare stable indices before and after a transformation:
 
 ```python
 before_indices = {message["original_index"] for message in before}
 after_indices = {message["original_index"] for message in after}
 removed_indices = sorted(before_indices - after_indices)
 added_indices = sorted(after_indices - before_indices)
-```
-
-Count remaining block types after each transformation:
-
-```python
-from collections import Counter
-
-block_types = Counter()
-for message in data:
-    for block in message.get("content", []):
-        if isinstance(block, str):
-            block_types["text"] += 1
-            continue
-        block_types[f'{block.get("type", "?")}:{block.get("name", "?")}'] += 1
-
-print(block_types.most_common())
 ```
