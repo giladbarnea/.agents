@@ -13,6 +13,9 @@ import pathlib
 import sys
 import xml.etree.ElementTree
 
+PARENT_SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "scripts"
+sys.path.insert(0, str(PARENT_SCRIPTS))
+
 import transcript_common
 
 TOOL_BLOCK_TYPES = frozenset({"tool-input", "tool-output"})

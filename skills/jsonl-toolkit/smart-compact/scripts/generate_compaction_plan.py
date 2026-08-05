@@ -23,6 +23,9 @@ import re
 import sys
 import xml.sax.saxutils
 
+PARENT_SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "scripts"
+sys.path.insert(0, str(PARENT_SCRIPTS))
+
 import apply_compaction_plan
 import transcript_common
 

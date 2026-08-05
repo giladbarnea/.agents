@@ -3,7 +3,7 @@
 # requires-python = "==3.12.*"
 # dependencies = []
 # ///
-"""Render a structured transcript for semantic compaction review."""
+"""Render a structured transcript as chronological Markdown for review."""
 
 import argparse
 import json

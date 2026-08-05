@@ -15,6 +15,9 @@ import json
 import pathlib
 import sys
 
+PARENT_SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "scripts"
+sys.path.insert(0, str(PARENT_SCRIPTS))
+
 import transcript_common
 import transfer_to_pi_session
 

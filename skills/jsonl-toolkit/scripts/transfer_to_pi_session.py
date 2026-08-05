@@ -21,9 +21,13 @@ import json
 import os
 import re
 import secrets
+import sys
 import tempfile
 import xml.etree.ElementTree
 from pathlib import Path
+
+SMART_COMPACT_SCRIPTS = Path(__file__).resolve().parents[1] / "smart-compact" / "scripts"
+sys.path.insert(0, str(SMART_COMPACT_SCRIPTS))
 
 import apply_compaction_plan
 import transcript_common

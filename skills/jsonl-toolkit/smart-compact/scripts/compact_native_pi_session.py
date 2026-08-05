@@ -8,31 +8,18 @@
 Usage:
     uv run compact_native_pi_session.py <source.jsonl> [--decisions decisions.json]
 
-Produces a NEW compacted .jsonl alongside the source (never modifies the original).
-Prints census, transform stats, and verification to stderr.
-
-The decisions file is optional. If omitted, defaults are used:
-    {
-      "drop_custom_types": ["pi-time-sense"],
-      "drop_tool_units": ["todo"],
-      "keep_thinking": true,
-      "shrink_always": ["read", "read_many_files", "write"],
-      "shrink_threshold": 800,
-      "drop_entry_ids": []
-    }
-When provided, fields override defaults selectively; unmentioned fields keep defaults.
+Produces a new compacted JSONL file beside the source. The source stays unchanged.
 """
+
 import json
-import os
-import secrets
-import subprocess
 import sys
 import time
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Defaults
-# ---------------------------------------------------------------------------
+PARENT_SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
+sys.path.insert(0, str(PARENT_SCRIPTS))
+
+import pi_session
 
 DEFAULTS = {
     "drop_custom_types": ["pi-time-sense"],
@@ -43,48 +30,7 @@ DEFAULTS = {
     "drop_entry_ids": [],
 }
 
-PI_SOURCE = Path("/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent")
-GOLDLOAD = Path(__file__).parent / "pi-goldload.mjs"
-
-
-def eprint(*args, **kw):
-    print(*args, file=sys.stderr, **kw)
-
-
-def uuidv7() -> str:
-    ms = int(time.time() * 1000)
-    b = bytearray(ms.to_bytes(6, "big") + secrets.token_bytes(10))
-    b[6] = (b[6] & 0x0F) | 0x70
-    b[8] = (b[8] & 0x3F) | 0x80
-    h = b.hex()
-    return f"{h[0:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}"
-
-
-# ---------------------------------------------------------------------------
-# Load + active-path extraction
-# ---------------------------------------------------------------------------
-
-def load_entries(path: Path) -> list[dict]:
-    with open(path, encoding="utf-8") as f:
-        return [json.loads(line) for line in f if line.strip()]
-
-
-def extract_active_path(entries: list[dict]) -> tuple[dict, list[dict]]:
-    """Returns (header, active_path) where active_path is root->leaf order."""
-    header = entries[0]
-    assert header.get("type") == "session", "line 1 is not a session header"
-    tree = entries[1:]
-    by_id = {e["id"]: e for e in tree if "id" in e}
-    path, seen, cur = [], set(), tree[-1]
-    while cur is not None:
-        assert cur["id"] not in seen, f"cycle at {cur['id']}"
-        path.append(cur)
-        seen.add(cur["id"])
-        pid = cur.get("parentId")
-        cur = by_id.get(pid) if pid else None
-    path.reverse()
-    assert path[0].get("parentId") is None, "active root has non-null parentId"
-    return header, path
+eprint = pi_session.eprint
 
 
 # ---------------------------------------------------------------------------
@@ -329,151 +275,6 @@ def verify(source_active_snapshot: list[dict], header: dict, survivors: list[dic
     return ok
 
 
-def gold_standard(output_path: Path):
-    """Run pi-goldload.mjs via node if available."""
-    mjs = GOLDLOAD if GOLDLOAD.exists() else Path(__file__).parent / "pi-goldload.mjs"
-    if not mjs.exists():
-        eprint("  gold-standard: SKIPPED (pi-goldload.mjs not found)")
-        return
-    if not PI_SOURCE.exists():
-        eprint("  gold-standard: SKIPPED (pi source not at expected path)")
-        return
-    try:
-        r = subprocess.run(
-            ["node", str(mjs), str(output_path)],
-            capture_output=True, text=True, timeout=30
-        )
-        for line in r.stdout.strip().splitlines():
-            eprint(f"  gold-standard: {line}")
-        if r.returncode != 0:
-            eprint(f"  gold-standard: FAILED (exit {r.returncode})")
-            if r.stderr:
-                eprint(f"    {r.stderr[:200]}")
-    except FileNotFoundError:
-        eprint("  gold-standard: SKIPPED (node not found)")
-    except subprocess.TimeoutExpired:
-        eprint("  gold-standard: SKIPPED (timeout)")
-
-
-def discovery_smoke(new_id: str):
-    """Verify the new session is discoverable via ch."""
-    try:
-        r = subprocess.run(
-            ["ch", new_id, "-l"],
-            capture_output=True, text=True, timeout=15
-        )
-        if r.returncode == 0 and "history_path" in r.stdout:
-            eprint(f"  discovery (ch): PASS — session {new_id[:12]}… resolves")
-        else:
-            eprint(f"  discovery (ch): FAIL — ch could not resolve {new_id}")
-            if r.stderr:
-                eprint(f"    {r.stderr[:150]}")
-    except FileNotFoundError:
-        eprint("  discovery (ch): SKIPPED (ch not found)")
-    except subprocess.TimeoutExpired:
-        eprint("  discovery (ch): SKIPPED (timeout)")
-
-
-# ---------------------------------------------------------------------------
-# Bootstrap (new resumable copy)
-# ---------------------------------------------------------------------------
-
-def resolve_session(arg: str) -> Path:
-    """Resolve a session id or file path to an actual .jsonl path.
-
-    Accepts:
-      - A direct file path (returned as-is if it exists)
-      - A session id (glob-matched as *_<id>.jsonl under sessions dirs,
-        or matched by reading line-1 header ids)
-    """
-    p = Path(arg)
-    if p.exists() and p.suffix == ".jsonl":
-        return p.resolve()
-
-    # Treat as session id — search known session dirs
-    session_id = arg
-    candidates: list[Path] = []
-    for sessions_root in _sessions_roots():
-        candidates.extend(sessions_root.rglob(f"*_{session_id}.jsonl"))
-    if candidates:
-        return candidates[0].resolve()
-
-    # Fallback: scan headers
-    for sessions_root in _sessions_roots():
-        for jsonl in sessions_root.rglob("*.jsonl"):
-            try:
-                with open(jsonl) as f:
-                    first = f.readline()
-                header = json.loads(first)
-                if header.get("id") == session_id:
-                    return jsonl.resolve()
-            except (json.JSONDecodeError, OSError):
-                continue
-
-    sys.exit(f"Could not resolve session: {arg}")
-
-
-def _sessions_roots() -> list[Path]:
-    roots = []
-    # ~/.pi/agent/sessions (pi convention)
-    pi_sessions = Path.home() / ".pi" / "agent" / "sessions"
-    if pi_sessions.is_dir():
-        roots.append(pi_sessions)
-    # ~/.claude/projects (Claude Code convention)
-    cc_projects = Path.home() / ".claude" / "projects"
-    if cc_projects.is_dir():
-        roots.append(cc_projects)
-    return roots
-
-
-def content_id_audit(entries: list[dict], old_id: str, active_ids: set[str]) -> dict:
-    """Count occurrences of old_id in message/custom content (not structural fields)."""
-    total = 0
-    on_active = 0
-    locations: list[str] = []
-    for e in entries[1:]:  # skip header
-        raw = json.dumps(e, ensure_ascii=False)
-        # Don't count structural id/parentId fields
-        structural_hits = (1 if e.get("id") == old_id else 0) + (1 if e.get("parentId") == old_id else 0)
-        content_hits = raw.count(old_id) - structural_hits
-        if content_hits > 0:
-            total += content_hits
-            is_active = e.get("id") in active_ids if "id" in e else False
-            if is_active:
-                on_active += content_hits
-            locations.append(f"{e.get('id','?')} ({'active' if is_active else 'off-path'}): {content_hits}")
-    return {"total": total, "on_active_path": on_active, "off_path": total - on_active, "locations": locations}
-
-
-def rewrite_content_id(survivors: list[dict], old_id: str, new_id: str) -> int:
-    """Replace old_id with new_id inside message/custom content text. Returns count of replacements."""
-    count = 0
-    for e in survivors:
-        if e.get("type") == "message":
-            for blk in e["message"].get("content", []):
-                if isinstance(blk, dict) and blk.get("type") == "text" and old_id in blk.get("text", ""):
-                    blk["text"] = blk["text"].replace(old_id, new_id)
-                    count += 1
-        elif e.get("type") in ("custom", "custom_message"):
-            data = e.get("data", {})
-            if isinstance(data, dict):
-                raw = json.dumps(data, ensure_ascii=False)
-                if old_id in raw:
-                    e["data"] = json.loads(raw.replace(old_id, new_id))
-                    count += 1
-    return count
-
-
-def bootstrap(source: Path) -> tuple[Path, str]:
-    """Create a new session file with a fresh uuidv7 id. Returns (new_path, new_id)."""
-    new_id = uuidv7()
-    now = time.time()
-    iso = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(now)) + f".{int((now % 1) * 1000):03d}Z"
-    file_ts = iso.replace(":", "-").replace(".", "-")
-    new_path = source.parent / f"{file_ts}_{new_id}.jsonl"
-    return new_path, new_id
-
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -491,7 +292,7 @@ def main():
                         help="with --dry-run: print per-entry active-path summary with action annotations")
     args = parser.parse_args()
 
-    source = resolve_session(args.source)
+    source = pi_session.resolve_session(args.source)
     eprint(f"  resolved: {source}")
 
     # Load decisions
@@ -502,14 +303,14 @@ def main():
         decisions.update(user_decisions)
 
     # Load source
-    all_entries = load_entries(source)
-    header, active = extract_active_path(all_entries)
+    all_entries = pi_session.load_entries(source)
+    header, active = pi_session.extract_active_path(all_entries)
 
     # Census
     census(header, active, all_entries)
     old_id = header.get("id", "")
     active_ids = {e["id"] for e in active if "id" in e}
-    id_audit = content_id_audit(all_entries, old_id, active_ids)
+    id_audit = pi_session.content_id_audit(all_entries, old_id, active_ids)
     eprint(f"  old-id content occurrences: {id_audit['total']} total "
            f"({id_audit['on_active_path']} on active path, {id_audit['off_path']} off-path)")
     if id_audit["locations"]:
@@ -587,7 +388,7 @@ def main():
         return
 
     # Bootstrap new file
-    new_path, new_id = bootstrap(source)
+    new_path, new_id = pi_session.bootstrap_path(source)
     new_header = dict(header)
     new_header["id"] = new_id
     new_header["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + f".{int((time.time() % 1) * 1000):03d}Z"
@@ -610,11 +411,11 @@ def main():
     # Content-id rewrite (optional)
     rewritten = 0
     if args.rewrite_content_id:
-        rewritten = rewrite_content_id(survivors, old_id, new_id)
+        rewritten = pi_session.rewrite_content_id(survivors, old_id, new_id)
         eprint(f"  content-id rewritten: {rewritten} blocks (old→new)")
 
     # Output id audit on the final artifact
-    output_audit = content_id_audit([new_header] + survivors, old_id, {e["id"] for e in survivors})
+    output_audit = pi_session.content_id_audit([new_header] + survivors, old_id, {e["id"] for e in survivors})
     eprint(f"  old-id in output: {output_audit['total']} occurrences")
 
     # Write
@@ -624,10 +425,10 @@ def main():
             f.write(json.dumps(e, ensure_ascii=False) + "\n")
 
     # Gold standard
-    gold_standard(new_path)
+    pi_session.gold_standard(new_path)
 
     # Discovery smoke (ch)
-    discovery_smoke(new_id)
+    pi_session.discovery_smoke(new_id)
 
     # Final report
     import hashlib
