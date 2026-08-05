@@ -36,7 +36,7 @@ Toy information vector examples include:
 - Every useful vector should have a clear epistemic state: current truth, validated capability, decision, constraint, open question, false claim, superseded claim, historical rationale, or raw evidence.
 - Preserve historical rationale only when it prevents future confusion or repeated mistakes.
 - When a claim's status cannot be established from the corpus, keep the uncertainty visible rather than guessing.
-- A few distinguished vectors never lose relevance, because they are global and permanent — the project's purpose, the durable rules agents work under. The vast majority of vector do lose relevance; decay is covered below.
+- A few distinguished vectors never lose relevance, because they are global and permanent — the project's purpose, the durable rules agents work under. The vast majority of vector do lose relevance; controlled forgetting is covered below.
 
 **Misinformation is worse than missing information. Failure states to avoid:**
 - A proposal is a proposal. It must not quietly read like a decision.
@@ -52,8 +52,7 @@ Toy information vector examples include:
 
 ## Live mode: Maintain memory while doing the work
 
-When new work changes the project's model, update the relevant memory in the same unit of work. Identify the new vector, its epistemic state, and record it in its canonical home. Then handle any vector it displaces.
-
+When new work changes the project's model, update the relevant memory in the same unit of work. Identify the new vector, its epistemic state, and record it in its canonical home. Then find every vector it displaces and decay or remove it. ‘Controlled Forgetting’ below governs which.
 Record at the narrowest truthful scope.
 
 Retain enough reason to recover consequential decisions, but do not retell the whole path that produced them. The project should remember why it took an important turn without forcing every future agent to relive the conversation.
@@ -158,7 +157,7 @@ Optimize for a capable agent reaching the right model quickly and knowing where 
 
 ## Controlled Forgetting
 
-> So far, we have covered the desired shapes and hierarchies of a good memory layer. This section deals with the crucial act of continuously keeping the memory layer truthful to the present moment. As the present moment advances, so does the memory layer must adapt its center of gravity to what is *currently* true, by re-fitting the weights of the vectors it is made of, or shed them outright.
+> So far, we have covered the desired shapes and hierarchies of a good memory layer. This section deals with the crucial act of continuously keeping the memory layer truthful to the present moment. As the present moment advances, so does the memory layer must adapt its center of gravity to what is *currently* true, by re-fitting the weights of the vectors it is made of, or remove them outright.
 
 **What should be partially or fully forgotten — the gist:**
 - Stale information.
@@ -166,10 +165,10 @@ Optimize for a capable agent reaching the right model quickly and knowing where 
 - Unjustified information duplication within and across the memory layer.
 - Any combination of these three items.
 
-### Old information must be decayed out and ultimately removed
+### Old information must be decayed and ultimately removed
 
-- All vectors lose relevance simply by living in the ledger for a while (time decay).
-- Vectors recording wrong things — mistakes made, decisions and assumptions overturned — should be removed, or in case de-weighting them to a gravestone directly helps understand the *why* behind current, true vectors, they should be replaced by their gravestones.
+- All vectors lose relevance simply by living in the ledger for a while (aging).
+- Vectors recording wrong things — mistakes made, decisions and assumptions overturned — should be removed, or in case decaying them to a gravestone directly helps understand the *why* behind current, true vectors, they should be replaced by their gravestones.
 
 **Examples of what ages out; generalize, this is not a recipe:**
 
@@ -179,14 +178,14 @@ Optimize for a capable agent reaching the right model quickly and knowing where 
 
 **How to decay a vector.** Tone it down: dilute its detail, shorten it a little, weaken its footprint in the semantic space and its weight in the next reader's attention, calm down its Markdown formatting, de-fluff its writing. Make it decayed.
 
-A time-decayed item can be decayed at most once. There is no second: past some irrelevancy threshold it is plainly removed. That threshold is not eager, but it’s not very conservative either.
+A vector can be decayed at most once. There is no second: past some irrelevancy threshold it is plainly removed. That threshold is not eager, but it’s not very conservative either.
 
-Decay is not a disclaimer placed beside stale text. It means giving obsolete information less weight, attention, and real estate than an ordinary current vector — often, correctly, zero (removal).
+Decay is not a disclaimer placed beside stale text. It means giving obsolete information less weight, attention, and real estate than an ordinary current vector. When even a small footprint is more than the vector is worth, remove it instead.
 When history remains valuable, move it off the current-state surface and compress it to the reason future work still needs.
 
 History earns its place when it explains a current constraint, prevents a likely repeated mistake, or preserves meaningful accountability. It does not survive merely because it once existed. Let project complexity set memory complexity: a small early project usually benefits from direct deletion, since there is little value in preserving the ancestry of every discarded thought, while a mature project may need more decision history, because surprising constraints, reversals, and institutional precedent affect future work.
 
-**Some vectors must not decay.** Durable battle scars and permanent operating context — "verify IAP fails closed before a data-bearing deploy" — are annotated `phase-out::never` with the user's consent and hold full weight indefinitely. Never decay or remove one. A vector that merely *looks* permanently relevant but carries no such marker is not yours to exempt: surface it to the user and let them decide.
+**Some vectors must never be forgotten.** Durable battle scars and permanent operating context — "verify IAP fails closed before a data-bearing deploy" — are annotated `forget::never` with the user's consent and hold full weight indefinitely. Never decay or remove one. A vector that merely *looks* permanently relevant but carries no such marker is not yours to exempt: surface it to the user and let them decide.
 
 ### Do not start a yelling contest
 
@@ -234,11 +233,13 @@ Match the ambition of the pass to the project. A young, simple project should us
 
 ### Orient and bound the pass
 
-Load the relevant client or project context before judging memory. If the project provides a context-loading skill or reference manifest — `load-client-context` or its equivalent — (re-)load it first. Read the project instructions and every core doc in full, then follow their Markdown references down that bounded graph. Always read the README, AGENTS and LEDGER trio in referenced subdirectories, even where the manifest does not list all three. Respect explicit exclusions — meeting transcriptions, generated runs and worlds, dependency directories, scratch workdirs — unless the user asks otherwise.
+Load the relevant client or project context before judging memory. If the project provides a context-loading skill or reference manifest — `load-client-context` or its equivalent — (re-)load it first. Read the project instructions and every core doc in full, then follow their Markdown references down that bounded graph. Always read the README, AGENTS and LEDGER trio in referenced subdirectories, even where the manifest does not list all three. Respect explicit exclusions — meeting transcriptions, generated runs and worlds, dependency directories — unless the user asks otherwise.
 
 Search is useful for finding repeated language and suspected contradictions, but snippets cannot reveal the contract or authority of a whole document.
 
 Based on what that context-gathering pass surfaced, define the maintenance boundary — an inclusion list and an exclusion list — before starting.
+
+<!-- The few H3 sections below, up to (excluding) ‘Rewrite at ordinary volume’, repeat a lot of the information above. Should sharpen sometime -->
 
 ### Inventory and classify
 
@@ -246,7 +247,7 @@ First identify the existing document roles. Determine which surface represents p
 
 Then inventory the information vectors and classify each: current truth, validated capability, decision, constraint, open question, false claim, superseded claim, useful historical rationale, or raw evidence. Where a claim's status cannot be established from the corpus, keep the uncertainty visible rather than guessing.
 
-### Audit for decay failures
+### Audit for forgetting failures
 
 **Stale contradictions.** An older vector that a later, truer one has overtaken, yet which still reads as active. A healthy stale vector is either already partially decayed and carrying a meta note pointing at the newer truth, or else completely removed, metadata included. Find the ones that meet neither criterion.
 
@@ -268,15 +269,15 @@ Maintenance is semantic before it is editorial. Decide what the project should c
 
 Prefer direct observation and explicit user decisions over earlier proposals or agent inferences. Preserve the boundary of each validation. When two credible sources still conflict and the resolution would materially change the project, surface the conflict to the user instead of choosing the more convenient story.
 
-Decide per stale item: delete, decay, or mark as never phased out — the last is rare, and belongs to the user. Concretely:
+Decide per stale vector: delete, decay, or mark `forget::never` — the last is rare, and belongs to the user. Concretely:
 
-1. Delete a false claim.
+1. Remove a false claim.
 2. Replace a superseded present-state claim.
 3. Reduce a consequential reversal to the shortest useful ledger entry.
 4. Keep raw source material subordinate; do not let it masquerade as current guidance.
 5. Convert unresolved design space into one concise open question.
 
-Keep the scars and root-cause lessons that explain why the current state exists or that prevent a repeat of a meaningful mistake. Delete active-looking fragments that add nothing once the lesson is preserved. Respect `phase-out::never`, and escalate anything that looks permanent but carries no marker.
+Keep the scars and root-cause lessons that explain why the current state exists or that prevent a repeat of a meaningful mistake. Remove active-looking fragments that add nothing once the lesson is preserved. Respect `forget::never`, and escalate anything that looks permanent but carries no marker.
 
 ### Rewrite at ordinary volume
 
