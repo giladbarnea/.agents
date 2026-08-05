@@ -12,9 +12,10 @@ Raw meetings, chats, research, and experiments are evidence. They are not automa
 
 Two things depend on it: recovering the decisions taken over time and the rationale behind them, and letting a new session resume work effectively, truthfully, and efficiently. A newcomer should be able to form the true, coherent, internally consistent story of how the project got here.
 
-Memory maintenance has two modes:
-Live mode: On-the-job bookkeeping keeps memory healthy as work happens, and is the default; it is the first half of this document.
-Hindsight mode: A retrospective pass treats the corpus (the memory layer) itself as the work product, and is the second half of this doc. A retrospective pass is due upon completing a substantial body of work, on upon request.
+This document has three parts:
+The standard: what good memory looks like. It runs from here to the governing test, and both modes enforce it.
+Live mode: On-the-job bookkeeping keeps memory healthy as work happens, and is the default.
+Hindsight mode: A retrospective pass treats the corpus (the memory layer) itself as the work product. It is due upon completing a substantial body of work, or upon request.
 
 ## Think and work in information vectors
 
@@ -47,41 +48,6 @@ Toy information vector examples include:
 - De-facto behavior (status-quo) must not be confused with an intentional, top-down constitution, unless such a canonical manifest exists.
 - Overturned or disproved notions must be exposed or discarded.
 - Etc.
-
----
-
-## Live mode: Maintain memory while doing the work
-
-When new work changes the project's model, update the relevant memory in the same unit of work. Identify the new vector, its epistemic state, and record it in its canonical home. Then find every vector it displaces and decay or remove it. ‘Controlled Forgetting’ below governs which.
-Record at the narrowest truthful scope.
-
-Retain enough reason to recover consequential decisions, but do not retell the whole path that produced them. The project should remember why it took an important turn without forcing every future agent to relive the conversation.
-
-Tell the user when a decision or development has made previously written documentation stale.
-
-Keep the docs the user told you to read for baseline context true to the present state.
-
-## Metadata carries the why
-
-Raw text covers the what. Metadata covers the why, how we got here, and what a thing relates to.
-
-The conventions are `yy-mm-dd` filename prefixes; YAML frontmatter carrying at least `description: <one short phrase>` and `last_updated: yyyy-mm-dd hh:mm`; and Logseq-style `annotation:: ...` metadata inside the doc’s body on sections, paragraphs, blocks or individual items.
-
-Four rules hold for every kind of doc:
-
-1. Everything carries date and time at the minimum. Many recorded items deserve at least one further `something:: ...` annotation beyond the timestamp.
-2. Metadata both annotates content and references other content, across time and space, describing relationships in their present true state. Bidirectional references — between files and between vectors — are good practice, and keeping them truthful takes frequent updating as the project evolves.
-3. Do not record what is already recorded. Avoid duplicating information; see the MECE sections below.
-4. Write annotations in a very terse, dense style.
-
-There is no strict schema, deliberately. These docs are never parsed programmatically, so metadata should serve the content, the current truth, and the relationships first, and adapt its shape as the project and the real world change.
-
-Small illustrations, to generalize from rather than copy:
-
-- Asked to summarize `a.md` and `b.md` into `summary.md`, write `summary.md` with `description`, `last_updated`, and `based_on: [a.md, b.md]`, which records the semantic cause and effect.
-- Told that approach B replaces approach A, record it in the ledger with `added:: mm-dd hh:mm` and `supersedes:: §{canonical approach A reference}`, add `superseded_by:: §{the new item}` everywhere approach A is specified, and give approach A its first decay pass. The moment B replaced it, its reason for being documented changed too — from the leading way to go, to history that helps trace how decisions evolved — so it no longer holds center stage.
-- Add `context:: <a phrase or two answering the "wait, but why?" a reader will feel>` on a decision or state that looks unexpected.
-- On encountering a stale vector, finish the reading you set out to do, then tell the user briefly.
 
 ## Three content-type homes
 
@@ -153,7 +119,27 @@ Two vertical anti-patterns:
 Other documents may link to a vector or record that it changed. They must not independently maintain competing versions of the same current truth.
 Optimize for a capable agent reaching the right model quickly and knowing where to update it next time, not for a perfect taxonomy.
 
---- 
+## Metadata carries the why
+
+Raw text covers the what. Metadata covers the why, how we got here, and what a thing relates to.
+
+The conventions are `yy-mm-dd` filename prefixes; YAML frontmatter carrying at least `description: <one short phrase>` and `last_updated: yyyy-mm-dd hh:mm`; and Logseq-style `annotation:: ...` metadata inside the doc’s body on sections, paragraphs, blocks or individual items.
+
+Four rules hold for every kind of doc:
+
+1. Everything carries date and time at the minimum. Many recorded items deserve at least one further `something:: ...` annotation beyond the timestamp.
+2. Metadata both annotates content and references other content, across time and space, describing relationships in their present true state. Bidirectional references — between files and between vectors — are good practice, and keeping them truthful takes frequent updating as the project evolves.
+3. Do not record what is already recorded. Avoid duplicating information; see the MECE sections above.
+4. Write annotations in a very terse, dense style.
+
+There is no strict schema, deliberately. These docs are never parsed programmatically, so metadata should serve the content, the current truth, and the relationships first, and adapt its shape as the project and the real world change.
+
+Small illustrations, to generalize from rather than copy:
+
+- Asked to summarize `a.md` and `b.md` into `summary.md`, write `summary.md` with `description`, `last_updated`, and `based_on: [a.md, b.md]`, which records the semantic cause and effect.
+- Told that approach B replaces approach A, record it in the ledger with `added:: mm-dd hh:mm` and `supersedes:: §{canonical approach A reference}`, add `superseded_by:: §{the new item}` everywhere approach A is specified, and give approach A its first decay pass. The moment B replaced it, its reason for being documented changed too — from the leading way to go, to history that helps trace how decisions evolved — so it no longer holds center stage.
+- Add `context:: <a phrase or two answering the "wait, but why?" a reader will feel>` on a decision or state that looks unexpected.
+- On encountering a stale vector, finish the reading you set out to do, then tell the user briefly.
 
 ## Controlled Forgetting
 
@@ -193,21 +179,19 @@ A yelling contest begins when an agent wants to record a fresh vector, finds sev
 
 Do not make the fresh vector louder, and do not out-repeat the old ones. Clear the space first: delete false claims, replace superseded present-state claims, compress valuable history into its proper historical home, and remove obsolete prominence. Then write the fresh vector calmly, at the ordinary length, detail, and emphasis it deserves — as if it had never had to compete.
 
----
-
-### Evidence remains as narrow as the test  <!-- this section should be shortened. less text -->
+## Evidence remains as narrow as the test  <!-- this section should be shortened. less text -->
 
 A validation establishes only what was observed. One successful HTTP request does not prove unrestricted network access. One process launched under a user account does not prove arbitrary installation capability. One observed workflow does not prove that every case follows it.
 
 Broader conclusions may be recorded, but label them as inferences or open assumptions. Do not let convenient language silently widen evidence.
 
-### Open questions are first-class memory
+## Open questions are first-class memory
 
 An unresolved question is useful project state. State it once and keep it short. It should name the decision surface without prematurely designing the answer.
 
 Supporting possibilities belong only when they materially explain why the question exists. A long speculative branch is not a better open question.
 
-### Good memory reads like one informed mind
+## Good memory reads like one informed mind
 
 Current reality appears before history. Claims are precise about scope and certainty. Important rationale survives without taking over the page. Open questions are visibly unresolved. Failed assumptions do not linger as ambient possibilities. Links connect documents instead of prose duplicating them. The amount of documentation matches the project's actual complexity.
 
@@ -219,11 +203,23 @@ If the agent must reconcile contradictions, distinguish plans from decisions, or
 
 ---
 
+## Live mode: Maintain memory while doing the work
+
+When new work changes the project's model, update the relevant memory in the same unit of work. Identify the new vector, its epistemic state, and record it in its canonical home. Then find every vector it displaces and decay or remove it. ‘Controlled Forgetting’ above governs which.
+
+Record at the narrowest truthful scope.
+
+Retain enough reason to recover consequential decisions, but do not retell the whole path that produced them. The project should remember why it took an important turn without forcing every future agent to relive the conversation.
+
+Tell the user when a decision or development has made previously written documentation stale.
+
+Keep the docs the user told you to read for baseline context true to the present state.
+
 ## Hindsight mode: Retrospective maintenance passes
 
 A retrospective pass is an intentional effort to repair the project model after information has accumulated. The work is not a side effect of another task; the corpus itself is the task. Use this when asked to inspect, audit, clean up, reconcile, prune, or repair project memory: old decisions, ledgers, `AGENTS.md`, client docs, stale notes, superseded claims, or documentation that has grown louder and harder to trust over time.
 
-The goal is not prettier documentation. It is a smaller, more trustworthy model of reality that a new agent can absorb without textual archaeology. Everything above is the standard this pass enforces; what follows is the procedure.
+The goal is not prettier documentation. It is a smaller, more trustworthy model of reality that a new agent can absorb without textual archaeology. The standard above is what this pass enforces; what follows is the procedure.
 
 ### Define success before editing
 
