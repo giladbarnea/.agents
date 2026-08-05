@@ -143,7 +143,7 @@ Small illustrations, to generalize from rather than copy:
 
 ## Controlled Forgetting
 
-> So far, we have covered the desired shapes and hierarchies of a good memory layer. This section deals with the crucial act of continuously keeping the memory layer truthful to the present moment. As the present moment advances, so does the memory layer must adapt its center of gravity to what is *currently* true, by re-fitting the weights of the vectors it is made of, or remove them outright.
+> So far, we have covered the desired shapes and hierarchies of a good memory layer. This section deals with the crucial act of continuously keeping the memory layer truthful to the present moment. As the present moment advances, so must the memory layer adapt its center of gravity to what is *currently* true, by re-fitting the weights of the vectors it is made of, or removing them outright.
 
 **What should be partially or fully forgotten — the gist:**
 - Stale information.
