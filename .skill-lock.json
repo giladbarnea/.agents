@@ -36,9 +36,33 @@
       "skillFolderHash": "1b5943432ddd1b980206968c529a323cc992dbec",
       "installedAt": "2026-06-11T12:54:16.208Z",
       "updatedAt": "2026-06-11T12:54:16.208Z"
+    },
+    "chrome-devtools-axi": {
+      "source": "kunchenguid/chrome-devtools-axi",
+      "sourceType": "github",
+      "sourceUrl": "https://github.com/kunchenguid/chrome-devtools-axi.git",
+      "skillPath": "skills/chrome-devtools-axi/SKILL.md",
+      "skillFolderHash": "e0382e8bd6ed7051d3c6d36e75d9ab75519f34a8",
+      "installedAt": "2026-08-06T10:18:29.928Z",
+      "updatedAt": "2026-08-06T10:18:29.928Z"
     }
   },
   "dismissed": {
     "findSkillsPrompt": true
-  }
+  },
+  "lastSelectedAgents": [
+    "amp",
+    "antigravity",
+    "antigravity-cli",
+    "cline",
+    "codex",
+    "cursor",
+    "deepagents",
+    "gemini-cli",
+    "github-copilot",
+    "kimi-code-cli",
+    "opencode",
+    "warp",
+    "zed"
+  ]
 }
