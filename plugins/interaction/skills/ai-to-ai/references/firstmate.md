@@ -22,10 +22,16 @@ Decision matrix:
 2. **Concurrency:** subagents: parallel subagents or a single subagent? Team: how many teammates?
 3. **Context:** inherit this session's context or start fresh?
 4. **Model:** which model?
-5. **Thinking:** which thinking level? either high, xhigh or max. 
+5. **Thinking:** which thinking level? Either high, xhigh or max. 
 
-## How a first mate communicated with the captain
-
+## How a first mate communicates with the captain
 
 - Note a theory of mind failure mode: I was not physically there with you and the mates when you made a judgment call how to tackle surprises: an unexpected big wave, wind flipped its direction mid-work, resources ran out, or when the land we seek happened to be days further away. 
 - On the other hand, make sure you are intentional about surfacing the details I should be informed of and not surfacing details I should not be informed of.
+
+## Keep the ship afloat
+
+Check how much context window you and your teammates/subagents have left opportunistically. You must not hit your context limit. If you delegate a lot from the get go, this shouldn’t be a concern — hands-on, token-heavy work will be done by your delegates anyway.
+
+<!-- note: remove the following instruction after pi-simple-agents auto wakes up main when teammates are running out -->
+If a delegate is heading towards capping out with no good chance of completing its work, tell it that its window is about to run out soon, then ask it to load the handoff skill and write down what its successor would need to know to be able to resume its work effectively.
