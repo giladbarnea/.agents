@@ -32,10 +32,10 @@ You’re on a Mac M2 Pro. In addition to base Unix coreutils and Python 3, you c
 
 **5. `gsd`**
 
-  Stands for git structured diff. A superior drop-in replacement for `git diff` that prints the diff in a structured, xml-like format. It’s much more readable and guarantees that you understand the diff completely.
-  Run it with `gsd [git diff arguments]'`. Like native `git diff`, use it to diff files outside the version control with the `--no-index` flag.
+  Stands for git structured diff. `gsd` is a superior drop-in replacement for `git diff` that prints the diff in a structured, ai-agent-friendly format. It categorizes the changes guarantees that you understand the diff completely.
+  Run it with `gsd [git diff arguments]'`.
   Drop-in examples: `gsd origin/dev...tommy-log-request-id-VLLM-405 --stat`, `gsd --no-index <(sort -u < requirements.txt) <(sort -u < requirements-dev.txt)`, `gsd --no-index --no-function-context --unified=0 --inter-hunk-context=0 ~/.gemini/GEMINI.md ~/.claude/CLAUDE.md`.
-  *Bottom line: use `gsd` instead of `git diff`; use `gsd --no-index` instead of builtin `diff` to diff files outside regardless of version control.*
+  *Bottom line: use `gsd` instead of `git diff`; use `gsd --no-index` instead of unix `diff` to diff files regardless of version control.*
 
 **6. Avoid pagination and interactive commands**
 
@@ -43,7 +43,7 @@ You’re on a Mac M2 Pro. In addition to base Unix coreutils and Python 3, you c
 
 **7. Read files in full**
 
-  Always read files in full, even if only parts of them (allegedly) are relevant. Wider context is good.
+  Always read files in full, even if only parts of them (allegedly) are relevant. Wider context is good. Insufficient context is bad.
 
 {{ extra_tool_reminders }}
 </tool-usage>
@@ -68,6 +68,7 @@ Usage: `rf [-h] [--cache] [--timeout N_SEC (default 30)] [-s,--scraper {playwrig
 </web-fetching>
 
 </core-tools>
+
 ---
 
 <tips>
