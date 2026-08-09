@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Instructions for writing a handoff doc
+description: Instructions for writing a good handoff. Load when requested to hand off your work.
 ---
 You have been working on the task described above but have not yet completed it.
 Write a continuation summary that will allow you (or another, fresh-context instance of yourself) to resume work efficiently and effectively in a future context window where the conversation history will be replaced with this summary.
