@@ -192,6 +192,32 @@ skeletons:
             f"Block order changed: {pruned!r}",
         )
 
+    def test_pruner_preserves_todo_tool_calls_and_drops_outputs(self) -> None:
+        todo_call = {
+            "type": "tool-input",
+            "name": "todo",
+            "id": "tasks",
+            "action": "update",
+        }
+        todo_output = {
+            "type": "tool-output",
+            "name": "todo",
+            "id": "tasks",
+            "content": "Updated task 1",
+        }
+        source = [
+            message(1, "assistant", ["before", todo_call, "after"]),
+            message(2, "user", [todo_output]),
+        ]
+
+        pruned = prune_transcript.prune(source)
+
+        self.assertEqual(
+            pruned,
+            [source[0]],
+            f"Todo calls must survive while todo outputs are removed. Got: {pruned!r}",
+        )
+
     def test_pruner_drops_explicit_empty_orphan_and_audits_it(self) -> None:
         source = [
             message(46, "user", ["keep"]),

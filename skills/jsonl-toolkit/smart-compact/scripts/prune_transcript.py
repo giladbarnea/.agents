@@ -21,7 +21,7 @@ sys.path.insert(0, str(PARENT_SCRIPTS))
 import transcript_common
 import transfer_to_pi_session
 
-NOISE_TOOL_NAMES = frozenset({"todo"})
+PRUNED_OUTPUT_TOOL_NAMES = transcript_common.FILE_OUTPUT_TOOLS | {"todo"}
 EMPTY_ORPHAN_KEYS = frozenset(
     {"type", "name", "id", "native_tool_call_id", "native_content_index"}
 )
@@ -214,8 +214,9 @@ def drop_authorized_empty_orphans(
 def prune(data: list[dict[str, object]]) -> list[dict[str, object]]:
     """Prune deterministic noise while preserving message and block order.
 
-    >>> prune([{'content': [{'type': 'tool-input', 'name': 'todo'}]}])
-    []
+    >>> source = [{'content': [{'type': 'tool-input', 'name': 'todo'}]}]
+    >>> prune(source) == source
+    True
     """
     result: list[dict[str, object]] = []
     seen_skill_bodies: set[str] = set()
@@ -242,11 +243,9 @@ def prune(data: list[dict[str, object]]) -> list[dict[str, object]]:
             if not isinstance(block, dict):
                 pruned_blocks.append(block)
                 continue
-            if block.get("name") in NOISE_TOOL_NAMES:
-                continue
             if (
                 block.get("type") == "tool-output"
-                and block.get("name") in transcript_common.FILE_OUTPUT_TOOLS
+                and block.get("name") in PRUNED_OUTPUT_TOOL_NAMES
             ):
                 continue
 

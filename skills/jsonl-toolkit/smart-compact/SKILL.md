@@ -118,7 +118,7 @@ uv run --script scripts/prune_transcript.py transcription.json > pruned.json
 
 The pruner:
 
-- Removes todos.
+- Preserves todo calls but removes todo outputs.
 - Removes raw outputs from structured file tools.
 - Expands multi-file reads.
 - Replaces file inputs without reordering mixed content.
