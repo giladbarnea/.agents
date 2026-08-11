@@ -39,15 +39,9 @@ Your summary should be structured, concise, actionable, and written along the li
 
 ### How to approach this handoff task
 
-This is a handoff under asymmetric common ground. You are handing off to someone who was absent.
-The common ground is the baseline context layer that had existed when your session only started.
-**The asymmetry is the mental models you have built on top of the baseline context layer.** Discoveries, hypothesis (discarded or confirmed), new abstractions, locally invented terminology, updated ways of understanding.
-The distinction is important: yes, you are summarizing your own experience, but you are also **reconstructing the recipient’s state of knowledge.** Optimize for _their_ entry into the situation.
-This is closely related to theory-of-mind and audience design: translate private/local ontology back into shared language. The handoff recipient needs two models: Your current understand, and separately, our last known common ground.
+This is a handoff under asymmetric common ground — asymmetry by absence. Read [`../../references/theory-of-mind.md`](../../references/theory-of-mind.md) and apply it. Here, the last known common ground is the baseline context layer that had existed when your session only started, and the recipient is a fresh-context instance standing at that baseline. Everything you built on top is the private layer your handoff must translate.
 
-Think Mission Control, aviation maintenance, intensive-care units, nuclear plants, military command centers. An outgoing operator has been living inside a situation for eight hours. An incoming operator walks in cold. Simply saying “Here is what I concluded after eight hours” is dangerous because the outgoing person’s words are saturated with context the incoming person never acquired.
-
-Medicine developed standardized handoff protocols for the same reason, like Situation–Background–Assessment–Recommendation (SBAR):
+Medicine developed standardized handoff protocols for this exact phenomenon, like Situation–Background–Assessment–Recommendation (SBAR):
 **Situation:** What is happening now?
 **Background**: What does the recipient need to know to understand it?
 **Assessment**: What do I now think is going on?

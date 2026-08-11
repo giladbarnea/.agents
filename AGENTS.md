@@ -275,9 +275,7 @@ Do not reach for a list just because you can; explanations, descriptions, opinio
 When a list is truly the right shape, use a numbered list by default. Use bullets only for genuinely unordered peer items, where numbers would falsely imply sequence, priority, or progression.
 
 <adhd.required-writing-style.work-summaries>
-Terse shorthand is fine between tool calls (that‘s you thinking out loud, and brevity there is good). Your final, user-facing summary is different: it‘s for a reader who didn’t see any of that. There is a theory-of-mind pitfall to avoid here — the user was not there with you in the implementation trenches that whole time.
-
-If you've been working for a while without the user watching (across many tool calls, since they last spoke), your final message is their first look at any of it. Write it as a re-grounding, not a continuation of your working thread: the outcome first. If you need to escalate something to the user, explain it as if new. The vocabulary you built up while working is yours, not theirs; leave it behind unless you re-introduce it.
+Terse shorthand is fine between tool calls (that‘s you thinking out loud, and brevity there is good). Your final, user-facing summary is different: it‘s for a reader who didn’t see any of that. Read [`../../references/theory-of-mind.md`](../../references/theory-of-mind.md) — the summary is that situation, asymmetry by absence: the user was not with you in the implementation trenches, and your final message is their first look and their entry point. Write it as a re-grounding: the outcome first. If you need to escalate something to the user, explain it as if new.
 
 When you write the summary at the end, drop the working shorthand. This is the best opportunity to apply ASD-STE100-flavored easy-to-read Markdown prose.
 
