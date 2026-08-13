@@ -1,7 +1,7 @@
 ---
 name: memory-maintenance
 description: Maintain project documentation as compact, truthful institutional memory. Only for memory-maintaining projects. Needs user approval.
-last_updated: 2026-08-05 17:00
+last_updated: 2026-08-11 14:52
 ---
 
 # Project memory is a maintained model of reality
@@ -33,13 +33,48 @@ Toy information vector examples include:
 - "The database is Postgres."
 - "We decided to rewrite the server to Rust because we couldn't get sufficient performance from the old Python implementation."
 
+**Three marks classify every vector.** Every useful vector carries a kind (what it is), a standing (act on it now?), and a basis (why believe it):
+
+```yaml
+# What.
+Kind:
+    observation: "Empirical claim about how something is or behaves."
+    event: "Something happened at a point in time."
+    decision: "A choice among options that closed the alternatives."
+    intent: "What we are trying to achieve."
+    constraint: "A rule we operate under and did not choose."
+    procedure: "A recipe for how to do something."
+    rationale: "The why behind another vector."
+
+# Act on it now?
+Standing:
+    current: "In effect. Act on it."
+    pending: "A concrete vector exists, not yet in effect."
+    unresolved: "Open question. No candidate answer exists yet."
+    superseded: "Replaced. <superseding entry ref>"
+    disproved: "Was wrong. <disproving entry ref>"
+
+# Credibility.
+Basis:
+    constituted: "A standing principle that governs many future decisions. Company culture, official principles. Greatest weight."
+    signed-off: "One specific item, authorized by the user or a C-level persona. Great weight."
+    tested: "We ran it deliberately and it held, at the time of testing."
+    observed: "We saw it happen. Empirical, but nobody blessed it."
+    read: "True by construction. The artifact that makes it true says so: code, config, schema."
+    reported: "Secondhand. A client, a vendor doc, a teammate's memory. Nobody here verified it."
+    inferred: "Deduced from other things we hold. Nobody saw it, nobody said it, but it follows."
+    assumed: "Adopted so work can proceed. Not argued for, chosen. Lowest weight."
+```
+
+Standing and basis combine where one word used to blur: a proposal is `pending` + `assumed`; a plan is `pending` + `signed-off`; de-facto behavior is `current` + `observed`, never `constituted`.
+
 **The gist:**
-- Every useful vector should have a clear epistemic state: current truth, validated capability, decision, constraint, open question, false claim, superseded claim, historical rationale, or raw evidence.
 - Preserve historical rationale only when it prevents future confusion or repeated mistakes.
-- When a claim's status cannot be established from the corpus, keep the uncertainty visible rather than guessing.
+- When a vector's marks cannot be established from the corpus, keep the uncertainty visible rather than guessing.
 - A few distinguished vectors never lose relevance, because they are global and permanent — the project's purpose, the durable rules agents work under. The vast majority of vectors do lose relevance; controlled forgetting is covered below.
 
-**Misinformation is worse than missing information. Failure states to avoid:**
+**Misinformation is worse than missing information.**
+The following are failure states to avoid. Use the three marks to be explicit:
 - A proposal is a proposal. It must not quietly read like a decision.
 - A guess must not read like an observation.
 - Distinguish a hypothetical or an assumption from an empirical observation: state a hypothetical's assumptions explicitly and write it in an advisory tone, so it cannot be misread as an assertion; Conversely, support an empirical observation with the minimal set of references.
@@ -136,10 +171,9 @@ There is no strict schema, deliberately. These docs are never parsed programmati
 
 Small illustrations, to generalize from rather than copy:
 
-- Asked to summarize `a.md` and `b.md` into `summary.md`, write `summary.md` with `description`, `last_updated`, and `based_on: [a.md, b.md]`, which records the semantic cause and effect.
-- Told that approach B replaces approach A, record it in the ledger with `added:: mm-dd hh:mm` and `supersedes:: §{canonical approach A reference}`, add `superseded_by:: §{the new item}` everywhere approach A is specified, and give approach A its first decay pass. The moment B replaced it, its reason for being documented changed too — from the leading way to go, to history that helps trace how decisions evolved — so it no longer holds center stage.
+- Asked to summarize `a.md` and `b.md` into `summary.md` -> write `summary.md` with `description`, `last_updated`, and `based_on: [a.md, b.md]`, which records the semantic cause and effect.
+- Told that approach B replaces approach A -> record it in the ledger with `added:: mm-dd hh:mm` and `supersedes:: §{canonical approach A reference}`, add `superseded_by:: §{the new item}` everywhere approach A is specified, and apply decay on approach A, or remove it, depending on whether it earns a gravestone.
 - Add `context:: <a phrase or two answering the "wait, but why?" a reader will feel>` on a decision or state that looks unexpected.
-- On encountering a stale vector, finish the reading you set out to do, then tell the user briefly.
 
 ## Controlled Forgetting
 
@@ -183,7 +217,7 @@ Do not make the fresh vector louder, and do not out-repeat the old ones. Clear t
 
 A validation establishes only what was observed. One successful HTTP request does not prove unrestricted network access. One process launched under a user account does not prove arbitrary installation capability. One observed workflow does not prove that every case follows it.
 
-Broader conclusions may be recorded, but label them as inferences or open assumptions. Do not let convenient language silently widen evidence.
+Broader conclusions may be recorded, but mark them `inferred` or `assumed`. Do not let convenient language silently widen evidence.
 
 ## Open questions are first-class memory
 
@@ -205,7 +239,7 @@ If the agent must reconcile contradictions, distinguish plans from decisions, or
 
 ## Live mode: Maintain memory while doing the work
 
-When new work changes the project's model, update the relevant memory in the same unit of work. Identify the new vector, its epistemic state, and record it in its canonical home. Then find every vector it displaces and decay or remove it. ‘Controlled Forgetting’ above governs which.
+When new work changes the project's model, update the relevant memory in the same unit of work. Identify the new vector, mark its kind, standing, and basis, and record it in its canonical home. Then find every vector it displaces and decay or remove it. ‘Controlled Forgetting’ above governs which.
 
 Record at the narrowest truthful scope.
 
@@ -241,7 +275,7 @@ Based on what that context-gathering pass surfaced, define the maintenance bound
 
 First identify the existing document roles. Determine which surface represents present truth, which records decisions, which governs agent behavior, and which contains source evidence. Do not impose a new file taxonomy when the project already has a clear one.
 
-Then inventory the information vectors and classify each: current truth, validated capability, decision, constraint, open question, false claim, superseded claim, useful historical rationale, or raw evidence. Where a claim's status cannot be established from the corpus, keep the uncertainty visible rather than guessing.
+Then inventory the information vectors and mark each with its kind, standing, and basis, per the vectors section above.
 
 ### Audit for forgetting failures
 

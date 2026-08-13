@@ -1,50 +1,59 @@
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 
-SCRIPT_NAME=${0:t}
+script_name=${0##*/}
+
+grouped() {
+    printf "%'d" "$1"
+}
 
 main() {
     if (( $# == 0 )); then
-        print -u2 "usage: $SCRIPT_NAME <path> [path ...]"
+        printf 'usage: %s <path> [path ...]\n' "$script_name" >&2
         return 2
     fi
 
     export LC_NUMERIC=en_US.UTF-8
-    grouped() { printf "%'d" $1 }
 
-    local p rel size bytes lines words tokens sortkey
+    local path relative_path size bytes lines words tokens sort_key absolute_path tab
     local -a rows=()
+    tab=$'\t'
 
-    for p in "$@"; do
-        rel=${${p:a}#$PWD/}
-
-        if [[ ! -e $p ]]; then
-            rows+=("-2\t0\t0\t0\t$rel\tDoes not exist")
-            continue
-        fi
-
-        if [[ -d $p ]]; then
-            rows+=("-2\t0\t0\t0\t$rel\tDirectory, not a file")
-            continue
-        fi
-
-        size=$(du -h "$p" | awk '{print $1}')
-        bytes=$(stat -f%z "$p")
-        lines=$(wc -l < "$p" | tr -d ' ')
-        words=$(wc -w < "$p" | tr -d ' ')
-        if LC_ALL=C grep -qI . "$p"; then
-            tokens=$(ttok < "$p")
-            sortkey=$tokens
-            tokens=$(grouped $tokens)
+    for path in "$@"; do
+        if [[ $path == /* ]]; then
+            absolute_path=$path
         else
-            tokens="<binary>"
-            sortkey=-1
+            absolute_path=$PWD/$path
+        fi
+        relative_path=${absolute_path#$PWD/}
+
+        if [[ ! -e $path ]]; then
+            rows+=("-2${tab}0${tab}0${tab}0${tab}${relative_path}${tab}Does not exist")
+            continue
         fi
 
-        rows+=("$sortkey\t$words\t$lines\t$bytes\t$rel\t$size\t$(grouped $lines)\t$(grouped $words)\t$tokens")
+        if [[ -d $path ]]; then
+            rows+=("-2${tab}0${tab}0${tab}0${tab}${relative_path}${tab}Directory, not a file")
+            continue
+        fi
+
+        size=$(du -h "$path" | awk '{print $1}')
+        bytes=$(stat -f%z "$path")
+        lines=$(wc -l < "$path" | tr -d ' ')
+        words=$(wc -w < "$path" | tr -d ' ')
+        if LC_ALL=C grep -qI . "$path"; then
+            tokens=$(ttok < "$path")
+            sort_key=$tokens
+            tokens=$(grouped "$tokens")
+        else
+            tokens='<binary>'
+            sort_key=-1
+        fi
+
+        rows+=("${sort_key}${tab}${words}${tab}${lines}${tab}${bytes}${tab}${relative_path}${tab}${size}${tab}$(grouped "$lines")${tab}$(grouped "$words")${tab}${tokens}")
     done
 
-    print "path\tsize\tlines\twords\ttokens"
-    print -l -- $rows \
+    printf 'path\tsize\tlines\twords\ttokens\n'
+    printf '%s\n' "${rows[@]}" \
         | sort -t$'\t' -k1,1nr -k2,2nr -k3,3nr -k4,4nr \
         | cut -f5-
 }
