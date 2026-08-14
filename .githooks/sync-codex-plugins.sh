@@ -137,7 +137,6 @@ sync_plugin() {
   local source_plugin_directory="$1"
   local plugin_name
   local marketplace_name
-  local source_skills_directory
   local marketplace_directory
   local generated_plugin_directory
   local cache_directory
@@ -145,21 +144,20 @@ sync_plugin() {
 
   plugin_name="$(basename "$source_plugin_directory")"
   marketplace_name="$plugin_name"
-  source_skills_directory="$source_plugin_directory/skills"
   marketplace_directory="$CODEX_DIRECTORY/plugins/marketplaces/$marketplace_name"
   generated_plugin_directory="$marketplace_directory/plugins/$plugin_name"
   cache_directory="$CODEX_DIRECTORY/plugins/cache/$marketplace_name/$plugin_name/$PLUGIN_VERSION"
   plugin_identifier="$plugin_name@$marketplace_name"
 
-  [[ -d "$source_skills_directory" ]] || fail "Missing plugin skills directory: $source_skills_directory"
+  [[ -d "$source_plugin_directory/skills" ]] || fail "Missing plugin skills directory: $source_plugin_directory/skills"
 
   mkdir -p \
-    "$generated_plugin_directory/.codex-plugin" \
-    "$generated_plugin_directory/skills" \
+    "$generated_plugin_directory" \
     "$marketplace_directory/.agents/plugins" \
     "$cache_directory"
 
-  rsync -a --delete "$source_skills_directory/" "$generated_plugin_directory/skills/"
+  rsync -a --delete "$source_plugin_directory/" "$generated_plugin_directory/"
+  mkdir -p "$generated_plugin_directory/.codex-plugin"
 
   jq --null-input \
     --arg name "$plugin_name" \

@@ -146,11 +146,11 @@ sync_plugin() {
   done
 
   mkdir -p "$marketplace_directory/.claude-plugin"
-  mkdir -p "$generated_plugin_directory/.claude-plugin"
-  mkdir -p "$generated_plugin_directory/skills"
+  mkdir -p "$generated_plugin_directory"
   mkdir -p "$cache_directory"
 
-  rsync -a --delete "$source_plugin_directory/skills/" "$generated_plugin_directory/skills/"
+  rsync -a --delete "$source_plugin_directory/" "$generated_plugin_directory/"
+  mkdir -p "$generated_plugin_directory/.claude-plugin"
 
   jq -n \
     --arg name "$plugin_name" \
