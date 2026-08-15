@@ -2,6 +2,8 @@
 name: handoff
 description: Instructions for writing a good handoff. Load when requested to hand off your work.
 ---
+# Handoff
+
 You have been working on the task described above but have not yet completed it.
 Write a continuation summary that will allow you (or another, fresh-context instance of yourself) to resume work efficiently and effectively in a future context window where the conversation history will be replaced with this summary.
 Your summary should be structured, concise, actionable, and written along the lines of ASD-STE100. Include:
@@ -12,7 +14,7 @@ Your summary should be structured, concise, actionable, and written along the li
 
 2. **Prior State**
    - What was when _your_ session just started.
-   - What were the circumstances, assumptions and mental models <i need a word or a few words here> before you started work.
+   - What were the circumstances, assumptions and mental models you inherited before you started work.
 
 3. **Current State**
    - What has been completed so far.
