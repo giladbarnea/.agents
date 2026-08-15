@@ -51,7 +51,7 @@ Incorporate this approach.
 
 ### Write efficiently
 
-So far the instructions dealt with handoff effectiveness. This is about efficiency.
+So far the instructions dealt with handoff effectiveness. The following is about efficiency.
 
 One rule: if it can be referenced, reference it, don’t repeat its contents.
    Toy example:
@@ -60,6 +60,17 @@ One rule: if it can be referenced, reference it, don’t repeat its contents.
 
 Good references live at the end of each handoff section, grouped by whether created, read, edited, deleted, with references accompanied by 2–5 words describing the “why”, if justified.
 Toy example: (inside a ‘edited-files’ group) `- path/to/file.py: fixed deployment bug.`
+
+### Rings of responsibility
+
+> This section applies only if you are part of a structure with other agents — above, below, or sideways.
+
+Write the handoff from your own point of view, to set up a successor who will hold the same role and point of view. Cover mainly the context that only you held in the organization, and reference the contextual docs of other responsibility scopes rather than repeat their contents.
+If you manage other agents, your unique context is the in-between of their work.
+If you are the one talking directly to the human, that too is a unique scope.
+Both can be true.
+
+If you manage other agents, trust them to watch their own context windows and write handoff docs when required (the harness you all share auto-notifies on low context and pushes them to read this very file). They do not need a context nanny. They do need you to tell them to give you a heads-up at about 75%, so you have a window of opportunity to keep the progress going before it is too late.
 
 ### Note on tone
 
