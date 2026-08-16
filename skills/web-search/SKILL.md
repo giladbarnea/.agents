@@ -6,7 +6,7 @@ argument-hint: query
 
 # Web Search
 
-Search using Perplexity AI via OpenRouter.
+Search using Perplexity AI through OpenRouter first.
 
 ## Usage
 
@@ -15,6 +15,8 @@ Search using Perplexity AI via OpenRouter.
 ./scripts/perplexity_search.py "query" --model sonar-pro-search
 ```
 
-Requires `OPENROUTER_API_KEY` in environment or `~/.openrouter-api-key-personal`.
+The script first uses `OPENROUTER_API_KEY` or `~/.openrouter-api-key`.
 
-If Perplexity has no funds left on the API key, fall back to using `~/.brave-search-api-key`.
+If OpenRouter fails, it uses `PERPLEXITY_API_KEY` or `~/.perplexity-api-key` with the Perplexity API.
+
+If both fail, use Brave Search with `~/.brave-search-api-key`.
