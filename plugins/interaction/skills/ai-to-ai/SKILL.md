@@ -29,6 +29,8 @@ Read [`references/firstmate.md`](references/firstmate.md) when the user asks you
 
 This section is a communication rulebook to all cases where an AI requests something from another AI: down, sideways and up — main to sub-agent, main to team, teammate to teammate, and delegated to delegator.
 
+The framework behind this section: [`theory-of-mind.md`](../../references/theory-of-mind.md). Read it once.
+
 **1. Orient the agent to the project:**
     1.a. Tell the AI agent to *load the skills and files the user has referenced* throughout the session. That's the baseline common ground. Do not repeat the content of those skills and files in your prompt.
     1.b. Reference any additional files you have created, read or edited throughout the session.
