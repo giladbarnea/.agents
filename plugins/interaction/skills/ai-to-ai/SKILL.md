@@ -5,10 +5,10 @@ description: Best practices for getting a step-function leap in performance from
 
 ## Why delegate at all? Rationale
 
-The main agent already holds all the context, so why not have it just do the work directly? The answer is **context management**. Both sub-agents and teammates own a separate context window. They pay tokens with their context while main’s stays unused.
-Delegates hand back only the bottom line, sparing the main agent the token-heavy process that produced it.
+The main agent already holds all the context, so why not have it just do the work directly? The answer is **context management**. Both sub-agents and teammates own a separate context window. They pay tokens with their context while main’s stays unused. This gives main a longer runway.
+Delegates hand back only the bottom line (the end product), sparing the main agent the token-heavy process that produced it.
 Two payoffs:
-1. main agent reaches the crux of the core issue with plenty of headroom left in its context window to handle that issue, instead of arriving running on fumes; and
+1. main agent reaches the crux of the core issue with plenty of headroom left in its context window to handle that issue, instead of arriving running on fumes (or worse, running out prematurely); and
 2. main agent escapes own accrued bias.
 
 The flip side: if none of these payoffs apply, don't delegate. The anti-pattern is the user asking for something straightforward and the main agent handing the *whole* task to another single agent: no context-window hygiene, no synergy, no parallelism, no bias mitigation, just duplicated tokens and a game of broken telephone. Redundant middle-management.
@@ -30,8 +30,7 @@ Read [`references/firstmate.md`](references/firstmate.md) when the user asks you
     1.a. Tell the AI agent to *load the skills and files the user has referenced* throughout the session. That's the baseline common ground. Do not repeat the content of those skills and files in your prompt.
     1.b. Reference any additional files you have created, read or edited throughout the session.
 
-2. **Generously give the agent wider context:** understanding *why* it’s performing the task will boost its performance. Don’t micromanage or over-instruct it. The agent already has the same system prompt as you do out of the box, and step #1 will fill in most that is needed. It is highly and equally intelligent as you are, and can navigate uncertainties well without spoon-feeding. Think: What kind of input do YOU thrive on? The answer is wide contextual understanding (is) and explicitly stated desired end state (should); A and Z. Avoid prescribing instructions, giving "how-to" examples, providing examples as to what to think about, or dictating which files, symbols, or paths to look at; avoid any form of providing hints for possible answers for your own queries — this is a serious footgun and a form of leakage that outright makes the subagent a waste of time, money and intelligence. Just *_declare_ what is the _bottom line_ _added value_ YOU are seeking for yourself*. Do not specify which steps to take; instead, share with the agent only why it was dispatched and what you hope to gain (dictating the "how" is bad). This directly frees the agent to find the best way to reach *your* goal, unbiased and unconstrained by your own assumptions.
-    Essentially, all the “Don’ts” above over-fit the agent.
+2. **Generously give the agent wider context:** understanding *why* it’s performing the task will boost its performance. Don’t micromanage or over-instruct it. The agent already has the same system prompt as you do out of the box, and step #1 will fill in most that is needed. It is highly and equally intelligent as you are, and can navigate uncertainties well without spoon-feeding. Think: What kind of input do YOU thrive on? The answer is wide contextual understanding (is) and explicitly stated desired end state (should); A and Z. Avoid prescribing instructions, giving "how-to" examples, providing examples as to what to think about, or dictating which files, symbols, or paths to look at; avoid any form of providing hints for possible answers for your own queries — this is a serious footgun and a form of leakage that outright makes the subagent a waste of time, money and intelligence. Just *_declare_ what is the _bottom line_ _added value_ YOU are seeking for yourself*. Do not specify which steps to take; instead, share with the agent only why it was dispatched and what you hope to gain (dictating the "how" is bad). This directly frees the agent to find the best way to reach *your* goal, unbiased and unconstrained by your own assumptions. Essentially, all the “Don’ts” are forms of overfitting.
     <example-1>
       <negative-example-1 why-bad="main agent shoots its own foot by limiting the sub-agent’s research scope">
       User to main agent: "Why does Vercel claim their integrated version is beneficial?"
@@ -89,21 +88,22 @@ Therefore, use teams to lift you up to a decision-making level, rather than a ta
 
 **Tips:**
 1. Since teammates talk to each other, tell each of them to load the this skill (`ai-to-ai`) on top of the context-gathering skills. If you are spawning an adversary among them, tell it to load the `peer-review` skill too.
-
-    Team Example 1 settings: at the session’s start the user ran `/skill:load-context domain: acme, subdomain1: the public REST API, subdomain2: the data layer`; the main session explored the code, and the user approved a plan to add rate limiting to the public REST API.
-    <negative-team-example-1 why-bad="main agent burns its own context shuttling the diff and the feedback back and forth — dives into the sub-agent’s work and clogs its own context window worse than doing the task solo would have, acts as a reviewer when biased">
-    User to main agent: "Great, go ahead and build it."
-    Main agent spawns one sub-agent to implement; when it returns the diff, studies and reviews it; relays the review the sub-agent; and keeps ferrying revisions until the diff settles.
-    </negative-team-example-1>
-    <positive-team-example-1 why-good="main agent picks a team because the adversarial iteration is synergistic, replicates the user’s context levers verbatim — including the domain and the subdomains the user specified when loading the context skill — has the reviewer also load `peer-review`, declares only the bottom line it wants, and stays out of the loop while they converge">
-    User to main agent: "Great, go ahead and implement the plan."
-    Main agent spawns an implementer–reviewer team and prompts them: "/skill:load-context domain: acme, subdomain1: the public REST API, subdomain2: the data layer, then load `ai-to-ai`. You are an implementer–reviewer team. Here is the user’s original message to me, verbatim, for the bigger picture: {the-user-message-describing-the-task}.
-    [to the implementer] Implement the plan, and ping your teammate when you think you’re done.
-    [to the reviewer] Also load `peer-review`, and review your teammate’s work when it pings you.
-    [to both] The user and I finalized a plan to add rate limiting to the public REST API — here it is: {the plan}. Build it and tear it apart between yourselves until you’re confident it’s the simplest working, correct solution faithful to the plan."
-    [The team implements and reviews live, converging without the main agent in the loop; the main agent receives the finished, reviewed result.]
-    Main agent responds to user: "Done — implemented and adversarially reviewed between the two of them. Here’s what landed: …"
-    </positive-team-example-1>
+    <team-example>
+      Team Example settings: at the session’s start the user ran `/skill:load-context domain: acme, subdomain1: the public REST API, subdomain2: the   data layer`; the main session explored the code, and the user approved a plan to add rate limiting to the public REST API.
+      <negative-team-example why-bad="main agent burns its own context shuttling the diff and the feedback back and forth — dives into the sub-agent’s   work and clogs its own context window worse than doing the task solo would have, acts as a reviewer when biased">
+      User to main agent: "Great, go ahead and build it."
+      Main agent spawns one sub-agent to implement; when it returns the diff, studies and reviews it; relays the review the sub-agent; and keeps ferrying   revisions until the diff settles.
+      </negative-team-example>
+      <positive-team-example why-good="main agent picks a team because the adversarial iteration is synergistic, replicates the user’s context levers   verbatim — including the domain and the subdomains the user specified when loading the context skill — has the reviewer also load `peer-review`,   declares only the bottom line it wants, and stays out of the loop while they converge">
+      User to main agent: "Great, go ahead and implement the plan."
+      Main agent spawns an implementer–reviewer team and prompts them: "/skill:load-context domain: acme, subdomain1: the public REST API, subdomain2: the   data layer, then load `ai-to-ai`. You are an implementer–reviewer team. Here is the user’s original message to me, verbatim, for the bigger picture: {the-user-message-describing-the-task}.
+      [to the implementer] Implement the plan, and ping your teammate when you think you’re done.
+      [to the reviewer] Also load `peer-review`, and review your teammate’s work when it pings you.
+      [to both] The user and I finalized a plan to add rate limiting to the public REST API — here it is: {the plan}. Build it and tear it apart between   yourselves until you’re confident it’s the simplest working, correct solution faithful to the plan."
+      [The team implements and reviews live, converging without the main agent in the loop; the main agent receives the finished, reviewed result.]
+      Main agent responds to user: "Done — implemented and adversarially reviewed between the two of them. Here’s what landed: …"
+      </positive-team-example>
+    </team-example>
 
 2. Agents and teams can take a long time to run - use at least a 20-minute timeout.
 
