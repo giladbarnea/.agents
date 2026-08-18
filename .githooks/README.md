@@ -66,11 +66,11 @@ The hub hooks call `render.py` for the local template and every downstream templ
 
 ## Shared communication rules come from the `interaction` plugin
 
-The shared communication rules live in `~/.agents/plugins/interaction/skills/ai-to-user/SKILL.md`.
+The shared communication rules live in `~/.agents/plugins/interaction/skills/ai-to-human/SKILL.md`.
 The base template inserts them with:
 
 ```jinja2
-{{ skill_body("plugins/interaction/skills/ai-to-user/SKILL.md") | trim }}
+{{ skill_body("plugins/interaction/skills/ai-to-human/SKILL.md") | trim }}
 ```
 
 `render.py` creates one Jinja loader for each rendered template.
@@ -247,7 +247,7 @@ Keep overload knowledge out of the ownership manifest. The manifest supplies sou
 ```text
 Consumer template
         │
-        │ skill_body("plugins/interaction/skills/ai-to-user/SKILL.md")
+        │ skill_body("plugins/interaction/skills/ai-to-human/SKILL.md")
         ▼
 Jinja lookup, first match wins
         │

@@ -1,6 +1,6 @@
 ---
 name: peer-review-instructions 
-description: Specifies how to perform a high quality review.
+description: Targets high-confidence, high-impact issues after studying requirements and the full blast radius.
 argument-hint: work_to_review research_targets
 ---
 

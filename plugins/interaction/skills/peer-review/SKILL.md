@@ -1,6 +1,6 @@
 ---
 name: peer-review
-description: Initiate a peer review of completed work. Load only upon user request.
+description: How to conduct peer review of completed work. Load only upon user request.
 argument-hint: work_to_review
 ---
 
