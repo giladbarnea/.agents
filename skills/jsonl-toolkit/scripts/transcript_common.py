@@ -14,6 +14,27 @@ SKILL_INVOCATION_PATTERN = re.compile(
 )
 
 
+def normalize_whitespace(text: str) -> str:
+    """Collapse whitespace for stable content bucketing.
+
+    >>> normalize_whitespace(' a   b ')
+    'a b'
+    """
+    return " ".join(text.split())
+
+
+def excerpt(text: str, limit: int = 88) -> str:
+    """Return a short one-line excerpt.
+
+    >>> excerpt('a b c d', 5)
+    'a b …'
+    """
+    compact = normalize_whitespace(text)
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1] + "…"
+
+
 def split_skill_invocation(block: str) -> tuple[str, str] | None:
     r"""Split one leading skill body from its invocation-specific user instruction.
 

@@ -21,6 +21,7 @@ PARENT_SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(PARENT_SCRIPTS))
 
 import analyze_transcript_json
+import transcript_common
 
 MURMUR_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
@@ -52,7 +53,7 @@ class IndexedSnippet:
 
 def looks_like_murmur(message: analyze_transcript_json.Message) -> bool:
     """Return whether short prose matches a configured murmur pattern."""
-    text = analyze_transcript_json.normalize_whitespace(message.text_content)
+    text = transcript_common.normalize_whitespace(message.text_content)
     return bool(text) and len(text) <= 220 and any(
         pattern.search(text) for pattern in MURMUR_PATTERNS
     )
@@ -108,7 +109,7 @@ def collect_snippets(
     return [
         IndexedSnippet(
             message.index,
-            analyze_transcript_json.excerpt(message.all_block_text),
+            transcript_common.excerpt(message.all_block_text),
         )
         for message in messages
         if predicate(message)

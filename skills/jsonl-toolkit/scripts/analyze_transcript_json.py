@@ -18,6 +18,7 @@ import yaml
 
 import transcript_common
 
+
 VALIDATION_KEYWORDS = {
     "build": ("npm run build", "vite build", "cargo build", "go build", "make build"),
     "lint": ("npm run lint", "ruff", "eslint", "biome", "cargo clippy"),
@@ -26,7 +27,7 @@ VALIDATION_KEYWORDS = {
 
 
 def flatten_tool_output(content: str | list[dict[str, str]]) -> str:
-    """Convert structured tool-output content to one string.
+    r"""Convert structured tool-output content to one string.
 
     >>> flatten_tool_output([{'type': 'text', 'text': 'a'}, {'type': 'text', 'text': 'b'}])
     'a\nb'
@@ -55,27 +56,6 @@ def block_text(block: str | dict[str, object]) -> str:
         return command
     path = block.get("path") or block.get("file_path")
     return path if isinstance(path, str) else ""
-
-
-def normalize_whitespace(text: str) -> str:
-    """Collapse whitespace for stable content bucketing.
-
-    >>> normalize_whitespace(' a   b ')
-    'a b'
-    """
-    return " ".join(text.split())
-
-
-def excerpt(text: str, limit: int = 88) -> str:
-    """Return a short one-line excerpt.
-
-    >>> excerpt('a b c d', 5)
-    'a b …'
-    """
-    compact = normalize_whitespace(text)
-    if len(compact) <= limit:
-        return compact
-    return compact[: limit - 1] + "…"
 
 
 def shorten_path(path: str) -> str:
@@ -370,7 +350,7 @@ def build_report(messages: list[Message], top: int) -> dict[str, object]:
             for name, indices in sorted(tool_outputs_by_tool.items())
         },
         "duplicate_commands": {
-            excerpt(command, 120): {"count": len(indices), "indices": sorted(indices)}
+            transcript_common.excerpt(command, 120): {"count": len(indices), "indices": sorted(indices)}
             for command, indices in sorted(bash_calls_by_command.items())
             if len(indices) > 1
         },

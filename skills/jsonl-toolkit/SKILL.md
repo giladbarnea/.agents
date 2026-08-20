@@ -93,6 +93,8 @@ ch <session-id> -t:s -f json > transcription.json
 ch <session-id> -t:s > transcription.md
 ```
 
+`-t:s` splices each long tool value down to about 500 characters, keeping both ends around a bare `...` line. It does this to arguments as well as results, so a truncated value still opens and closes correctly and can look whole. Export with `-t` instead whenever the content matters.
+
 Treat the structured JSON as the source of truth. Convert between the structured export and rendered Markdown with:
 
 ```bash
@@ -117,6 +119,31 @@ uv run --script scripts/render_transcript_review.py transcription.json > review.
 ```
 
 The renderer preserves chronology, pairs tools by exact ID, flags unmatched events, and elides only byte-identical repeated skill bodies.
+
+The chronological view prints every tool block as raw JSON. Use it only when you need a tool call reproduced byte for byte, and expect to read a small slice of it. For reading a session to decide what it means, render the annotated view, which is smaller on all but the smallest sessions and is the only view that checks the export for format drift:
+
+```bash
+ch <session-id> -t -f json > full.json
+uv run --script scripts/render_transcript_review.py --annotate full.json > annotated.txt
+```
+
+This emits one keyed line per tool call and per result, and prints message text verbatim, so a long message still spans many unprefixed lines. It finds long string arguments at any nesting depth and reduces short ones to tags. It names no tool anywhere it reads arguments, so it works on any provider's export. The one exception is recognizing the pruner's own file references.
+
+On a raw export the saving is large, because the conventional view spends most of its bytes on raw tool JSON. A 10 MB session renders to about 270 KB. The saving shrinks toward nothing as a session becomes mostly prose, because message text prints verbatim with no budget. A session that is almost entirely conversation saves a few percent, and a session under a kilobyte can come out a few bytes larger. Tool traffic is what this view compresses.
+
+The `this view clipped` line totals what the annotated view itself removed, separately from what the exporter removed. Each clipped value also carries its own residue count in place, but at 40-odd clipped values summing them by eye is not realistic.
+
+Nothing disappears without a marker. Long values are clipped to a budget and report the residue they removed, an elided block reports how much it held, and whitespace inside a value is collapsed. Results are never suppressed by size, because a chosen option and a routine receipt are the same length.
+
+The mode refuses a file it cannot key on, including a native session, rather than emitting an empty view.
+
+It reports what it saw to stderr. The line that detects a changed export format is `unrecognized block and wrapper types`. It reads `none` on every healthy export, including ones full of thinking and subagent blocks, so anything appearing there is a block type this mode has not vetted. Its content is still shown as a size, but nothing else about it is understood.
+
+The `values spliced with `...`` line counts values holding a bare `...` line, which is the mark `ch -t:s` leaves where it cut. It cuts arguments as well as results, and both ends survive, so a truncated value can look whole. A handful is ordinary content, such as a code fence or a tool's own elision. Hundreds means the export was capped and the middles are gone.
+
+The `tool ids` line matters when it says anything but `unique`. One provider emits a single constant id for a whole session, and `ch` shortens ids to four characters, so any long session can collide. The line separates a collision inside one message, which makes a skeleton anchor ambiguous, from one across messages, which only makes `no-result-in-file` unreliable.
+
+A call marked `no-result-in-file` says only that. In a raw export it means an interrupted call. In a pruned transcript it also covers results the pruner removed on purpose, so the marker names what it saw and leaves the cause to you.
 
 ## Work with a native Pi session
 

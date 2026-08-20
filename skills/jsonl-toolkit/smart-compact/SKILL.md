@@ -96,7 +96,15 @@ Use the parent file reporter when presenting the set:
 
 ## Build from a current structured export
 
-Follow the parent `ch` export contract. Use `original_index` rather than a shifting array position.
+Follow the parent `ch` export contract, but export with `-t` rather than `-t:s`:
+
+```bash
+ch <session-id> -t -f json > transcription.json
+```
+
+`-t:s` splices long tool values down to about 500 characters, keeping both ends around a bare `...` line. It cuts arguments as well as results, so a skeleton `command` and a skeleton `outcome` can both be silently wrong. `--annotate` counts spliced values on its stderr summary.
+
+Use `original_index` rather than a shifting array position.
 
 The native plan applier requires current Pi provenance fields. Re-export and re-prune an older transcript that lacks them.
 
@@ -186,6 +194,18 @@ uv run --script ../scripts/render_transcript_review.py pruned.json > review.md
 
 The parent renderer preserves message order, pairs tools by exact ID, labels boundaries, and elides only byte-identical skill bodies.
 
+Prefer the annotated view when repetitive tool traffic dominates the transcript:
+
+```bash
+uv run --script ../scripts/render_transcript_review.py --annotate pruned.json > annotated.txt
+```
+
+Every tool call and result line carries the `original_index` and the tool identity that a skeleton anchors on, so reading it is the annotation work. Message text prints verbatim, so a long message spans lines that carry no index. Results are shown whole up to a generous budget, because a skeleton `outcome` is usually written from a result.
+
+Check the stderr summary before you trust the view. Any entry on `unrecognized block and wrapper types` is a block type the mode has not vetted, which means the export format moved. Its size is still reported, but nothing else about it is read. A `NOT UNIQUE` verdict on the `tool ids` line means a skeleton anchor may be ambiguous and `no-result-in-file` cannot be believed.
+
+Ignore `no-result-in-file` on a pruned transcript. The pruner removes todo results by design, so the marker there reports its own removals rather than interrupted calls. Run `--annotate` on the export itself when you need that signal to mean something. That costs between nothing and about half again, depending on how much file work the session did, because dropping file-tool results is most of what the pruner saves. Transcribe indices only from the pruned run, because pruning drops whole messages and `compile_annotations.py` rejects an index that no longer exists.
+
 ## Annotate judgments instead of mechanical plan fields
 
 Create `annotations.yaml` containing only semantic decisions:
@@ -201,7 +221,7 @@ drop_file_references:
   - {original_index: 6, operation: Read, path: /path/to/stale.py}
 skeletons:
   - original_index: 236
-    tool_id: "toolu_full-native-id"
+    tool_id: "R3Ul"
     command: "pytest"
     purpose: "Validate the change"
     outcome: "148 tests passed"
