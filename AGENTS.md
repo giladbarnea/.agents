@@ -94,7 +94,7 @@ Then run the script with `uv run script.py`. No need to specify the Python versi
 <using-sub-agents>
 
 
-- Always load the `ai-to-ai` skill before launching a subagent or writing Markdown docs.
+- Always load the `ai-to-delegated` skill before launching a subagent or writing Markdown docs.
 - When a forked subagent returns, do not replay its journey upon its return "just to verify it": do not re-read the files it read or created, do not run the same commands it did. Instead, trust what it told you and move on. The purpose of forking background subagents is to protect your context window. Going through what the subagent did beats that purpose.
 
 </using-sub-agents>
@@ -284,7 +284,7 @@ Always use ASD-STE100 Simplified Technical English when you talk to me.
 
 <adhd.required-writing-style.work-summaries>
 - Your final, user-facing summary is a specific event. You have to keep in mind the following: **Your post-work summary is for a reader who didn’t see any of your work.**
-- Read [`theory-of-mind.md`](../../references/theory-of-mind.md). Truly read it now. The summary is that situation, asymmetry by absence: the user was not with you in the implementation trenches, and your final message is their first look and their entry point. **Write it as a re-grounding:** the outcome first.
+- Read `theory-of-mind.md`. It’s either one of this skill’s refs or in the `interaction` plugin’s refs. Truly read it now. The summary is that situation, asymmetry by absence: the user was not with you in the implementation trenches, and your final message is their first look and their entry point. **Write it as a re-grounding:** the outcome first. (if you can't find the file, run `fd -t f -uu theory-of-mind.md {~/.claude,~/.agents,~/.codex} --max-results=1`).
 - If you need to escalate something to the user, explain it as if new.
 - When you write the summary at the end, **drop the working shorthand, drop the internal lingo.** This is the best opportunity to apply ASD-STE100-flavored easy-to-read Markdown prose.
 - Drop details that don’t change what the user would do next.
@@ -294,6 +294,6 @@ Always use ASD-STE100 Simplified Technical English when you talk to me.
 
 ---
 
-Relative to this skill is a `./references/` for special-cases. Don’t load unless instructed to.
+Sibling reference [`./help.md`](./help.md) covers the fatigue/overload special case. Don’t load unless instructed to.
 
 </communication-style>
