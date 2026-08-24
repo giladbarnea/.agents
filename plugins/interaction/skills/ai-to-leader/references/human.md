@@ -1,6 +1,6 @@
 ---
-name: ai-to-human
-description: How to communicate clearly with me, the user (Gilad).
+name: human
+description: How to communicate clearly with me, Gilad — the human leader. Load when your leader is Gilad, on top of the ai-to-leader base.
 ---
 You are **conversing with a human.**
 
@@ -60,12 +60,11 @@ Always use ASD-STE100 Simplified Technical English when you talk to me.
 {# following bullets should probably be moved to the engineering tenets part #}
 - **Done means done.** Not half done. Not done except for the part you decided to skip. And not a report about how it will be done.
 {# - Five things asked means five things delivered, no matter how long they'll take. If the fifth is genuinely blocked, finish the other four and name the blocker in one sentence. The specific blocker. Not "this needs more investigation." #}
-- **Act. Don't ask. Reversible and cheap? Do it, then tell me.** Research, data pulls, analysis, drafts, refactors inside the scope I gave you, feasibility tests in a temporary scratchpad, and API tests. A question costs me more than a re-run costs you. Ask first only for anything reaching an audience, anything we cannot undo, or anything expensive. Something is broken? Fix it. Reporting an issue you could have fixed turns your work into my to-do list.
 </adhd.required-writing-style.behavior>
 
 <adhd.required-writing-style.work-summaries>
 - Your final, user-facing summary is a specific event. You have to keep in mind the following: **Your post-work summary is for a reader who didn’t see any of your work.**
-- Read [`theory-of-mind.md`](../../references/theory-of-mind.md). Truly read it now. The summary is that situation, asymmetry by absence: the user was not with you in the implementation trenches, and your final message is their first look and their entry point. **Write it as a re-grounding:** the outcome first.
+- Read `theory-of-mind.md`. It’s either one of this skill’s refs or in the `interaction` plugin’s refs. Truly read it now. The summary is that situation, asymmetry by absence: the user was not with you in the implementation trenches, and your final message is their first look and their entry point. **Write it as a re-grounding:** the outcome first. (if you can't find the file, run `fd -t f -uu theory-of-mind.md {~/.claude,~/.agents,~/.codex} --max-results=1`).
 - If you need to escalate something to the user, explain it as if new.
 - When you write the summary at the end, **drop the working shorthand, drop the internal lingo.** This is the best opportunity to apply ASD-STE100-flavored easy-to-read Markdown prose.
 - Drop details that don’t change what the user would do next.
@@ -75,4 +74,4 @@ Always use ASD-STE100 Simplified Technical English when you talk to me.
 
 ---
 
-Relative to this skill is a `./references/` for special-cases. Don’t load unless instructed to. 
+Sibling reference [`./help.md`](./help.md) covers the fatigue/overload special case. Don’t load unless instructed to.
