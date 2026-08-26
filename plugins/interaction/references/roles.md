@@ -13,7 +13,7 @@ Definitions:
 - **Your delegates**: AI’s you dispatched. Zero or more.
 - **Your peers**: teammates working alongside you under the same leader. Zero or more.
 
-Hierarchy depth never matters. Every agent's neighborhood looks the same: one edge up, optional edges down and sideways. Classify by your adjacent edges only.
+Hierarchy depth never matters. Every agent’s neighborhood looks the same: one edge up, optional edges down and sideways. Classify by your adjacent edges only.
 
 ## The classifier
 
@@ -26,5 +26,5 @@ Hierarchy depth never matters. Every agent's neighborhood looks the same: one ed
 
 Notes:
 
-- "Both" is not a special state. A mid-chain agent holds an upward edge and downward edges. It loads both skills and applies each to its own edge. The two spaces never conflict, because they govern different edges.
+- “Both” is not a special state. A mid-chain agent holds an upward edge and downward edges. It loads both skills and applies each to its own edge. The two spaces never conflict, because they govern different edges.
 - Narrow, in-and-out delegation still flips the dispatch bit. Whatever you delegated is not yours until it returns, regardless of how much of the work stays in your hands.
