@@ -29,12 +29,18 @@ show_render_diff() {
   local rendered="$2"
   
   if command -v hunk >/dev/null 2>&1; then
-     git --no-pager diff --no-index "$actual" "$rendered" | hunk && return 0
+     hunk diff "$actual" "$rendered"
+     return
   fi
   if command -v comview >/dev/null 2>&1; then
     git --no-pager diff --no-index "$actual" "$rendered" | comview && return 0
+    return
   fi
-  DELTA_FEATURES="${DELTA_FEATURES} narrow" delta "$actual" "$rendered"
+  if command -v delta >/dev/null 2>&1; then
+    DELTA_FEATURES="${DELTA_FEATURES} narrow" delta "$actual" "$rendered"
+    return
+  fi
+  git diff --no-index "$actual" "$rendered" 
 }
 
 render_one() {
@@ -198,8 +204,36 @@ render_skills() {
   for skill_directory in "$REPOSITORY_ROOT"/plugins/*/skills/*/; do
     skill_directory="${skill_directory%/}"
     [[ -s "$skill_directory/SKILL.md" ]] || continue
-    link_skill "$skill_directory" "$HOME/.pi/agent/skills" || return 1
+    link_pi_plugin_skill "$skill_directory" || return 1
   done
+}
+
+# Materializes one plugin skill for Pi as a real directory of symlinks instead
+# of one skill-directory symlink. This lets the plugin-level references/* land
+# flat inside <skill>/references/ without writing into the hub source. A skill's
+# own reference wins a name clash because it is linked last.
+link_pi_plugin_skill() {
+  setopt localoptions nullglob
+  local skill_directory="$1"
+  local plugin_directory="${skill_directory%/skills/*}"
+  local skill_name="$(basename "$skill_directory")"
+  local destination="$HOME/.pi/agent/skills/$skill_name"
+  local entry
+
+  [[ -L "$destination" ]] && rm "$destination"
+  mkdir -p "$destination/references"
+
+  for entry in "$skill_directory"/*; do
+    [[ "$(basename "$entry")" == "references" ]] && continue
+    ensure_symlink "$entry" "$destination/$(basename "$entry")" || return 1
+  done
+
+  for entry in "$plugin_directory"/references/* "$skill_directory"/references/*; do
+    ensure_symlink "$entry" "$destination/references/$(basename "$entry")" || return 1
+  done
+
+  printf '✓ Linked %s → %s (plugin skill, flattened references)\n' \
+    "$skill_name" "$HOME/.pi/agent/skills" >&2
 }
 
 # Detects and removes orphaned symlinks in provider skill directories.
