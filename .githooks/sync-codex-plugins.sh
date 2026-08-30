@@ -189,7 +189,7 @@ sync_plugin() {
   jq empty "$generated_plugin_directory/.codex-plugin/plugin.json"
   jq empty "$marketplace_directory/.agents/plugins/marketplace.json"
 
-  echo "Synchronized $plugin_identifier for Codex."
+  echo "✓ Synced $plugin_name → Codex ($plugin_identifier)"
 }
 
 reconcile_plugin() {

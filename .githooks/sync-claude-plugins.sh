@@ -230,7 +230,7 @@ sync_plugin() {
     "$KNOWN_MARKETPLACES_FILE" \
     "$INSTALLED_PLUGINS_FILE"
 
-  printf '✓ Synced %s into Claude as %s\n' "$source_plugin_directory" "$plugin_identifier"
+  printf '✓ Synced %s → Claude (%s)\n' "$plugin_name" "$plugin_identifier"
 }
 
 reconcile_plugin() {

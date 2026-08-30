@@ -1,7 +1,10 @@
 #!/usr/bin/env zsh
 
 source "$(dirname "$0")/common.sh"
+section "instructions"
 render_agents_md stage || exit 1
+section "skills"
 render_skills stage || exit 1
 clean_orphaned_skill_links
+section "plugins"
 sync_plugins || exit 1

@@ -19,6 +19,18 @@ SKILL_PROVIDERS=(
   "$HOME/.pi/agent/skills"
 )
 
+# ---[ Output styling ]---
+# Three tiers: dim gray = structure and routine detail; green ✓ = one milestone
+# summary per phase; yellow/red/bold = the few things that need attention.
+[[ -t 2 ]] && source "$HOME/dev/land/term.zsh"
+
+section() { printf "\n${CbrBlk}──[ ${C0}${Cb}%s${Cb0}${CbrBlk} ]────────────────────────────${C0}\n" "$1" >&2; }
+ok()      { printf "${Cgrn}✓${C0} %b\n" "$*" >&2; }
+dim()     { printf "${CbrBlk}%b${C0}\n" "$*" >&2; }
+warn()    { printf "${Cylw}⚠ %b${C0}\n" "$*" >&2; }
+err()     { printf "${Cred}✗ %b${C0}\n" "$*" >&2; }
+ask()     { printf "  ${CbrGrn}?${C0} ${Cb}%b${Cb0} ${CbrBlk}%s${C0} ${CbrBlu}❯${C0} " "$1" "$2" >/dev/tty; }
+
 can_prompt_for_render() {
   [[ -t 1 ]]
 }
@@ -46,15 +58,22 @@ show_render_diff() {
 render_one() {
   local target="$1"
   local output="${target%.j2}"
-  local rendered_tmp reply
+  local display="${output/#$HOME/~}"
+  local rendered_tmp reply dry_run_report
 
-  if ./render.py --dry-run "$target"; then
+  if dry_run_report="$(./render.py --dry-run "$target" 2>&1)"; then
+    ((RENDER_UNCHANGED_COUNT += 1))
     return 0
   fi
+  [[ "$dry_run_report" == *"would have been changed"* ]] || {
+    err "$dry_run_report"
+    return 1
+  }
 
+  printf "${Cylw}${Cb}✱ %s is stale${Cb0}${C0}\n" "$display" >&2
   can_prompt_for_render || return 1
 
-  printf 'Show diff? Y/N/R ' >/dev/tty
+  ask "Show diff?" "[y]es · [n]o · [r]ender now"
   read -r reply </dev/tty || return 1
 
   case "$reply" in
@@ -64,16 +83,18 @@ render_one() {
     show_render_diff "$output" "$rendered_tmp"
     rm -f "$rendered_tmp"
 
-    printf 'Render %s now? Y/N ' "$output" >/dev/tty
+    ask "Render ${display} now?" "[y/n]"
     read -r reply </dev/tty || return 1
     if [[ "$reply" == "Y" || "$reply" == "y" ]]; then
-      ./render.py "$target" || return 1
+      ./render.py "$target" >/dev/null || return 1
+      ok "Rendered → ${Cb}${display}${Cb0}"
     else
-      printf '⊘ Skipped %s\n' "$output" >/dev/tty
+      dim "⊘ Skipped ${display}"
     fi
     ;;
   [Rr])
-    ./render.py "$target" || return 1
+    ./render.py "$target" >/dev/null || return 1
+    ok "Rendered → ${Cb}${display}${Cb0}"
     ;;
   *)
     return 1
@@ -87,6 +108,7 @@ render_one() {
 render_agents_md() {
   local stage="${1:-}"
   local target
+  typeset -gi RENDER_UNCHANGED_COUNT=0
 
   render_one AGENTS.md.j2 || return 1
   [[ -n "$stage" ]] && git add AGENTS.md
@@ -94,6 +116,7 @@ render_agents_md() {
   for target in "${TARGETS[@]}"; do
     render_one "$target" || return 1
   done
+  ok "${Cb}${RENDER_UNCHANGED_COUNT}${Cb0}/$((${#TARGETS} + 1)) instruction files up to date"
 }
 
 # Joins provider short-names into a brace-expansion summary rooted at $HOME,
@@ -115,11 +138,11 @@ ensure_symlink() {
 
   [[ -L "$link" && "$(readlink "$link")" == "$target" ]] && return 0
   [[ ! -e "$link" || -L "$link" ]] || {
-    printf '✗ Refusing to link over non-symlink destination: %s\n' "$link" >&2
+    err "Refusing to link over non-symlink destination: $link"
     return 1
   }
   ln -sfn "$target" "$link" || {
-    printf '✗ Failed to link %s → %s\n' "$target" "$link" >&2
+    err "Failed to link $target → $link"
     return 1
   }
 }
@@ -128,19 +151,11 @@ link_skill() {
   local skill_directory="$1"
   shift
   local skill_name="$(basename "$skill_directory")"
-  local provider short
-  local -a linked
+  local provider
 
-  linked=()
   for provider in "$@"; do
-    short="${provider#"$HOME"/}"
-    short="${short%%/*}"
-    short="${short#.}"
     ensure_symlink "$skill_directory" "$provider/$skill_name" || return 1
-    linked+=("$short")
   done
-
-  printf '✓ Linked %s → %s\n' "$skill_name" "$(join_braced "${linked[@]}")" >&2
 }
 
 is_runtime_skill_path() {
@@ -157,16 +172,18 @@ is_runtime_skill_path() {
 # skill and provider is otherwise handled by this single traversal.
 render_skills() {
   local stage="${1:-}"
-  local skill_path skill_directory generator has_generator
+  local skill_path skill_directory generator has_generator provider providers_display
+  local -i hub_skill_count=0 plugin_skill_count=0
+  local -a provider_shorts=()
 
   for skill_path in "${RUNTIME_SKILL_PATHS[@]}"; do
     skill_directory="$REPOSITORY_ROOT/$skill_path"
     [[ -d "$skill_directory" ]] || {
-      printf '✗ Registered runtime skill does not exist: %s\n' "$skill_directory" >&2
+      err "Registered runtime skill does not exist: $skill_directory"
       return 1
     }
     [[ -f "$skill_directory/create/create.py" ]] || {
-      printf '✗ Registered runtime skill has no generator: %s\n' "$skill_directory" >&2
+      err "Registered runtime skill has no generator: $skill_directory"
       return 1
     }
   done
@@ -180,18 +197,17 @@ render_skills() {
 
     [[ -f "$skill_directory/SKILL.md" || $has_generator -eq 1 ]] || continue
     ((has_generator == 0)) || is_runtime_skill_path "$skill_path" || {
-      printf '✗ Runtime skill is missing from %s: %s\n' \
-        "$GITHOOKS_DIRECTORY/runtime-skills.sh" "$skill_path" >&2
+      err "Runtime skill is missing from $GITHOOKS_DIRECTORY/runtime-skills.sh: $skill_path"
       return 1
     }
 
     ((has_generator == 0)) || [[ -x "$generator" ]] || {
-      printf '✗ Skill runtime is not executable: %s\n' "$generator" >&2
+      err "Skill runtime is not executable: $generator"
       return 1
     }
     ((has_generator == 0)) || "$generator" || return 1
     [[ -f "$skill_directory/SKILL.md" ]] || {
-      printf '✗ Runtime did not produce SKILL.md: %s\n' "$skill_directory" >&2
+      err "Runtime did not produce SKILL.md: $skill_directory"
       return 1
     }
     if ((has_generator == 1)) && [[ -n "$stage" ]]; then
@@ -199,41 +215,57 @@ render_skills() {
     fi
 
     link_skill "$skill_directory" "${SKILL_PROVIDERS[@]}" || return 1
+    ((hub_skill_count += 1))
   done
+
+  for provider in "${SKILL_PROVIDERS[@]}"; do
+    provider="${provider#"$HOME"/}"
+    provider="${provider%%/*}"
+    provider_shorts+=("${provider#.}")
+  done
+  providers_display="$(join_braced "${provider_shorts[@]}")"
+  ok "Linked ${Cb}${hub_skill_count}${Cb0} hub skills → ${CbrBlk}${providers_display/#$HOME/~}${C0}"
 
   for skill_directory in "$REPOSITORY_ROOT"/plugins/*/skills/*/; do
     skill_directory="${skill_directory%/}"
     [[ -s "$skill_directory/SKILL.md" ]] || continue
     link_pi_plugin_skill "$skill_directory" || return 1
+    ((plugin_skill_count += 1))
   done
+  ok "Materialized ${Cb}${plugin_skill_count}${Cb0} plugin skills → ${CbrBlk}~/.pi/agent/skills${C0} (flat references)"
 }
 
 # Materializes one plugin skill for Pi as a real directory of symlinks instead
 # of one skill-directory symlink. This lets the plugin-level references/* land
-# flat inside <skill>/references/ without writing into the hub source. A skill's
-# own reference wins a name clash because it is linked last.
+# flat inside <skill>/references/ without writing into the hub source.
+# Reference links are rebuilt each run; on a name clash the earlier entry wins
+# (skill's own references before plugin-level ones) and the loser is skipped
+# with a warning.
 link_pi_plugin_skill() {
   setopt localoptions nullglob
   local skill_directory="$1"
   local plugin_directory="${skill_directory%/skills/*}"
   local skill_name="$(basename "$skill_directory")"
   local destination="$HOME/.pi/agent/skills/$skill_name"
-  local entry
+  local entry link
 
   [[ -L "$destination" ]] && rm "$destination"
   mkdir -p "$destination/references"
+  find "$destination/references" -maxdepth 1 -type l -delete
 
   for entry in "$skill_directory"/*; do
     [[ "$(basename "$entry")" == "references" ]] && continue
     ensure_symlink "$entry" "$destination/$(basename "$entry")" || return 1
   done
 
-  for entry in "$plugin_directory"/references/* "$skill_directory"/references/*; do
-    ensure_symlink "$entry" "$destination/references/$(basename "$entry")" || return 1
+  for entry in "$skill_directory"/references/* "$plugin_directory"/references/*; do
+    link="$destination/references/$(basename "$entry")"
+    if [[ -e "$link" || -L "$link" ]]; then
+      warn "Reference name clash: kept ${link/#$HOME/~}, skipped ${entry/#$HOME/~}"
+      continue
+    fi
+    ensure_symlink "$entry" "$link" || return 1
   done
-
-  printf '✓ Linked %s → %s (plugin skill, flattened references)\n' \
-    "$skill_name" "$HOME/.pi/agent/skills" >&2
 }
 
 # Detects and removes orphaned symlinks in provider skill directories.
@@ -253,27 +285,26 @@ clean_orphaned_skill_links() {
       if [[ ! -d "$target" ]]; then
         found_orphans=$((found_orphans + 1))
         link_name="$(basename "$link")"
-        printf 'Found orphaned link: %s\n' "$link" >&2
-        printf '  → points to (missing): %s\n' "$target" >&2
+        warn "Orphaned link: ${link/#$HOME/~} → missing ${target/#$HOME/~}"
 
         if can_prompt_for_render; then
-          printf 'Remove orphaned link %s? Y/N ' "$link_name" >/dev/tty
+          ask "Remove orphaned link ${link_name}?" "[y/n]"
           local reply
           read -r reply </dev/tty || continue
           if [[ "$reply" == "Y" || "$reply" == "y" ]]; then
-            rm -f "$link" && printf '✓ Removed %s\n' "$link" >&2
+            rm -f "$link" && ok "Removed ${link/#$HOME/~}"
           else
-            printf '⊘ Kept %s\n' "$link" >&2
+            dim "⊘ Kept ${link/#$HOME/~}"
           fi
         else
-          printf '⊘ (no TTY; skipping) %s\n' "$link" >&2
+          dim "⊘ (no TTY; skipping) ${link/#$HOME/~}"
         fi
       fi
     done < <(find "$skills_dir" -maxdepth 1 -mindepth 1 -type l -print)
   done
 
   if ((found_orphans == 0)); then
-    printf '✓ No orphaned skill links found\n' >&2
+    dim "No orphaned skill links"
   fi
 }
 

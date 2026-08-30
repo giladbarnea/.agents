@@ -2,7 +2,10 @@
 
 source "$(dirname "$0")/common.sh"
 # git submodule update --init --recursive plugins/claude-plugins || exit 1
+section "instructions"
 render_agents_md || exit 1
+section "skills"
 render_skills || exit 1
 clean_orphaned_skill_links
+section "plugins"
 sync_plugins ORIG_HEAD..HEAD || exit 1
