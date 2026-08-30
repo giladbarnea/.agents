@@ -1,9 +1,10 @@
-#!/usr/bin/env bash
+#!/usr/bin/env zsh
 
-GITHOOKS_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GITHOOKS_DIRECTORY="$(cd "$(dirname "${(%):-%x}")" && pwd)"
 REPOSITORY_ROOT="$(cd "$GITHOOKS_DIRECTORY/.." && pwd)"
 source "$GITHOOKS_DIRECTORY/runtime-skills.sh"
 
+# I want ~/.antigravity here too, but I'm not sure it has a .j2 file
 TARGETS=(
   ~/.pi/agent/AGENTS.md.j2
   ~/.codex/AGENTS.md.j2
@@ -23,14 +24,17 @@ can_prompt_for_render() {
 }
 
 show_render_diff() {
+  setopt localoptions pipefail errreturn
   local actual="$1"
   local rendered="$2"
-
-  if command -v comview >/dev/null 2>&1; then
-    git --no-pager diff --no-index "$actual" "$rendered" | comview
-  else
-    DELTA_FEATURES="${DELTA_FEATURES} narrow" delta "$actual" "$rendered"
+  
+  if command -v hunk >/dev/null 2>&1; then
+     git --no-pager diff --no-index "$actual" "$rendered" | hunk && return 0
   fi
+  if command -v comview >/dev/null 2>&1; then
+    git --no-pager diff --no-index "$actual" "$rendered" | comview && return 0
+  fi
+  DELTA_FEATURES="${DELTA_FEATURES} narrow" delta "$actual" "$rendered"
 }
 
 render_one() {
