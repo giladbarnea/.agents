@@ -16,7 +16,7 @@ readonly TEMPORARY_DIRECTORY="$(mktemp -d)"
 trap 'rm -rf "$TEMPORARY_DIRECTORY"' EXIT
 
 fail() {
-  printf '✗ %s\n' "$1" >&2
+  printf "${Cred:-}✗ %s${C0:-}\n" "$1" >&2
   exit 1
 }
 
@@ -101,7 +101,8 @@ remove_plugin() {
 
   rm -rf "$marketplace_directory" "$cache_directory"
 
-  printf '✓ Removed deleted plugin %s from Claude\n' "$plugin_identifier"
+  printf "${Cgrn:-}✓${C0:-} Removed ${Cb:-}%s${Cb0:-} from Claude ${CbrBlk:-}(%s)${C0:-}\n" \
+    "$plugin_name" "$plugin_identifier" >&2
 }
 
 sync_plugin() {
@@ -230,7 +231,8 @@ sync_plugin() {
     "$KNOWN_MARKETPLACES_FILE" \
     "$INSTALLED_PLUGINS_FILE"
 
-  printf '✓ Synced %s → Claude (%s)\n' "$plugin_name" "$plugin_identifier"
+  printf "${Cgrn:-}✓${C0:-} Synced ${Cb:-}%s${Cb0:-} → Claude ${CbrBlk:-}(%s)${C0:-}\n" \
+    "$plugin_name" "$plugin_identifier" >&2
 }
 
 reconcile_plugin() {
@@ -247,7 +249,7 @@ reconcile_plugin() {
     return
   fi
 
-  printf '⚠ Plugin exists without a non-empty skills/*/SKILL.md; leaving Claude unchanged: %s\n' \
+  printf "${Cylw:-}⚠ Plugin exists without a non-empty skills/*/SKILL.md; leaving Claude unchanged: %s${C0:-}\n" \
     "$source_plugin_directory" >&2
 }
 

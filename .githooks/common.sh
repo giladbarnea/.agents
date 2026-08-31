@@ -311,6 +311,7 @@ clean_orphaned_skill_links() {
 sync_plugins() {
   local git_range="${1:-}"
 
+  export Cb Cb0 Cgrn Cylw Cred CbrBlk C0
   PLUGIN_SYNC_GIT_RANGE="$git_range" "$GITHOOKS_DIRECTORY/sync-claude-plugins.sh" || return 1
   PLUGIN_SYNC_GIT_RANGE="$git_range" "$GITHOOKS_DIRECTORY/sync-codex-plugins.sh" || return 1
 }

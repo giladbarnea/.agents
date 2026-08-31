@@ -14,7 +14,7 @@ readonly TEMPORARY_DIRECTORY="$(mktemp -d "$CODEX_DIRECTORY/.sync-codex-plugins.
 trap 'rm -R "$TEMPORARY_DIRECTORY"' EXIT
 
 fail() {
-  echo "$1" >&2
+  printf "${Cred:-}✗ %s${C0:-}\n" "$1" >&2
   exit 1
 }
 
@@ -130,7 +130,8 @@ remove_plugin() {
   update_configuration remove "$plugin_identifier" "$marketplace_name" "$marketplace_directory"
   rm -rf "$marketplace_directory" "$cache_directory"
 
-  echo "Removed deleted plugin $plugin_identifier from Codex."
+  printf "${Cgrn:-}✓${C0:-} Removed ${Cb:-}%s${Cb0:-} from Codex ${CbrBlk:-}(%s)${C0:-}\n" \
+    "$plugin_name" "$plugin_identifier" >&2
 }
 
 sync_plugin() {
@@ -189,7 +190,8 @@ sync_plugin() {
   jq empty "$generated_plugin_directory/.codex-plugin/plugin.json"
   jq empty "$marketplace_directory/.agents/plugins/marketplace.json"
 
-  echo "✓ Synced $plugin_name → Codex ($plugin_identifier)"
+  printf "${Cgrn:-}✓${C0:-} Synced ${Cb:-}%s${Cb0:-} → Codex ${CbrBlk:-}(%s)${C0:-}\n" \
+    "$plugin_name" "$plugin_identifier" >&2
 }
 
 reconcile_plugin() {
@@ -206,7 +208,8 @@ reconcile_plugin() {
     return
   fi
 
-  echo "Plugin exists without a non-empty skills/*/SKILL.md; leaving Codex unchanged: $source_plugin_directory" >&2
+  printf "${Cylw:-}⚠ Plugin exists without a non-empty skills/*/SKILL.md; leaving Codex unchanged: %s${C0:-}\n" \
+    "$source_plugin_directory" >&2
 }
 
 [[ $# -eq 0 ]] || fail "Usage: $0"
