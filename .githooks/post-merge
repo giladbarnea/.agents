@@ -8,4 +8,4 @@ section "skills"
 render_skills || exit 1
 clean_orphaned_skill_links
 section "plugins"
-sync_plugins ORIG_HEAD..HEAD || exit 1
+sync_plugins || exit 1

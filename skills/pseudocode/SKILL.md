@@ -92,3 +92,11 @@ Walk a nested feed structure to collect every article whose ID appears in a
 selection set, then bucket the collected articles by issue date into a map,
 lazily creating each date bucket on first encounter.
 </pseudocode>
+
+<another-pseudocode-example>
+on(save)
+  if content is unchanged
+    return cached result
+  write new content
+  return fresh result
+</another-pseudocode-example>
