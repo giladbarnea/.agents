@@ -93,10 +93,49 @@ selection set, then bucket the collected articles by issue date into a map,
 lazily creating each date bucket on first encounter.
 </pseudocode>
 
-<another-pseudocode-example>
+<more-pseudocode-examples>
 on(save)
   if content is unchanged
     return cached result
   write new content
   return fresh result
-</another-pseudocode-example>
+
+- Show component interaction, control flow, or data flow with Mermaid:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI
+    participant Daemon
+    User->>UI: choose command
+    UI->>Daemon: send expanded prompt
+    Daemon-->>UI: stream result
+```
+
+- Use `diff` when the point is what changes and the surrounding shape already exists. Match the diff shape to the topic.
+
+For a component change:
+
+```diff
+ <SessionPage>
+   useSessionEvents()
+   <SessionToolbar>
++    <RunSkillButton />
+   <SessionTimeline>
++    <SkillResultCard />
+```
+
+For a file-layout change:
+
+```diff
+ src/
+ ├── commands/
++│   └── show-me.ts       # expands the slash command
+ ├── sessions/
+-└── transport.ts
++└── transport/
++    ├── client.ts
++    └── stream.ts
+```
+</more-pseudocode-examples>
+
