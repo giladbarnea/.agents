@@ -1,46 +1,46 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-main(){
-	local githooks_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-	local repository_root="$(cd "$githooks_directory/.." && pwd)"
-	local personal_plugin_directory="$repository_root/plugins/interaction"
-	local published_repository="$repository_root/plugins/.published-interaction"
-	local published_plugin_directory="$published_repository/plugins/interaction"
-	[[ -d "$personal_plugin_directory" && -d "$published_repository" ]] || return 0
+main() {
+  local githooks_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local repository_root="$(cd "$githooks_directory/.." && pwd)"
+  local personal_plugin_directory="$repository_root/plugins/interaction"
+  local published_repository="$repository_root/plugins/.published-interaction"
+  local published_plugin_directory="$published_repository/plugins/interaction"
+  [[ -d "$personal_plugin_directory" && -d "$published_repository" ]] || return 0
 
-	# The committed checksum records which personal-plugin state was last
-	# synced, anonymized, and human-reviewed. A match means there is nothing
-	# to do; a mismatch triggers a re-sync whose LLM output the human reviews
-	# and commits in the published repository.
-	local checksum_file="$published_repository/.plugin-source-checksum"
-	local source_checksum
-	source_checksum="$(find "$personal_plugin_directory" -mindepth 1 \( -type d -name '.*' -prune \) -o \( -type f -name '*.md' ! -name '.*' -print0 \) | sort -z | xargs -0 shasum -a 256 | shasum -a 256 | awk '{print $1}')"
-	if [[ "$source_checksum" == "$(cat "$checksum_file" 2>/dev/null)" ]]; then
-		return 0
-	fi
+  # The committed checksum records which personal-plugin state was last
+  # synced, anonymized, and human-reviewed. A match means there is nothing
+  # to do; a mismatch triggers a re-sync whose LLM output the human reviews
+  # and commits in the published repository.
+  local checksum_file="$published_repository/.plugin-source-checksum"
+  local source_checksum
+  source_checksum="$(find "$personal_plugin_directory" -mindepth 1 \( -type d -name '.*' -prune \) -o \( -type f -name '*.md' ! -name '.*' -print0 \) | sort -z | xargs -0 shasum -a 256 | shasum -a 256 | awk '{print $1}')"
+  if [[ "$source_checksum" == "$(cat "$checksum_file" 2>/dev/null)" ]]; then
+    return 0
+  fi
 
-	cd "$published_repository"
+  cd "$published_repository"
 
-	# Mirror the personal plugin verbatim, excluding hidden files (private
-	# notes stay private). Skill and reference names are a hardcoded whitelist.
-	local skill_name
-	for skill_name in ai-to-leader ai-to-delegated handoff peer-review; do
-		rsync -a --delete --exclude='.*' "$personal_plugin_directory/skills/$skill_name/" "$published_plugin_directory/skills/$skill_name/"
-	done
-	rsync -a "$personal_plugin_directory/references/roles.md" "$personal_plugin_directory/references/theory-of-mind.md" "$published_plugin_directory/references/"
+  # Mirror the personal plugin verbatim, excluding hidden files (private
+  # notes stay private). Skill and reference names are a hardcoded whitelist.
+  local skill_name
+  for skill_name in ai-to-leader ai-to-delegated handoff peer-review; do
+    rsync -a --delete --exclude='.*' "$personal_plugin_directory/skills/$skill_name/" "$published_plugin_directory/skills/$skill_name/"
+  done
+  rsync -a "$personal_plugin_directory/references/roles.md" "$personal_plugin_directory/references/theory-of-mind.md" "$published_plugin_directory/references/"
 
-	# The personal skills link the shared references with absolute ~/.agents
-	# paths. Published skills must use the shared plugin layout, which
-	# build-plugins.sh also keys on when it flattens skills for Pi.
-	find "$published_plugin_directory/skills" -name '*.md' -exec sed -i '' 's|(~/.agents/plugins/interaction/references/|(../../references/|g' {} +
+  # The personal skills link the shared references with absolute ~/.agents
+  # paths. Published skills must use the shared plugin layout, which
+  # build-plugins.sh also keys on when it flattens skills for Pi.
+  find "$published_plugin_directory/skills" -name '*.md' -exec sed -i '' 's|(~/.agents/plugins/interaction/references/|(../../references/|g' {} +
 
-	# The personal plugin speaks in Gilad's personal voice (Gilad, ADHD, first
-	# person). The published copies of the whitelisted files below must be
-	# anonymized (a generic human leader, cognitive overload, direct assertions
-	# softened). An LLM rewrites exactly those files in place.
-	local anonymization_prompt
-	IFS= read -r -d '' anonymization_prompt <<'EOF' || true
+  # The personal plugin speaks in Gilad's personal voice (Gilad, ADHD, first
+  # person). The published copies of the whitelisted files below must be
+  # anonymized (a generic human leader, cognitive overload, direct assertions
+  # softened). An LLM rewrites exactly those files in place.
+  local anonymization_prompt
+  IFS= read -r -d '' anonymization_prompt <<'EOF' || true
 Anonymize exactly these files in the published repository at __PUBLISHED_REPOSITORY__, in place. Do not touch any other file.
 - __PUBLISHED_REPOSITORY__/plugins/interaction/skills/ai-to-leader/references/human.md
 - __PUBLISHED_REPOSITORY__/plugins/interaction/skills/ai-to-leader/references/help.md
@@ -295,13 +295,13 @@ Note the head-of-product.md example: details true only of Gilad's specific situa
     post: Your human is the admiral. You are the captain.
 </leading-leaders.md anonymization>
 EOF
-	anonymization_prompt="${anonymization_prompt//__PUBLISHED_REPOSITORY__/$published_repository}"
+  anonymization_prompt="${anonymization_prompt//__PUBLISHED_REPOSITORY__/$published_repository}"
 
-	pi --model openai-codex/gpt-5.6-luna --thinking high --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files "$anonymization_prompt"
+  pi --model openai-codex/gpt-5.6-terra --thinking high --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files "$anonymization_prompt"
 
-	echo "$source_checksum" > "$checksum_file"
+  echo "$source_checksum" >"$checksum_file"
 
-	cat >&2 <<'MSG'
+  cat >&2 <<'MSG'
 sync-published-interaction: the personal interaction plugin changed. It was synced into plugins/.published-interaction and the whitelisted files were anonymized by an LLM.
 Review and ship it in plugins/.published-interaction:
 1. Review the changes (git diff).
