@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import secrets
 import subprocess
@@ -245,6 +246,15 @@ def gold_standard(output_path: Path) -> None:
         eprint(f"    {result.stderr[:200]}")
 
 
+def main() -> None:
+    """Show the module purpose and direct users to its reusable functions."""
+    parser = argparse.ArgumentParser(
+        description="Shared operations for inspecting and changing native Pi session JSONL files."
+    )
+    parser.parse_args()
+    parser.print_help()
+
+
 def discovery_smoke(session_identifier: str) -> None:
     """Check whether `ch` can discover a native session identifier."""
     try:
@@ -268,3 +278,7 @@ def discovery_smoke(session_identifier: str) -> None:
     eprint(f"  discovery (ch): FAIL — ch could not resolve {session_identifier}")
     if result.stderr:
         eprint(f"    {result.stderr[:150]}")
+
+
+if __name__ == "__main__":
+    main()

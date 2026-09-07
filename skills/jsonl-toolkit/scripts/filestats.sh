@@ -6,9 +6,23 @@ grouped() {
     printf "%'d" "$1"
 }
 
+usage() {
+    printf 'usage: %s <path> [path ...]\n' "$script_name"
+    printf 'Print file sizes and estimated text token counts.\n'
+}
+
 main() {
     if (( $# == 0 )); then
-        printf 'usage: %s <path> [path ...]\n' "$script_name" >&2
+        usage >&2
+        return 2
+    fi
+    if (( $# == 1 )) && [[ $1 == -h || $1 == --help ]]; then
+        usage
+        return 0
+    fi
+    if [[ $1 == -* ]]; then
+        printf '%s: unknown option: %s\n' "$script_name" "$1" >&2
+        usage >&2
         return 2
     fi
 
