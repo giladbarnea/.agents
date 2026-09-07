@@ -298,14 +298,18 @@ Note the head-of-product.md example: details true only of Gilad's specific situa
 EOF
   anonymization_prompt="${anonymization_prompt//__PUBLISHED_REPOSITORY__/$published_repository}"
 
-  echo "[debug] Launching Pi to (maybe) anonymize files. anonymization_prompt is "${#anonymization_prompt}" chars long." >&2
-  pi --model openai-codex/gpt-5.6-terra --thinking high --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files -p "$anonymization_prompt"
-  echo "[debug] Pi finished." >&2 
+  if [[ "${AGENTS_SKIP_ANONYMIZATION:-}" == "1" ]]; then
+    echo "[debug] Skipping Pi anonymization because AGENTS_SKIP_ANONYMIZATION=1." >&2
+  else
+    echo "[debug] Launching Pi to (maybe) anonymize files. anonymization_prompt is "${#anonymization_prompt}" chars long." >&2
+    pi --model openai-codex/gpt-5.6-terra --thinking high --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files -p "$anonymization_prompt"
+    echo "[debug] Pi finished." >&2
+  fi
 
   echo "$source_checksum" >"$checksum_file"
 
   cat >&2 <<'MSG'
-sync-published-interaction: the personal interaction plugin changed. It was synced into plugins/.published-interaction and the whitelisted files were anonymized by an LLM.
+sync-published-interaction: the personal interaction plugin changed. It was synced into plugins/.published-interaction and is ready for review.
 Review and ship it in plugins/.published-interaction:
 1. Review the changes (git diff).
 2. Run ./build-plugins.sh.

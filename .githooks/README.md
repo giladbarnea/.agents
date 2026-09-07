@@ -204,6 +204,8 @@ When the checksum differs, the script:
 4. Launches Pi to anonymize five named files: `human.md`, `help.md`, `leading-leaders.md`, `hats/head-of-product.md`, and shared `roles.md`.
 5. Writes the new source checksum and prints the review and release steps.
 
+Set `AGENTS_SKIP_ANONYMIZATION=1` to skip the Pi invocation. The sync still writes the source checksum and leaves the copied personal content unchanged.
+
 The skill and reference whitelists are hardcoded.
 Adding or moving a shared reference or skill therefore requires updating this script, not just the source tree.
 Shared-reference copying does not remove obsolete destination files.
