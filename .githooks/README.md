@@ -1,6 +1,6 @@
 ---
 description: Hub ownership model and current instruction and skill materialization behavior
-last_updated: 2026-08-03 15:34
+last_updated: 2026-09-07 10:38
 ---
 # Hub materialization
 
@@ -108,6 +108,8 @@ When an output differs:
 ```text
 Interactive terminal
 ├── Y: show the diff, then ask whether to render
+│   ├── Y: render
+│   └── Any other answer: skip rendering and continue
 ├── R: render immediately
 └── Any other answer: fail without rendering
 
@@ -117,21 +119,20 @@ No interactive terminal
 
 ## Hooks render instructions before materializing skills and plugins
 
-`post-merge` runs this pipeline:
+`post-merge` and `pre-commit` run this pipeline:
 
 ```text
-Align the pinned claude-plugins submodule
-→ Render the hub and downstream instruction files
+Render the hub and downstream instruction files
 → Validate and generate runtime skills
 → Link bare hub skills into every consumer skill root
-→ Link plugin skills into Pi's skill root
+→ Materialize plugin skills in Pi with flat references
 → Inspect broken consumer skill links
-→ Synchronize Claude and Codex plugins
+→ Sync and anonymize changed interaction content in the published repository
 ```
 
-`pre-commit` runs the same pipeline without submodule alignment.
-It stages the local `AGENTS.md` and generated runtime `SKILL.md` files.
-It cannot stage rendered files or skill links inside downstream repositories.
+`pre-commit` also stages the local `AGENTS.md` and generated runtime `SKILL.md` files.
+Neither hub hook stages files in downstream repositories or the separate published repository.
+The submodule update in `post-merge` is commented out.
 
 Rendering does not require existing consumer links.
 When a consumer-relative import is absent, the loader falls back to the canonical hub source.
@@ -139,7 +140,7 @@ When a consumer-relative import is absent, the loader falls back to the canonica
 ## Setup only enables the hooks
 
 `../setup.sh` only sets this repository's `core.hooksPath` to `.githooks`.
-It does not run the hooks, initialize the plugin submodule, render instructions, or create skill links.
+It does not run the hooks, render instructions, materialize skills, or sync the published repository.
 
 ## Every valid hub skill is linked into every consumer
 
@@ -162,19 +163,9 @@ The `simplify-code` generator:
 5. Combines the upstream body with the local Anthropic version.
 6. Writes the generated `SKILL.md`.
 
-After generation, the hook traverses every directory under `~/.agents/skills`.
+Generation and linking happen in the same traversal, one skill at a time.
 Static skills must contain `SKILL.md`.
-Directories without a skill file or a registered generator are skipped.
-
-<!-- Stale
-Two hub skill paths resolve through the pinned `claude-plugins` submodule:
-
-```text
-skills/in-html              → plugins/claude-plugins/plugins/in-html
-skills/instruct-another-ai  → plugins/claude-plugins/plugins/instruct-another-ai
-```
-
-/Stale -->
+Directories without a skill file or a generator are skipped.
 
 Every participating skill directory is linked into:
 
@@ -187,18 +178,76 @@ Every participating skill directory is linked into:
 
 The whole directory is linked, so its references, scripts, and other files remain available.
 
-## Plugin skills use three consumer-specific layouts
+## Claude Code and Codex consume the published plugin
 
-`~/.agents/plugins` is the canonical source tree for virtual plugin packages.
-Each plugin contains a `skills` directory, but consumers do not receive this source tree unchanged.
+`plugins/interaction` holds the personal source.
+`plugins/.published-interaction` is a separate Git repository for the public distribution.
+The hub no longer generates local Claude or Codex marketplaces, plugin installations, or cache entries.
+Claude Code and Codex consume the published GitHub marketplace instead.
 
-Claude sync generates a local Claude marketplace, a proper plugin, and its cache entry.
-Codex sync generates the equivalent Codex marketplace, plugin, and cache entry.
-Pi has no matching plugin package flow, so `render_skills` links each plugin skill directly into `~/.pi/agent/skills`.
-Gemini receives no plugin materialization.
+Both consumers retain the published `plugins/interaction` layout, including shared plugin-level `references` and individual `skills` directories.
+Claude Code uses `.claude-plugin` metadata.
+Codex uses `.agents/plugins/marketplace.json` and `.codex-plugin/plugin.json`, whose `skills` field points to `./skills/`.
+Gemini receives no plugin materialization from these hooks.
 
-These layouts serve consumer discovery only.
-Instruction rendering reads canonical plugin content through the hub loader instead of reconstructing consumer-specific paths.
+### The hub syncs public content, but does not release it
+
+`sync_plugins` calls `sync-published-interaction.sh`.
+The script returns without changes if either source or published repository is absent, or the source checksum matches `.plugin-source-checksum`.
+The checksum covers non-hidden Markdown files outside hidden directories in the personal plugin.
+
+When the checksum differs, the script:
+
+1. Mirrors five whitelisted skills with `rsync --delete`, excluding hidden files: `ai-to-leader`, `ai-to-delegated`, `handoff`, `peer-review`, and `theory-of-mind`.
+2. Copies the whitelisted shared reference: `roles.md`.
+3. Rewrites absolute personal shared-reference links in skill Markdown to `../../references/` links.
+4. Launches Pi to anonymize five named files: `human.md`, `help.md`, `leading-leaders.md`, `hats/head-of-product.md`, and shared `roles.md`.
+5. Writes the new source checksum and prints the review and release steps.
+
+The skill and reference whitelists are hardcoded.
+Adding or moving a shared reference or skill therefore requires updating this script, not just the source tree.
+Shared-reference copying does not remove obsolete destination files.
+
+The hub hook does not build, commit, or push the published repository.
+Review the synced content there, run `./build-plugins.sh`, then commit and push, including `.plugin-source-checksum`.
+
+## Local Pi skills and published Pi skills use different builds
+
+Both Pi layouts place shared references inside individual skill directories, but they reach that layout differently.
+`theory-of-mind` is a standalone skill in both Pi layouts and the published plugin. Dependent skills load it by name, not through reference copies.
+
+### Local Pi uses symlinks to personal content
+
+`render_skills` discovers non-empty `plugins/*/skills/*/SKILL.md` files and calls `link_pi_plugin_skill` for each skill.
+The destination, `~/.pi/agent/skills/<skill>`, is a real directory, not a skill-directory symlink.
+
+The materializer:
+
+1. Replaces an existing destination symlink with a real directory.
+2. Links non-hidden skill entries other than `references` directly to the personal source.
+3. Rebuilds direct symlinks inside the destination's `references` directory.
+4. Links the skill's own references, then plugin-level references, into that directory.
+
+A reference name clash keeps the earlier entry and emits a warning.
+Existing concrete reference entries also remain in place.
+Every plugin skill receives the shared references, whether its Markdown uses them or not.
+The materializer does not rewrite Markdown paths.
+
+### Published Pi skills are generated copies
+
+`plugins/.published-interaction/build-plugins.sh` discovers each published skill containing `SKILL.md` and copies it into a temporary build tree.
+For skills containing `../../references/`, it copies the shared references into the skill and rewrites that substring to `references/` in Markdown.
+It does not generally resolve or validate Markdown link targets.
+
+The build replaces tracked `pi/skills` with the generated tree and creates the ignored `interaction-pi-skills.zip` with normalized archive timestamps.
+It also copies the repository `LICENSE` into the Claude/Codex plugin and the Pi archive.
+The published repository's own `.githooks/pre-commit` runs this build and stages `pi/skills` and the plugin license.
+
+Unlike the hub sync whitelist, the Pi build discovers new skill directories automatically.
+Pi users install the archive's skill directories into `~/.pi/agent/skills`.
+
+Instruction rendering remains separate from these distribution layouts.
+It reads canonical plugin content through the hub loader instead of reconstructing consumer-specific paths.
 
 ## Link handling can cross ownership boundaries
 
@@ -217,11 +266,11 @@ It does not check whether the hub created that link.
 An interactive run asks before removing each broken link.
 A non-interactive run reports each link and leaves it unchanged.
 
-## Failures stop before cleanup
+## Failures stop the remaining pipeline
 
-The hook stops when submodule alignment, instruction rendering, runtime generation, structure validation, or skill linking fails.
-Broken-link cleanup runs only after those steps succeed.
-Its result does not control the final hook exit status.
+An instruction-rendering, runtime-generation, structure-validation, or skill-linking failure stops the hook before broken-link cleanup.
+Cleanup's result does not control the final hook exit status.
+Published-sync failure stops the hook after cleanup.
 
 ---
 

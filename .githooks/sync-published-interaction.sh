@@ -25,10 +25,10 @@ main() {
   # Mirror the personal plugin verbatim, excluding hidden files (private
   # notes stay private). Skill and reference names are a hardcoded whitelist.
   local skill_name
-  for skill_name in ai-to-leader ai-to-delegated handoff peer-review; do
+  for skill_name in ai-to-leader ai-to-delegated handoff peer-review theory-of-mind; do
     rsync -a --delete --exclude='.*' "$personal_plugin_directory/skills/$skill_name/" "$published_plugin_directory/skills/$skill_name/"
   done
-  rsync -a "$personal_plugin_directory/references/roles.md" "$personal_plugin_directory/references/theory-of-mind.md" "$published_plugin_directory/references/"
+  rsync -a "$personal_plugin_directory/references/roles.md" "$published_plugin_directory/references/"
 
   # The personal skills link the shared references with absolute ~/.agents
   # paths. Published skills must use the shared plugin layout, which
@@ -50,6 +50,7 @@ Anonymize exactly these files in the published repository at __PUBLISHED_REPOSIT
 
 They were copied from ~/.agents/plugins/interaction/, which speaks in Gilad's personal voice (Gilad, ADHD, first person).
 The published copies must be anonymized (a generic human leader, cognitive overload, direct assertions softened).
+Preserve current skill-loading instructions even when the historical examples use older reference paths.
 Here are signed-off before-and-after past anonymizations of these files. Note what’s modified and what’s left untouched. Apply this principle on the whitelisted files.
 <human.md pre-anonymization: gilad personal voice>
     ---
