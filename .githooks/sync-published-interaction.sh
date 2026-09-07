@@ -297,9 +297,9 @@ Note the head-of-product.md example: details true only of Gilad's specific situa
 EOF
   anonymization_prompt="${anonymization_prompt//__PUBLISHED_REPOSITORY__/$published_repository}"
 
-  echo "[debug] Launching Pi to (maybe) anonymize files..." >&2
-  # Bug: this freezes when the terminal is not interactive.
-  pi --model openai-codex/gpt-5.6-terra --thinking high --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files "$anonymization_prompt"
+  echo "[debug] Launching Pi to (maybe) anonymize files. anonymization_prompt is "${#anonymization_prompt}" chars long." >&2
+  pi --model openai-codex/gpt-5.6-terra --thinking high --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files -p "$anonymization_prompt"
+  echo "[debug] Pi finished." >&2 
 
   echo "$source_checksum" >"$checksum_file"
 
