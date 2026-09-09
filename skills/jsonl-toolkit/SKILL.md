@@ -203,3 +203,21 @@ after_indices = {message["original_index"] for message in after}
 removed_indices = sorted(before_indices - after_indices)
 added_indices = sorted(after_indices - before_indices)
 ```
+
+## Port a Codex session tree into native Pi sessions
+
+`scripts/codex_to_pi.py` accepts a Codex session ID or a `rollout-*.jsonl` path.
+
+```bash
+uv run --script scripts/codex_to_pi.py SESSION_ID ~/.pi/agent/sessions "Session name"
+```
+
+The selected session can sit anywhere in a persisted native fork tree. The converter climbs to the root, recursively converts every fork descendant, and links each Pi child to its converted parent through `parentSession`. Each child copies only the converted parent history before its Codex fork point. The converter also joins paginated rollout segments that belong to one Codex session.
+
+It keeps user messages, assistant text, reasoning summaries as thinking blocks, and the Codex compaction point. Codex `exec` scripts and `wait` calls become Pi `bash` calls: each `exec_command` becomes its shell command, `apply_patch` becomes an `apply_patch` heredoc, and background polls become comment lines. Results unwrap to the command output, and a non-zero exit code marks the result as an error the way Pi's bash tool does.
+
+A Codex sub-agent becomes pi-user-agents objects: one hidden `pi-user-agents` result message per delivery from the sub-agent and a `pi-user-agents-detached` breadcrumb. The sub-agent's own rollout becomes a second Pi session whose header carries `parentSession`. Codex encrypts sub-agent task and steering text, so those appear as placeholders.
+
+Codex side chats are ephemeral and pathless. Codex writes no rollout for them, so the converter ignores any surviving references instead of making empty Pi user agents.
+
+Codex-internal `notes`, `history`, and `collaboration` calls carry only ciphertext and are dropped. Verify results with `scripts/pi-goldload.mjs`. A ported compaction makes `reached` smaller than `expected` by design.
