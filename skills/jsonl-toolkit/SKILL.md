@@ -214,10 +214,28 @@ uv run --script scripts/codex_to_pi.py SESSION_ID ~/.pi/agent/sessions "Session 
 
 The selected session can sit anywhere in a persisted native fork tree. The converter climbs to the root, recursively converts every fork descendant, and links each Pi child to its converted parent through `parentSession`. Each child copies only the converted parent history before its Codex fork point. The converter also joins paginated rollout segments that belong to one Codex session.
 
-It keeps user messages, assistant text, reasoning summaries as thinking blocks, and the Codex compaction point. Codex `exec` scripts and `wait` calls become Pi `bash` calls: each `exec_command` becomes its shell command, `apply_patch` becomes an `apply_patch` heredoc, and background polls become comment lines. Results unwrap to the command output, and a non-zero exit code marks the result as an error the way Pi's bash tool does.
+It keeps user messages with their images, assistant text, reasoning summaries as thinking blocks, and the Codex compaction point. Codex `exec` scripts and `wait` calls become Pi `bash` calls: each `exec_command` becomes its shell command, `apply_patch` becomes an `apply_patch` heredoc, and background polls become comment lines. A script the renderer cannot parse stays verbatim under a comment header. Results unwrap to the command output, and a non-zero exit code marks the result as an error the way Pi's bash tool does. Every other function call, including `request_user_input_async`, becomes a Pi tool call under its own name.
 
-A Codex sub-agent becomes pi-user-agents objects: one hidden `pi-user-agents` result message per delivery from the sub-agent and a `pi-user-agents-detached` breadcrumb. The sub-agent's own rollout becomes a second Pi session whose header carries `parentSession`. Codex encrypts sub-agent task and steering text, so those appear as placeholders.
+The conversion is lossless for everything the model reads or writes. Each model-facing Codex item rides verbatim inside the Pi object that replaced it, in a slot Pi keeps but never sends to the API:
 
-Codex side chats are ephemeral and pathless. Codex writes no rollout for them, so the converter ignores any surviving references instead of making empty Pi user agents.
+- Reasoning: the whole item in `thinkingSignature`. Assistant text: id and phase in `textSignature`.
+- Tool calls: the payload under `codex` on the block. Tool results and compaction: under `details.codex`.
+- User messages and the session header: under a top-level `codex` key.
 
-Codex-internal `notes`, `history`, and `collaboration` calls carry only ciphertext and are dropped. Verify results with `scripts/pi-goldload.mjs`. A ported compaction makes `reached` smaller than `expected` by design.
+A Codex sub-agent becomes a pi-subagents task: one `subagent-notification` custom message per delivery from the sub-agent, and a `subagents:record` entry at its final answer. The sub-agent's own rollout becomes a second Pi session whose header carries `parentSession`. Codex encrypts the task and steering text, so those appear as placeholders in the child session.
+
+Codex side chats are ephemeral and pathless. Codex writes no rollout for them, so the converter ignores any surviving references.
+
+Codex-internal `notes`, `history`, and `collaboration` calls carry only ciphertext. They become out-of-context `codex-encrypted-call` custom entries, in sequence, so nothing unreadable enters Pi's context. Verify results with `scripts/pi-goldload.mjs`. A ported compaction makes `reached` smaller than `expected` by design.
+
+## Restore a Codex rollout from a converted Pi session
+
+`scripts/pi_to_codex.py` unfolds the stashed items along the active path into one standalone rollout. A Pi fork child already holds its whole history inline, so the rollout carries no fork links.
+
+```bash
+uv run --script scripts/pi_to_codex.py session.jsonl output-directory/
+```
+
+The harness injections that codex_to_pi drops on purpose stay dropped: environment context, AGENTS.md, developer messages, events, and token usage. Codex will not resume such a rollout without them. The oracle for "lossless" is `model_facing` in `tests/test_roundtrip_codex_pi_codex.py`, which projects a rollout onto the fields that enter or leave the model. The suite runs it on synthetic shapes and on real September 2026 sessions under `tests/fixtures/codex/sessions`.
+
+Codex shapes that stopped appearing before July 2026 are out of scope: the function-call form of `exec_command`, `web_search_call`, and the `multi_agent_v1` tools.

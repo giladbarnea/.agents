@@ -7,10 +7,15 @@
 
 The converter follows native fork ancestry in both directions, rebuilds paginated rollout
 segments, copies each fork-point history into its Pi child, and sets `parentSession`.
-It also ports messages, reasoning, shell tools, compaction, and native Codex sub-agents.
-Sub-agents become pi-user-agents objects and separate Pi sessions. Codex side chats remain
-absent because Codex keeps them ephemeral and writes no rollout. Codex-internal
-notes/history/collaboration calls carry only ciphertext and are dropped.
+It ports messages, reasoning, shell tools, compaction, and native Codex sub-agents.
+
+Every model-facing Codex item rides verbatim inside the Pi object that replaced it, so
+`pi_to_codex.py` can restore the rollout: reasoning in `thinkingSignature`, assistant ids in
+`textSignature`, and the raw payload under a `codex` key on user entries, tool call blocks,
+tool result and compaction `details`, sub-agent notifications, and the session header.
+Sub-agents become pi-subagents notifications plus separate Pi child sessions. Codex-internal
+notes/history/collaboration calls carry only ciphertext, so they become out-of-context
+`custom` entries. Codex side chats remain absent because Codex writes no rollout for them.
 """
 
 import json
@@ -34,9 +39,12 @@ ZERO_USAGE = {
     "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0},
 }
 INJECTED_USER_PREFIXES = ("<environment_context>", "# AGENTS.md instructions", "<recommended_plugins>")
-DROPPED_NAMESPACES = {"notes", "history", "collaboration"}
-SQUASH_PREFACE = "The user has dispatched a background sub-agent with a task. The sub-agent is done. The following is the back and forth between them:"
+ENCRYPTED_NAMESPACES = {"notes", "history", "collaboration"}
+ENCRYPTED_CALL_TYPE = "codex-encrypted-call"
+SUBAGENT_NOTIFICATION_TYPE = "subagent-notification"
+SUBAGENT_RECORD_TYPE = "subagents:record"
 ENCRYPTED_NOTE = "[Encrypted by Codex. Only the ciphertext was stored.]"
+COMPACTION_PREFACE = "Codex compacted the context here. Its summary is encrypted and unreadable outside Codex. It replayed the following user messages verbatim after the summary:\n\n"
 
 Role = Literal["root", "subagent"]
 
@@ -61,8 +69,33 @@ def text_of(content: str | list[dict[str, object]]) -> str:
     return "".join(str(block.get("text", "")) for block in content if block.get("type") in ("input_text", "output_text"))
 
 
-def escape_attribute(value: str) -> str:
-    return value.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+def image_block(data_url: str) -> dict[str, object]:
+    """Split a Codex data URL into Pi's image block.
+
+    >>> image_block("data:image/png;base64,iVBOR")
+    {'type': 'image', 'mimeType': 'image/png', 'data': 'iVBOR'}
+    """
+    header, _, data = data_url.partition(",")
+    return {"type": "image", "mimeType": header.removeprefix("data:").removesuffix(";base64"), "data": data}
+
+
+def pi_content_blocks(content: str | list[dict[str, object]]) -> list[dict[str, object]]:
+    """Render Codex message content as Pi content blocks: text stays text, images become image blocks."""
+    if isinstance(content, str):
+        return [{"type": "text", "text": content}]
+    blocks: list[dict[str, object]] = []
+    for block in content:
+        if block["type"] in ("input_text", "output_text"):
+            blocks.append({"type": "text", "text": block["text"]})
+        elif block["type"] == "input_image":
+            blocks.append(image_block(str(block["image_url"])))
+        else:
+            raise ValueError(f"Cannot render Codex content block {block['type']!r} in Pi")
+    return blocks
+
+
+def escape_xml(value: str) -> str:
+    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 JS_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "v": "\v", "0": "\0"}
@@ -158,8 +191,7 @@ def tool_call_to_bash(name: str, arguments: str) -> str | None:
         if characters:
             return f"# Codex: write to background session {session.group(1)} stdin: {characters!r}"
         return f"# Codex: poll background session {session.group(1)} for output"
-    compact = " ".join(arguments.split())
-    return f"# Codex tool {name}({compact[:300]})"
+    return f"# Codex tool {name}({' '.join(arguments.split())})"
 
 
 def bash_command_for_exec(script: str) -> str:
@@ -168,9 +200,13 @@ def bash_command_for_exec(script: str) -> str:
     >>> bash_command_for_exec('text(await tools.exec_command({cmd:"ls -la",workdir:"/tmp"}));')
     'cd /tmp && ls -la'
     """
-    lines = [tool_call_to_bash(name, arguments) for name, arguments in parse_tool_calls(script)]
+    verbatim = "# Codex exec script (JavaScript), run by the Codex exec tool\n" + script
+    try:
+        lines = [tool_call_to_bash(name, arguments) for name, arguments in parse_tool_calls(script)]
+    except (ValueError, IndexError):
+        return verbatim
     if not lines or None in lines:
-        return "# Codex exec script (JavaScript), run by the Codex exec tool\n" + script
+        return verbatim
     return "\n".join(line for line in lines if line is not None)
 
 
@@ -207,22 +243,14 @@ def bash_result(raw: str) -> tuple[str, bool]:
         record = value.get("value", value) if isinstance(value, dict) else value
         if isinstance(record, dict) and "output" in record:
             lines.append(str(record["output"]))
-            exit_codes.append(int(record.get("exit_code", 0)))
+            exit_codes.append(record.get("exit_code"))
         elif record:
             lines.append(dumps(record))
     text = "\n".join(lines)
-    failures = [code for code in exit_codes if code != 0]
+    failures = [code for code in exit_codes if code not in (0, None)]
     if failures:
         return f"{text}\n\nCommand exited with code {failures[0]}", True
     return text, False
-
-
-def question_text(arguments: dict[str, object]) -> str:
-    parts: list[str] = ["Question to the user:"]
-    for question in arguments["questions"]:
-        parts.append(str(question["title"]))
-        parts.extend(f"- {option}" for option in question.get("options", []))
-    return "\n".join(parts)
 
 
 @dataclass
@@ -256,21 +284,13 @@ def load_first_item(path: Path) -> Item:
 
 
 @dataclass
-class SquashMessage:
-    role: Literal["user", "assistant"]
-    text: str
-    timestamp: str
-
-
-@dataclass
 class Subagent:
+    """A native Codex sub-agent, modeled as a pi-subagents task whose child session is the sub-agent rollout."""
+
     agent_path: str
     nickname: str
     started_at: str
-    model: str
     session_id: str
-    task: str
-    messages: list[SquashMessage]
     tool_call_timestamps: list[str]
     rollout: Path
 
@@ -278,77 +298,58 @@ class Subagent:
     def from_rollout(cls, rollout: Path, agent_path: str, started_at: str) -> "Subagent":
         items = load_items(rollout)
         meta = items[0].payload
-        spawn = meta["source"]["subagent"]["thread_spawn"]
-        model = next(str(item.payload["model"]) for item in items if item.kind == "turn_context")
-        task = f"{ENCRYPTED_NOTE} Codex sub-agent {agent_path} (nickname {spawn['agent_nickname']})."
-        messages = [SquashMessage("user", task, started_at)]
-        tool_call_timestamps: list[str] = []
-        for item in items[1:]:
-            if item.kind != "response_item":
-                continue
-            item_type = item.payload["type"]
-            if item_type == "message" and item.payload["role"] == "assistant":
-                messages.append(SquashMessage("assistant", text_of(item.payload["content"]), item.timestamp))
-            elif item_type == "agent_message":
-                header = text_of(item.payload["content"]).split("\n")[0]
-                if header == "Message Type: MESSAGE":
-                    messages.append(SquashMessage("user", f"{ENCRYPTED_NOTE} Steering message from the root agent.", item.timestamp))
-                elif header == "Message Type: NEW_TASK" and len(messages) > 1:
-                    messages.append(SquashMessage("user", f"{ENCRYPTED_NOTE} Follow-up task from the root agent.", item.timestamp))
-            elif item_type in ("custom_tool_call", "function_call"):
-                tool_call_timestamps.append(item.timestamp)
-        return cls(agent_path, spawn["agent_nickname"], started_at, model, uuidv7(epoch_ms(meta["timestamp"])), task, messages, tool_call_timestamps, rollout)
+        nickname = str(meta["source"]["subagent"]["thread_spawn"]["agent_nickname"])
+        tool_call_timestamps = [item.timestamp for item in items[1:] if item.kind == "response_item" and item.payload["type"] in ("custom_tool_call", "function_call")]
+        return cls(agent_path, nickname, started_at, uuidv7(epoch_ms(meta["timestamp"])), tool_call_timestamps, rollout)
 
-    def select_squashed(self, until: str) -> list[SquashMessage]:
-        selected: list[SquashMessage] = []
-        latest_assistant: SquashMessage | None = None
-        for message in self.messages:
-            if message.timestamp > until:
-                break
-            if message.role == "assistant" and message.text.strip():
-                latest_assistant = message
-                continue
-            if latest_assistant:
-                selected.append(latest_assistant)
-            latest_assistant = None
-            selected.append(message)
-        if latest_assistant:
-            selected.append(latest_assistant)
-        return selected
+    @property
+    def description(self) -> str:
+        return f"Codex sub-agent {self.agent_path} ({self.nickname})"
 
-    def result_message(self, until: str, agent_id: str) -> dict[str, object]:
-        selected = self.select_squashed(until)
-        model_label = f"{PROVIDER}/{self.model}"
-        lines = [SQUASH_PREFACE, f'<user_agent model="{escape_attribute(model_label)}" inherited_context="true">']
-        for index, message in enumerate(selected, start=1):
-            tag = "user_message" if message.role == "user" else "assistant_response"
-            lines.append(f"  <{tag} i={index}>")
-            lines.extend(f"  {line}" for line in message.text.split("\n"))
-            lines.append(f"  </{tag}>")
-        lines.append("</user_agent>")
-        responses = [message for message in selected if message.role == "assistant"]
+    def notification(self, payload: dict[str, object], until: str) -> dict[str, object]:
+        """Render one delivery from the sub-agent the way pi-subagents notifies the root model."""
+        text = text_of(payload["content"])
+        status = "completed" if text.startswith("Message Type: FINAL_ANSWER") else "running"
         details = {
-            "agentId": agent_id,
-            "command": "agent",
-            "mainContextState": "squashed",
-            "inheritedContext": True,
-            "model": model_label,
-            "modelLabel": self.model,
-            "task": self.task,
-            "ok": True,
-            "durationMs": epoch_ms(until) - epoch_ms(self.started_at),
+            "id": self.session_id,
+            "description": self.description,
+            "status": status,
             "toolUses": sum(1 for timestamp in self.tool_call_timestamps if timestamp <= until),
-            "turnCount": sum(1 for message in selected if message.role == "user"),
-            "responseText": responses[-1].text if responses else "",
+            "turnCount": 0,
+            "totalTokens": 0,
+            "durationMs": epoch_ms(until) - epoch_ms(self.started_at),
+            "resultPreview": text[:500],
+            "codex": payload,
         }
-        return {"customType": "pi-user-agents", "content": "\n".join(lines), "display": False, "details": details}
+        content = "\n".join(
+            [
+                "<task-notification>",
+                f"<task-id>{self.session_id}</task-id>",
+                f"<status>{'Done' if status == 'completed' else 'Running'}</status>",
+                f'<summary>Agent "{escape_xml(self.description)}" {status}</summary>',
+                f"<result>{escape_xml(text)}</result>",
+                f"<usage><total_tokens>0</total_tokens><tool_uses>{details['toolUses']}</tool_uses><duration_ms>{details['durationMs']}</duration_ms></usage>",
+                "</task-notification>",
+            ]
+        )
+        return {"customType": SUBAGENT_NOTIFICATION_TYPE, "content": content, "display": True, "details": details}
+
+    def record(self, payload: dict[str, object], until: str) -> dict[str, object]:
+        return {
+            "id": self.session_id,
+            "type": "codex-subagent",
+            "description": self.description,
+            "status": "completed",
+            "result": text_of(payload["content"]),
+            "startedAt": epoch_ms(self.started_at),
+            "completedAt": epoch_ms(until),
+        }
 
 
 @dataclass(frozen=True)
 class PiPrefix:
     lines: list[str]
     source_ordinals: list[int | None]
-    codex_id_to_pi_id: dict[str, str]
 
 
 @dataclass
@@ -357,7 +358,6 @@ class PiWriter:
     source_ordinals: list[int | None] = field(default_factory=list)
     leaf_id: str | None = None
     used_ids: set[str] = field(default_factory=set)
-    codex_id_to_pi_id: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def from_prefix(cls, prefix: PiPrefix | None) -> "PiWriter":
@@ -369,7 +369,6 @@ class PiWriter:
             source_ordinals=list(prefix.source_ordinals),
             leaf_id=str(json.loads(prefix.lines[-1])["id"]),
             used_ids=identifiers,
-            codex_id_to_pi_id=dict(prefix.codex_id_to_pi_id),
         )
 
     def new_id(self) -> str:
@@ -384,15 +383,13 @@ class PiWriter:
         entry_type: str,
         timestamp: str,
         body: dict[str, object],
-        codex_ids: list[str] | tuple[str, ...] = (),
         source_ordinal: int | None = None,
+        entry_id: str | None = None,
     ) -> str:
-        entry_id = self.new_id()
+        entry_id = entry_id or self.new_id()
         self.lines.append(dumps({"type": entry_type, "id": entry_id, "parentId": self.leaf_id, "timestamp": timestamp, **body}))
         self.source_ordinals.append(source_ordinal)
         self.leaf_id = entry_id
-        for codex_id in codex_ids:
-            self.codex_id_to_pi_id[codex_id] = entry_id
         return entry_id
 
     def prefix_before(self, source_ordinal: int) -> PiPrefix:
@@ -404,14 +401,7 @@ class PiWriter:
         residues = self.source_ordinals[selected_count:]
         if any(ordinal is None or ordinal < source_ordinal for ordinal in residues):
             raise ValueError(f"Pi entries are not ordered at Codex fork ordinal {source_ordinal}")
-        lines = self.lines[:selected_count]
-        identifiers = {str(json.loads(line)["id"]) for line in lines}
-        mapping = {
-            codex_id: pi_id
-            for codex_id, pi_id in self.codex_id_to_pi_id.items()
-            if pi_id in identifiers
-        }
-        return PiPrefix(lines, self.source_ordinals[:selected_count], mapping)
+        return PiPrefix(self.lines[:selected_count], self.source_ordinals[:selected_count])
 
     def current_settings(self) -> tuple[str | None, str | None]:
         model: str | None = None
@@ -430,15 +420,22 @@ class PiWriter:
 @dataclass
 class PendingAssistant:
     blocks: list[dict[str, object]] = field(default_factory=list)
-    codex_ids: list[str] = field(default_factory=list)
     source_ordinals: list[int] = field(default_factory=list)
     timestamp: str | None = None
 
 
 def reasoning_block(payload: dict[str, object]) -> dict[str, object]:
-    summary_text = "\n\n".join(str(part["text"]) for part in payload["summary"])
-    signature = {key: payload[key] for key in ("id", "type", "content", "encrypted_content", "summary") if key in payload}
-    return {"type": "thinking", "thinking": summary_text, "thinkingSignature": dumps(signature)}
+    """Carry the whole Codex reasoning item in the signature, the way Pi's own Codex provider does."""
+    summary_text = "\n\n".join(str(part["text"]) for part in payload.get("summary") or [])
+    return {"type": "thinking", "thinking": summary_text, "thinkingSignature": dumps(payload)}
+
+
+def text_block(payload: dict[str, object]) -> dict[str, object]:
+    """Carry the Codex assistant message id and phase in the slot Pi's Codex provider reads back."""
+    signature = {"v": 1, "id": payload["id"]}
+    if "phase" in payload:
+        signature["phase"] = payload["phase"]
+    return {"type": "text", "text": text_of(payload["content"]), "textSignature": dumps(signature)}
 
 
 def session_directory(sessions_root: Path, cwd: str) -> Path:
@@ -482,9 +479,8 @@ class Conversion:
         pending = PendingAssistant()
         call_names: dict[str, str] = {}
         call_pi_ids: dict[str, str] = {}
-        dropped_call_ids: set[str] = set()
+        encrypted_call_ids: set[str] = set()
         dropped: dict[str, int] = {}
-        delivered_agent_ids: dict[str, str] = {}
 
         def drop(reason: str) -> None:
             dropped[reason] = dropped.get(reason, 0) + 1
@@ -502,19 +498,12 @@ class Conversion:
                 "stopReason": stop_reason,
                 "timestamp": epoch_ms(pending.timestamp),
             }
-            writer.append(
-                "message",
-                pending.timestamp,
-                {"message": message},
-                pending.codex_ids,
-                max(pending.source_ordinals),
-            )
-            pending.blocks, pending.codex_ids, pending.source_ordinals, pending.timestamp = [], [], [], None
+            writer.append("message", pending.timestamp, {"message": message}, max(pending.source_ordinals))
+            pending.blocks, pending.source_ordinals, pending.timestamp = [], [], None
 
-        def add_pending(block: dict[str, object], codex_id: str, timestamp: str, source_ordinal: int) -> None:
+        def add_pending(block: dict[str, object], timestamp: str, source_ordinal: int) -> None:
             pending.timestamp = pending.timestamp or timestamp
             pending.blocks.append(block)
-            pending.codex_ids.append(codex_id)
             pending.source_ordinals.append(source_ordinal)
 
         def add_tool_call(
@@ -527,16 +516,11 @@ class Conversion:
             pi_call_id = f"{payload['call_id']}|{payload['id']}"
             call_names[str(payload["call_id"])] = name
             call_pi_ids[str(payload["call_id"])] = pi_call_id
-            add_pending(
-                {"type": "toolCall", "id": pi_call_id, "name": name, "arguments": arguments},
-                str(payload["id"]),
-                timestamp,
-                source_ordinal,
-            )
+            add_pending({"type": "toolCall", "id": pi_call_id, "name": name, "arguments": arguments, "codex": payload}, timestamp, source_ordinal)
 
         def add_tool_result(
             payload: dict[str, object],
-            text: str,
+            content: list[dict[str, object]],
             is_error: bool,
             timestamp: str,
             source_ordinal: int,
@@ -547,17 +531,21 @@ class Conversion:
                 "role": "toolResult",
                 "toolCallId": call_pi_ids[call_id],
                 "toolName": call_names[call_id],
-                "content": [{"type": "text", "text": text}],
-                "details": {},
+                "content": content,
+                "details": {"codex": payload},
                 "isError": is_error,
                 "timestamp": epoch_ms(timestamp),
             }
-            writer.append("message", timestamp, {"message": message}, [str(payload["id"])], source_ordinal)
+            writer.append("message", timestamp, {"message": message}, source_ordinal=source_ordinal)
 
-        def add_user_message(text: str, codex_id: str, timestamp: str, source_ordinal: int) -> None:
+        def add_encrypted_call(payload: dict[str, object], timestamp: str, source_ordinal: int) -> None:
             flush("stop")
-            message = {"role": "user", "content": [{"type": "text", "text": text}], "timestamp": epoch_ms(timestamp)}
-            writer.append("message", timestamp, {"message": message}, [codex_id], source_ordinal)
+            writer.append("custom", timestamp, {"customType": ENCRYPTED_CALL_TYPE, "data": {"codex": payload}}, source_ordinal=source_ordinal)
+
+        def add_user_message(payload: dict[str, object], blocks: list[dict[str, object]], timestamp: str, source_ordinal: int) -> None:
+            flush("stop")
+            message = {"role": "user", "content": blocks, "timestamp": epoch_ms(timestamp)}
+            writer.append("message", timestamp, {"message": message, "codex": payload}, source_ordinal=source_ordinal)
 
         for item in items[1:]:
             timestamp, payload = item.timestamp, item.payload
@@ -584,17 +572,17 @@ class Conversion:
 
             if item.kind == "compacted":
                 flush("stop")
-                guardian = payload["guardian_history"]
-                first_tail_index = next(index for index, entry in enumerate(guardian) if not (entry["type"] == "message" and entry["role"] == "user"))
-                summary = "Codex compacted the context here. It kept no summary. It kept the following user messages verbatim, together with the most recent items:\n\n" + "\n\n---\n\n".join(
-                    f"<user_message>\n{text_of(entry['content'])}\n</user_message>" for entry in guardian[:first_tail_index]
-                )
-                first_kept_codex_id = next(entry["id"] for entry in guardian[first_tail_index:] if entry["id"] in writer.codex_id_to_pi_id)
+                replacement = payload["replacement_history"]
+                kept_users = [entry for entry in replacement if entry["type"] == "message" and entry["role"] == "user"]
+                summary = COMPACTION_PREFACE + "\n\n---\n\n".join(f"<user_message>\n{text_of(entry['content'])}\n</user_message>" for entry in kept_users)
+                usage_record = payload.get("latest_token_usage_record") or {"usage": {"total_tokens": 0}}
+                entry_id = writer.new_id()
                 writer.append(
                     "compaction",
                     timestamp,
-                    {"summary": summary, "firstKeptEntryId": writer.codex_id_to_pi_id[first_kept_codex_id], "tokensBefore": payload["latest_token_usage_record"]["usage"]["total_tokens"]},
+                    {"summary": summary, "firstKeptEntryId": entry_id, "tokensBefore": usage_record["usage"]["total_tokens"], "details": {"codex": payload}},
                     source_ordinal=item.ordinal,
+                    entry_id=entry_id,
                 )
                 continue
 
@@ -605,9 +593,9 @@ class Conversion:
             item_type = payload["type"]
 
             if item_type == "reasoning":
-                add_pending(reasoning_block(payload), str(payload["id"]), timestamp, item.ordinal)
+                add_pending(reasoning_block(payload), timestamp, item.ordinal)
             elif item_type == "message" and payload["role"] == "assistant":
-                add_pending({"type": "text", "text": text_of(payload["content"])}, str(payload["id"]), timestamp, item.ordinal)
+                add_pending(text_block(payload), timestamp, item.ordinal)
             elif item_type == "custom_tool_call":
                 add_tool_call(
                     payload,
@@ -619,9 +607,9 @@ class Conversion:
             elif item_type == "function_call":
                 arguments = json.loads(str(payload["arguments"]))
                 name = str(payload["name"])
-                if payload.get("namespace") in DROPPED_NAMESPACES:
-                    dropped_call_ids.add(str(payload["call_id"]))
-                    drop(f"function_call:{payload['namespace']}.{name}")
+                if payload.get("namespace") in ENCRYPTED_NAMESPACES:
+                    encrypted_call_ids.add(str(payload["call_id"]))
+                    add_encrypted_call(payload, timestamp, item.ordinal)
                 elif name == "wait":
                     add_tool_call(
                         payload,
@@ -630,53 +618,38 @@ class Conversion:
                         timestamp,
                         item.ordinal,
                     )
-                elif name == "request_user_input_async":
-                    dropped_call_ids.add(str(payload["call_id"]))
-                    add_pending(
-                        {"type": "text", "text": question_text(arguments)},
-                        str(payload["id"]),
-                        timestamp,
-                        item.ordinal,
-                    )
                 else:
-                    raise ValueError(f"Unhandled function_call {name} at {timestamp}")
+                    add_tool_call(payload, name, arguments, timestamp, item.ordinal)
             elif item_type in ("custom_tool_call_output", "function_call_output"):
-                if payload["call_id"] in dropped_call_ids:
-                    drop("dropped_call_output")
+                if payload["call_id"] in encrypted_call_ids:
+                    add_encrypted_call(payload, timestamp, item.ordinal)
                     continue
                 text, is_error = bash_result(text_of(payload["output"]))
-                add_tool_result(payload, text, is_error, timestamp, item.ordinal)
+                images = [block for block in pi_content_blocks(payload["output"]) if block["type"] == "image"]
+                add_tool_result(payload, [{"type": "text", "text": text}] * bool(text) + images, is_error, timestamp, item.ordinal)
+            elif item_type == "tool_search_call":
+                add_tool_call(payload, "tool_search", dict(payload["arguments"]), timestamp, item.ordinal)
+            elif item_type == "tool_search_output":
+                add_tool_result(payload, [{"type": "text", "text": dumps(payload["tools"])}], False, timestamp, item.ordinal)
             elif item_type == "message" and payload["role"] == "user":
-                text = text_of(payload["content"])
-                if text.startswith(INJECTED_USER_PREFIXES):
+                if text_of(payload["content"]).startswith(INJECTED_USER_PREFIXES):
                     drop("injected_user_message")
                     continue
-                add_user_message(text, str(payload["id"]), timestamp, item.ordinal)
+                add_user_message(payload, pi_content_blocks(payload["content"]), timestamp, item.ordinal)
             elif item_type == "message" and payload["role"] == "developer":
                 drop("developer_message")
             elif item_type == "agent_message" and self.role == "subagent":
-                add_user_message(
-                    text_of(payload["content"]) + ENCRYPTED_NOTE,
-                    str(payload["id"]),
-                    timestamp,
-                    item.ordinal,
-                )
+                blocks = [{"type": "text", "text": text_of(payload["content"]) + ENCRYPTED_NOTE}]
+                add_user_message(payload, blocks, timestamp, item.ordinal)
             elif item_type == "agent_message":
                 flush("stop")
                 subagent = self.subagents[str(payload["author"])]
-                agent_id = delivered_agent_ids.setdefault(subagent.agent_path, f"codex-{len(delivered_agent_ids) + 1}")
-                writer.append(
-                    "custom_message",
-                    timestamp,
-                    subagent.result_message(timestamp, agent_id),
-                    [str(payload["id"])],
-                    item.ordinal,
-                )
+                writer.append("custom_message", timestamp, subagent.notification(payload, timestamp), source_ordinal=item.ordinal)
                 if text_of(payload["content"]).startswith("Message Type: FINAL_ANSWER"):
                     writer.append(
                         "custom",
                         timestamp,
-                        {"customType": "pi-user-agents-detached", "data": {"sessionId": subagent.session_id}},
+                        {"customType": SUBAGENT_RECORD_TYPE, "data": subagent.record(payload, timestamp)},
                         source_ordinal=item.ordinal,
                     )
             else:
@@ -684,7 +657,7 @@ class Conversion:
 
         flush("stop")
 
-        header: dict[str, object] = {"type": "session", "version": 3, "id": self.session_id, "timestamp": started_at, "cwd": cwd}
+        header: dict[str, object] = {"type": "session", "version": 3, "id": self.session_id, "timestamp": started_at, "cwd": cwd, "codex": meta}
         if self.parent_session:
             header["parentSession"] = self.parent_session
 
@@ -909,8 +882,8 @@ def convert_fork_tree(
 ) -> dict[str, Path]:
     """Convert the complete persisted fork tree containing one Codex session.
 
-    The selected session can sit anywhere in the tree. Native Codex sub-agents remain
-    pi-user-agents sessions and are not mistaken for user-created forks.
+    The selected session can sit anywhere in the tree. Native Codex sub-agents become
+    pi-subagents child sessions and are not mistaken for user-created forks.
     """
     graph = CodexSessionGraph.load(codex_sessions_root)
     tree_root_id = graph.root_of(selected_session_id)
