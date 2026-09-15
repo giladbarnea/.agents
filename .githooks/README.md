@@ -254,7 +254,7 @@ It reads canonical plugin content through the hub loader instead of reconstructi
 ## Link handling can cross ownership boundaries
 
 `ensure_symlink` keeps a destination that already points to the expected hub skill.
-It refuses to replace a concrete destination.
+It refuses to replace a concrete destination, warns, and continues the remaining materialization work.
 It replaces any different symlink, including one created by a downstream consumer.
 
 Downstream consumer hooks also manage entries inside some consumer skill roots.
@@ -270,7 +270,8 @@ A non-interactive run reports each link and leaves it unchanged.
 
 ## Failures stop the remaining pipeline
 
-An instruction-rendering, runtime-generation, structure-validation, or skill-linking failure stops the hook before broken-link cleanup.
+An instruction-rendering, runtime-generation, structure-validation, or symlink-creation failure stops the hook before broken-link cleanup.
+A concrete destination refusal does not stop the hook.
 Cleanup's result does not control the final hook exit status.
 Published-sync failure stops the hook after cleanup.
 
@@ -286,8 +287,7 @@ For every relative skill import, let Jinja select the first matching file.
 Load the selected file through the same active Jinja loader. Remove leading frontmatter when present. Preserve the content unchanged when frontmatter is absent.
 </pseudocode>
 
-The ordered lookup is active.
-Non-destructive skill materialization remains future work:
+The ordered lookup and non-destructive skill materialization are active:
 
 <pseudocode>
 For skill discovery, create a hub link only when the consumer destination is empty. Keep an existing correct hub link. Preserve every other existing destination as consumer-owned.

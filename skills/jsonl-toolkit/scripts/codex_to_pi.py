@@ -16,6 +16,9 @@ tool result and compaction `details`, sub-agent notifications, and the session h
 Sub-agents become pi-subagents notifications plus separate Pi child sessions. Codex-internal
 notes/history/collaboration calls carry only ciphertext, so they become out-of-context
 `custom` entries. Codex side chats remain absent because Codex writes no rollout for them.
+
+Shapes that stopped before July 2026 are out of scope. The function-call form of exec,
+`web_search_call`, and `multi_agent_v1` are not handled.
 """
 
 import json

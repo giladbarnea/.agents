@@ -15,6 +15,12 @@ Fewer tests that are more focused, precise, and substantial are better than a la
 Insubstantial tests usually fall under the category of fooling one's self petitio principii–style—essentially, even if indirectly, by mocking aspects of the outcome you're supposed to be testing.
 </tests-must-be-meaningful>
 
+<tests-must-be-falsification-driven priority="1">
+A test is a falsification criterion: a disprovable claim about a bad state. Design that criterion on purpose. The failure should be thought-of and intentional, and grounded in realistic use and behavior, not a synthetic shape invented to make a red.
+When a test is red, make sure it is red for the right reason: it must demonstrate the specific defect it was written for. A red caused by a fixture bug, a missing import, or a helper's own exception proves nothing. Read the failure before fixing anything.
+The red is never a formality for ticking the box to go on to the next item. An empty red gives the same false security as an empty green.
+</tests-must-be-falsification-driven>
+
 <tests-must-be-informative priority="2">
 Make use of `assert`'s second positional argument to help the developer understand the error.
 <negative-example description="uninformative assert expression">

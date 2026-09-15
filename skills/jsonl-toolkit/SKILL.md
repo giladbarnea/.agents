@@ -238,4 +238,4 @@ uv run --script scripts/pi_to_codex.py session.jsonl output-directory/
 
 The harness injections that codex_to_pi drops on purpose stay dropped: environment context, AGENTS.md, developer messages, events, and token usage. Codex will not resume such a rollout without them. The oracle for "lossless" is `model_facing` in `tests/test_roundtrip_codex_pi_codex.py`, which projects a rollout onto the fields that enter or leave the model. The suite runs it on synthetic shapes and on real September 2026 sessions under `tests/fixtures/codex/sessions`.
 
-Codex shapes that stopped appearing before July 2026 are out of scope: the function-call form of `exec_command`, `web_search_call`, and the `multi_agent_v1` tools.
+Shapes that stopped before July 2026 are out of scope. The function-call form of exec, `web_search_call`, and `multi_agent_v1` are not handled.

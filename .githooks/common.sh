@@ -130,16 +130,16 @@ join_braced() {
   fi
 }
 
-# Idempotently point <link> at <target> (an absolute path). Fails rather than
-# placing a nested symlink inside a concrete destination.
+# Idempotently point <link> at <target> (an absolute path). Preserves a
+# concrete destination and continues rather than placing a symlink inside it.
 ensure_symlink() {
   local target="$1"
   local link="$2"
 
   [[ -L "$link" && "$(readlink "$link")" == "$target" ]] && return 0
   [[ ! -e "$link" || -L "$link" ]] || {
-    err "Refusing to link over non-symlink destination: $link"
-    return 1
+    warn "Refusing to link over non-symlink destination: $link"
+    return 0
   }
   ln -sfn "$target" "$link" || {
     err "Failed to link $target → $link"
