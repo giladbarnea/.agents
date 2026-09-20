@@ -185,7 +185,7 @@ The whole directory is linked, so its references, scripts, and other files remai
 The hub no longer generates local Claude or Codex marketplaces, plugin installations, or cache entries.
 Claude Code and Codex consume the published GitHub marketplace instead.
 
-Both consumers retain the published `plugins/interaction` layout, including shared plugin-level `references` and individual `skills` directories.
+Both consumers retain the published `plugins/interaction` layout, including the root `roles.md` map and individual `skills` directories.
 Claude Code uses `.claude-plugin` metadata.
 Codex uses `.agents/plugins/marketplace.json` and `.codex-plugin/plugin.json`, whose `skills` field points to `./skills/`.
 Gemini receives no plugin materialization from these hooks.
@@ -199,16 +199,14 @@ The checksum covers non-hidden Markdown files outside hidden directories in the 
 When the checksum differs, the script:
 
 1. Mirrors five whitelisted skills with `rsync --delete`, excluding hidden files: `ai-to-leader`, `ai-to-delegated`, `handoff`, `peer-review`, and `theory-of-mind`.
-2. Copies the whitelisted shared reference: `roles.md`.
-3. Rewrites absolute personal shared-reference links in skill Markdown to `../../references/` links.
-4. Launches Pi to anonymize five named files: `human.md`, `help.md`, `leading-leaders.md`, `hats/head-of-product.md`, and shared `roles.md`.
-5. Writes the new source checksum and prints the review and release steps.
+2. Copies the whitelisted root `roles.md` map and removes its obsolete `references/roles.md` path.
+3. Launches Pi to anonymize four named files: `human.md`, `help.md`, `coordination/leading-leaders.md`, and `roles.md`.
+4. Writes the new source checksum and prints the review and release steps.
 
 Set `AGENTS_SKIP_ANONYMIZATION=1` to skip the Pi invocation. The sync still writes the source checksum and leaves the copied personal content unchanged.
 
-The skill and reference whitelists are hardcoded.
-Adding or moving a shared reference or skill therefore requires updating this script, not just the source tree.
-Shared-reference copying does not remove obsolete destination files.
+The skill and root-file whitelists are hardcoded.
+Adding or moving a root file or skill therefore requires updating this script, not just the source tree.
 
 The hub hook does not build, commit, or push the published repository.
 Review the synced content there, run `./build-plugins.sh`, then commit and push, including `.plugin-source-checksum`.

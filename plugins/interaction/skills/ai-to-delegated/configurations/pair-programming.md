@@ -6,6 +6,9 @@ description: Pairs peers who agree on a plan, then implement and review once.
 
 # Pair-Programming Team Pattern
 
+Before dispatching, read [delegate coordination](../coordination/delegates.md). When briefing participants without shared context, read [fresh-context briefing](../briefing/fresh-context.md).
+Participants: read [peer coordination](../coordination/peers.md) before working together.
+
 This team structure is somewhat different in that the teammates' slots shape are vertical, not horizontal. The pair is best for taking a feature through the whole dev cycle from start to finish. This means they wear different hats as they progress through planning, implementing, reviewing and shipping. Neither is "an implementer" or "a reviewer". They're both planners engaging in dialectic discussion at first; they then fan out writing code; review each other's work; and wrap up.
 
 Use this when a task is small-to-medium, well-scoped, and would benefit from a second mind on the *plan* more than on the code. Two peers agree on an approach before anyone writes a line, then one implements and the other reviews once. It is a single pass, not a ping-pong loop.
@@ -33,7 +36,7 @@ Out of scope: heavyweight, NASA-grade review.
 
 ## Reviewer tone
 
-The reviewer advises; it does not adjudicate. It should not state hypotheses or extrapolations as facts. Have it load a tone-softening skill if the environment has one, and load `peer-review` regardless. Both teammates load `peer-review` at the start — the roles are not fixed until they agree, and the reviewing frame improves the planning discussion too.
+The reviewer advises; it does not adjudicate. It should not state hypotheses or extrapolations as facts. Have it load a tone-softening skill if the environment has one, and load [peer-review](../../peer-review/SKILL.md) regardless. Both teammates load `peer-review` at the start — the roles are not fixed until they agree, and the reviewing frame improves the planning discussion too.
 
 ## Context floor
 
@@ -49,8 +52,10 @@ Write to them the way you would talk to a colleague, not as a spec. A strict, cl
 
 ## Team prompt template
 
+When sending this template, resolve its relative file paths from this file's directory.
+
 ```text
-Load the project context skill with the same arguments I used, then load `ai-to-leader`, its teammate flavor `peers.md`, and `peer-review`. Reviewer: also load the tone-softening skill if there is one.
+Load the project context skill with the same arguments I used, then load `ai-to-leader`, the peer conduct in `../coordination/peers.md`, and `peer-review`. Reviewer: also load the tone-softening skill if there is one.
 
 You two are a pair-programming team. The goal is: <goal in the user's framing>.
 Avoid <ruled-out approach>, we already decided against it.
@@ -64,4 +69,4 @@ Implementer, make a judgement call on the review, do that turn, and you're done.
 
 ## When not to use
 
-If there is a measurable target and a real search space, you want the hillclimber–watcher pattern instead. If the work is trivial or purely exploratory, one agent is enough. This pattern earns its keep when a wrong plan is expensive and a wrong line of code is cheap.
+If there is a measurable target and a real search space, you want the [hillclimber–watcher pattern](hillclimber-watcher/protocol.md) instead. If the work is trivial or purely exploratory, one agent is enough. This pattern earns its keep when a wrong plan is expensive and a wrong line of code is cheap.

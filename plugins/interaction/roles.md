@@ -1,6 +1,6 @@
 ---
 name: roles
-description: The classifier every agent runs first — three questions that decide which interaction skills to load.
+description: Map an agent's relationships to the interaction guidance that applies.
 ---
 
 # Roles: Who Are You in the Structure?
@@ -17,14 +17,19 @@ Hierarchy depth never matters. Every agent’s neighborhood looks the same: one 
 
 ## The classifier
 
+Read every matching route, once while its contents remain in context. Reconsider the routes when your relationships change.
+
 | question | if yes, load |
 | --- | --- |
-| — (always) | `theory-of-mind` skill + [`ai-to-leader`](../skills/ai-to-leader/SKILL.md) |
-| Is your leader Gilad? | [`ai-to-leader/references/human.md`](../skills/ai-to-leader/references/human.md) |
-| Do you dispatch subagents or teams? | [`ai-to-delegated`](../skills/ai-to-delegated/SKILL.md) |
-| Do you have teammates? | [`ai-to-delegated/references/peers.md`](../skills/ai-to-delegated/references/peers.md) |
+| — (always) | [`theory-of-mind`](skills/theory-of-mind/SKILL.md) + [`ai-to-leader`](skills/ai-to-leader/SKILL.md) |
+| Is your leader Gilad? | [`ai-to-leader/references/human.md`](skills/ai-to-leader/references/human.md) |
+| Do you dispatch or supervise delegates? | [Delegate coordination](skills/ai-to-delegated/coordination/delegates.md) |
+| Do your delegates lead their own agents? | Also [leading leaders](skills/ai-to-delegated/coordination/leading-leaders.md) |
+| Do you have teammates? | [Peer coordination](skills/ai-to-delegated/coordination/peers.md) |
 
 Notes:
 
 - “Both” is not a special state. A mid-chain agent holds an upward edge and downward edges. It loads both skills and applies each to its own edge. The two spaces never conflict, because they govern different edges.
 - Narrow, in-and-out delegation still flips the dispatch bit. Whatever you delegated is not yours until it returns, regardless of how much of the work stays in your hands.
+
+For delegation planning, briefing, or named configurations, use the matching routes in [ai-to-delegated](skills/ai-to-delegated/SKILL.md).

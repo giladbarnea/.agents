@@ -6,6 +6,10 @@ description: Pairs an iterative optimizer with a watcher that prevents tunnel vi
 
 # Hillclimber–Watcher Team Pattern
 
+Before creating this team, read [delegate coordination](../../coordination/delegates.md).
+When briefing participants without shared context, read [fresh-context briefing](../../briefing/fresh-context.md).
+Participants: read [peer coordination](../../coordination/peers.md). The watcher also reads [watcher.md](watcher.md).
+
 Use this pattern when the task has a measurable target, a search space, and a real risk that a busy agent will tunnel-vision while iterating. The point is not ordinary implementer/reviewer pairing. The point is **autonomous optimization with periodic outside-the-loop steering**.
 
 ## Shape
@@ -30,6 +34,8 @@ Do not use this for straightforward implementation, simple research, or work whe
 
 ## Context floor
 
+This section applies to the dispatcher.
+
 Before spawning the team, write a short context file and tell both teammates to read it first.
 
 The context file should include:
@@ -45,8 +51,11 @@ Keep it a mission brief, not a transcript. Strip stale interpretations, tool rec
 
 ## Team prompt template
 
+The dispatcher supplies the goal and context file. Both participants follow the agreement below.
+When sending this template, resolve its relative file paths from this file's directory.
+
 ```text
-Load the project context skill with the same arguments I used, then load `ai-to-leader` and its teammate flavor `peers.md`.
+Load the project context skill with the same arguments I used, then load `ai-to-leader` and the peer conduct in `../../coordination/peers.md`.
 
 Read this context file first:
 @/path/to/curated-teammates-context-brief.md
@@ -55,25 +64,9 @@ You are a hillclimber–watcher team. The shared goal is: <goal and measurable t
 
 Hillclimber: own the implementation and optimization loop. Try approaches, measure them, keep the work reproducible, and iterate toward the target. Prefer simple, principled changes over piles of special-case patches. Ping Watcher when you have meaningful progress, and answer Watcher's check-ins.
 
-Watcher: You are the outside-box watcher. Stay mostly low-activity. Check status every two minutes (Bash `sleep`). Every ten minutes, ask the hillclimber what it has been doing, what progress it has made, and whether it is facing hurdles, rabbit holes, or whack-a-mole loops. Read new or changed files when useful. Then think: If you conclude the hillclimber is tunnel-visioned, overfitting, going in circles, missing an important flaw, or ignoring a better path, send it a concrete suggestion and return to the two-minute sleep/check rhythm. If it looks like hillclimber is doing fine, do not say anything. Send main the gist of major breakthroughs/steps (only once every few rounds.) Do not take over the implementation.
+Watcher: read the adjacent `watcher.md` for your observation procedure. Do not take over the implementation.
 
 Both: set short, current statuses frequently. Keep summaries concise. Continue until you either reach the target or have been plateuing for more than an hour straight without progress (yes, look at the clock from time to time.). 
 
 Communicate directly with each other and converge without main-agent micromanagement.
 ```
-
-## Watcher cadence
-
-The watcher loop is deliberately boring:
-
-1. Set status.
-2. Sleep for two minutes.
-3. Lightly inspect team status and visible progress.
-4. Every ten minutes, ask the hillclimber for a short progress report.
-5. Think independently about whether the current path is still good.
-6. If useful, read changed files or metrics.
-7. Send steering only when it materially improves the search.
-8. Repeat.
-
-The watcher should bias toward silence. A noisy watcher becomes drag.
-

@@ -23,17 +23,14 @@ main() {
   cd "$published_repository"
 
   # Mirror the personal plugin verbatim, excluding hidden files (private
-  # notes stay private). Skill and reference names are a hardcoded whitelist.
+  # notes stay private). Skill and root file names are a hardcoded whitelist.
   local skill_name
   for skill_name in ai-to-leader ai-to-delegated handoff peer-review theory-of-mind; do
     rsync -a --delete --exclude='.*' "$personal_plugin_directory/skills/$skill_name/" "$published_plugin_directory/skills/$skill_name/"
   done
-  rsync -a "$personal_plugin_directory/references/roles.md" "$published_plugin_directory/references/"
-
-  # The personal skills link the shared references with absolute ~/.agents
-  # paths. Published skills must use the shared plugin layout, which
-  # build-plugins.sh also keys on when it flattens skills for Pi.
-  find "$published_plugin_directory/skills" -name '*.md' -exec sed -i '' 's|(~/.agents/plugins/interaction/references/|(../../references/|g' {} +
+  rm -f "$published_plugin_directory/references/roles.md"
+  rmdir "$published_plugin_directory/references" 2>/dev/null || true
+  rsync -a "$personal_plugin_directory/roles.md" "$published_plugin_directory/"
 
   # The personal plugin speaks in Gilad's personal voice (Gilad, ADHD, first
   # person). The published copies of the whitelisted files below must be
@@ -44,9 +41,8 @@ main() {
 Anonymize exactly these files in the published repository at __PUBLISHED_REPOSITORY__, in place. Do not touch any other file.
 - __PUBLISHED_REPOSITORY__/plugins/interaction/skills/ai-to-leader/references/human.md
 - __PUBLISHED_REPOSITORY__/plugins/interaction/skills/ai-to-leader/references/help.md
-- __PUBLISHED_REPOSITORY__/plugins/interaction/skills/ai-to-delegated/references/leading-leaders.md
-- __PUBLISHED_REPOSITORY__/plugins/interaction/skills/ai-to-delegated/references/hats/head-of-product.md
-- __PUBLISHED_REPOSITORY__/plugins/interaction/references/roles.md
+- __PUBLISHED_REPOSITORY__/plugins/interaction/skills/ai-to-delegated/coordination/leading-leaders.md
+- __PUBLISHED_REPOSITORY__/plugins/interaction/roles.md
 
 They were copied from ~/.agents/plugins/interaction/, which speaks in Gilad's personal voice (Gilad, ADHD, first person).
 The published copies must be anonymized (a generic human leader, cognitive overload, direct assertions softened).
