@@ -24,12 +24,10 @@ import sys
 import uuid
 from pathlib import Path
 
-from codex_to_pi import INJECTED_USER_PREFIXES, CodexSessionGraph, resolve_codex_input, text_of
+from codex_to_pi import ENCRYPTED_PLACEHOLDER, INJECTED_USER_PREFIXES, CodexSessionGraph, compaction_summary, hide_ciphertext, resolve_codex_input, text_of
 
 CLAUDE_VERSION = "2.1.280"
 INERT_TYPE = "codex-record"
-ENCRYPTED_PLACEHOLDER = "[Codex ciphertext: only OpenAI can read this part]"
-CIPHERTEXT_PREFIX = "gAAAAA"
 OUTPUT_ITEMS = {"custom_tool_call_output", "function_call_output", "tool_search_output"}
 
 Record = dict[str, object]
@@ -58,21 +56,6 @@ def claude_blocks(content: str | list[Record]) -> list[Record]:
     return [block for block in blocks if block["type"] != "text" or block["text"]]
 
 
-def hide_ciphertext(value: object) -> object:
-    """Replace every ciphertext string inside tool arguments with a placeholder, keeping the readable fields.
-
-    >>> hide_ciphertext({"task_name": "hud", "message": "gAAAAABqsX_G", "timeout_ms": 60000})
-    {'task_name': 'hud', 'message': '[Codex ciphertext: only OpenAI can read this part]', 'timeout_ms': 60000}
-    """
-    if isinstance(value, str) and value.startswith(CIPHERTEXT_PREFIX):
-        return ENCRYPTED_PLACEHOLDER
-    if isinstance(value, dict):
-        return {key: hide_ciphertext(item) for key, item in value.items()}
-    if isinstance(value, list):
-        return [hide_ciphertext(item) for item in value]
-    return value
-
-
 def is_model_facing(payload: Record) -> bool:
     """Whether Claude should see this item. Codex harness injections stay inert, because Claude Code injects its own."""
     if payload["type"] == "message" and payload["role"] == "developer":
@@ -80,19 +63,6 @@ def is_model_facing(payload: Record) -> bool:
     if payload["type"] == "message" and payload["role"] == "user":
         return not text_of(payload["content"]).startswith(INJECTED_USER_PREFIXES)
     return True
-
-
-def replay_text(item: Record) -> str | None:
-    """Render one item that Codex replayed after a compaction, or None when Claude should not see it.
-
-    >>> replay_text({"type": "agent_message", "author": "/root/hud", "recipient": "/root", "content": [{"type": "input_text", "text": "done"}]})
-    '[/root/hud to /root]\\ndone'
-    """
-    if item["type"] == "agent_message":
-        return f"[{item['author']} to {item['recipient']}]\n{text_of(item['content'])}"
-    if item["type"] == "message" and is_model_facing(item):
-        return f"[{item['role']}]\n{text_of(item['content'])}"
-    return None
 
 
 def claude_project_directory(projects_root: Path, cwd: str) -> Path:
@@ -134,13 +104,11 @@ def convert(rollout: Path) -> list[Record]:
         if record["type"] == "turn_context":
             state["model"] = payload["model"]
         if record["type"] == "compacted":
-            replayed = [text for text in map(replay_text, payload["replacement_history"]) if text is not None]
             logical_parent = state["parent"]
             state["parent"] = None
             entry("system", record, {"subtype": "compact_boundary", "content": "Conversation compacted", "logicalParentUuid": logical_parent, "level": "info", "isMeta": False,
                                      "compactMetadata": {"trigger": "auto", "preTokens": (payload.get("latest_token_usage_record") or {"usage": {"total_tokens": 0}})["usage"]["total_tokens"]}})
-            summary = "Codex compacted the context here. Its summary is OpenAI ciphertext. Codex replayed these messages after it:\n\n" + "\n\n---\n\n".join(replayed)
-            user(record, summary, stash=False, isCompactSummary=True, isVisibleInTranscriptOnly=True)
+            user(record, compaction_summary(payload["replacement_history"]), stash=False, isCompactSummary=True, isVisibleInTranscriptOnly=True)
             continue
         if record["type"] != "response_item" or not is_model_facing(payload):
             lines.append({"type": INERT_TYPE, "sessionId": session_id, "codex": record})

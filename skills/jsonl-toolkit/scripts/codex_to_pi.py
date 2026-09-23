@@ -14,8 +14,8 @@ Every model-facing Codex item rides verbatim inside the Pi object that replaced 
 `textSignature`, and the raw payload under a `codex` key on user entries, tool call blocks,
 tool result and compaction `details`, sub-agent notifications, and the session header.
 Sub-agents become pi-subagents notifications plus separate Pi child sessions. Codex-internal
-notes/history/collaboration calls carry only ciphertext, so they become out-of-context
-`custom` entries. Codex side chats remain absent because Codex writes no rollout for them.
+notes/history calls carry only ciphertext, so they become out-of-context `custom` entries.
+Collaboration calls stay in context with only their ciphertext strings masked. Codex side chats remain absent because Codex writes no rollout for them.
 
 Shapes that stopped before July 2026 are out of scope. The function-call form of exec,
 `web_search_call`, and `multi_agent_v1` are not handled.
@@ -42,12 +42,14 @@ ZERO_USAGE = {
     "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0},
 }
 INJECTED_USER_PREFIXES = ("<environment_context>", "# AGENTS.md instructions", "<recommended_plugins>")
-ENCRYPTED_NAMESPACES = {"notes", "history", "collaboration"}
+ENCRYPTED_NAMESPACES = {"notes", "history"}
 ENCRYPTED_CALL_TYPE = "codex-encrypted-call"
 SUBAGENT_NOTIFICATION_TYPE = "subagent-notification"
 SUBAGENT_RECORD_TYPE = "subagents:record"
 ENCRYPTED_NOTE = "[Encrypted by Codex. Only the ciphertext was stored.]"
-COMPACTION_PREFACE = "Codex compacted the context here. Its summary is encrypted and unreadable outside Codex. It replayed the following user messages verbatim after the summary:\n\n"
+ENCRYPTED_PLACEHOLDER = "[Codex ciphertext: only OpenAI can read this part]"
+CIPHERTEXT_PREFIX = "gAAAAA"
+COMPACTION_PREFACE = "Codex compacted the context here. Its summary is encrypted and unreadable outside Codex. It replayed the following messages verbatim after the summary:\n\n"
 
 Role = Literal["root", "subagent"]
 
@@ -70,6 +72,26 @@ def text_of(content: str | list[dict[str, object]]) -> str:
     if isinstance(content, str):
         return content
     return "".join(str(block.get("text", "")) for block in content if block.get("type") in ("input_text", "output_text"))
+
+
+def replay_text(item: dict[str, object]) -> str | None:
+    """Render one item that Codex replayed after a compaction, or None for the encrypted summary and harness injections.
+
+    >>> replay_text({"type": "agent_message", "author": "/root/hud", "recipient": "/root", "content": [{"type": "input_text", "text": "done"}]})
+    '[/root/hud to /root]\\ndone'
+    >>> replay_text({"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "<permissions>"}]}) is None
+    True
+    """
+    if item["type"] == "agent_message":
+        return f"[{item['author']} to {item['recipient']}]\n{text_of(item['content'])}"
+    if item["type"] != "message" or item["role"] == "developer" or text_of(item["content"]).startswith(INJECTED_USER_PREFIXES):
+        return None
+    return f"[{item['role']}]\n{text_of(item['content'])}"
+
+
+def compaction_summary(replacement_history: list[dict[str, object]]) -> str:
+    """Describe a Codex compaction to a model that cannot read its encrypted summary: the preface, then every replayed message."""
+    return COMPACTION_PREFACE + "\n\n---\n\n".join(text for text in map(replay_text, replacement_history) if text is not None)
 
 
 def image_block(data_url: str) -> dict[str, object]:
@@ -95,6 +117,21 @@ def pi_content_blocks(content: str | list[dict[str, object]]) -> list[dict[str, 
         else:
             raise ValueError(f"Cannot render Codex content block {block['type']!r} in Pi")
     return blocks
+
+
+def hide_ciphertext(value: object) -> object:
+    """Replace every ciphertext string inside tool arguments with a placeholder, keeping the readable fields.
+
+    >>> hide_ciphertext({"task_name": "hud", "message": "gAAAAABqsX_G", "timeout_ms": 60000})
+    {'task_name': 'hud', 'message': '[Codex ciphertext: only OpenAI can read this part]', 'timeout_ms': 60000}
+    """
+    if isinstance(value, str) and value.startswith(CIPHERTEXT_PREFIX):
+        return ENCRYPTED_PLACEHOLDER
+    if isinstance(value, dict):
+        return {key: hide_ciphertext(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [hide_ciphertext(item) for item in value]
+    return value
 
 
 def escape_xml(value: str) -> str:
@@ -204,18 +241,39 @@ def tool_call_to_bash(name: str, arguments: str) -> str | None:
     return f"# Codex tool {name}({' '.join(arguments.split())})"
 
 
+JS_STRING_LITERAL = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`')
+JS_CONTROL_FLOW = re.compile(r"\b(?:if|else|for|while|do|switch|case|try|catch|function)\b|=>|\?|&&|\|\|")
+
+
+def has_control_flow(script: str, calls: list[tuple[str, str]]) -> bool:
+    """Whether code around the tool calls can skip or repeat them, so one bash line per call would misstate what ran.
+
+    >>> has_control_flow('if (x) text(await tools.exec_command({cmd:"rm -rf b"}));', [("exec_command", '{cmd:"rm -rf b"}')])
+    True
+    >>> has_control_flow('const r = await tools.exec_command({cmd:"a && b"}); text(r.output);', [("exec_command", '{cmd:"a && b"}')])
+    False
+    """
+    skeleton = script
+    for name, arguments in calls:
+        skeleton = skeleton.replace(f"tools.{name}({arguments})", "T", 1)
+    return bool(JS_CONTROL_FLOW.search(JS_STRING_LITERAL.sub("S", skeleton)))
+
+
 def bash_command_for_exec(script: str) -> str:
-    """Turn a Codex exec script into a bash command, one line per tool call it makes.
+    """Turn a Codex exec script into a bash command, one line per tool call, when every call runs unconditionally.
+
+    Any other script stays verbatim under a comment header.
 
     >>> bash_command_for_exec('text(await tools.exec_command({cmd:"ls -la",workdir:"/tmp"}));')
     'cd /tmp && ls -la'
     """
     verbatim = "# Codex exec script (JavaScript), run by the Codex exec tool\n" + script
     try:
-        lines = [tool_call_to_bash(name, arguments) for name, arguments in parse_tool_calls(script)]
+        calls = parse_tool_calls(script)
+        lines = [tool_call_to_bash(name, arguments) for name, arguments in calls]
     except (ValueError, IndexError):
         return verbatim
-    if not lines or None in lines:
+    if not lines or None in lines or has_control_flow(script, calls):
         return verbatim
     return "\n".join(line for line in lines if line is not None)
 
@@ -582,9 +640,7 @@ class Conversion:
 
             if item.kind == "compacted":
                 flush("stop")
-                replacement = payload["replacement_history"]
-                kept_users = [entry for entry in replacement if entry["type"] == "message" and entry["role"] == "user"]
-                summary = COMPACTION_PREFACE + "\n\n---\n\n".join(f"<user_message>\n{text_of(entry['content'])}\n</user_message>" for entry in kept_users)
+                summary = compaction_summary(payload["replacement_history"])
                 usage_record = payload.get("latest_token_usage_record") or {"usage": {"total_tokens": 0}}
                 entry_id = writer.new_id()
                 writer.append(
@@ -615,7 +671,7 @@ class Conversion:
                     item.ordinal,
                 )
             elif item_type == "function_call":
-                arguments = json.loads(str(payload["arguments"]))
+                arguments = hide_ciphertext(json.loads(str(payload["arguments"])))
                 name = str(payload["name"])
                 if payload.get("namespace") in ENCRYPTED_NAMESPACES:
                     encrypted_call_ids.add(str(payload["call_id"]))

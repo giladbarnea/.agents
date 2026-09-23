@@ -353,5 +353,110 @@ class CodexForkTreeTests(unittest.TestCase):
             )
 
 
+def convert_root(temporary: pathlib.Path, records: list[dict[str, object]]) -> list[dict[str, object]]:
+    rollout = write_rollout(temporary / "codex" / "sessions", ROOT_ID, records)
+    return load_session(codex_to_pi.main(rollout, temporary / "pi" / "sessions", "Pi context")[ROOT_ID])
+
+
+def tool_calls(entries: list[dict[str, object]]) -> dict[str, dict[str, object]]:
+    return {
+        str(block["name"]): block
+        for entry in entries
+        if entry.get("type") == "message" and entry["message"]["role"] == "assistant"
+        for block in entry["message"]["content"]
+        if block["type"] == "toolCall"
+    }
+
+
+def tool_result_texts(entries: list[dict[str, object]]) -> list[str]:
+    return [
+        str(block["text"])
+        for entry in entries
+        if entry.get("type") == "message" and entry["message"]["role"] == "toolResult"
+        for block in entry["message"]["content"]
+        if block["type"] == "text"
+    ]
+
+
+class PiContextTests(unittest.TestCase):
+    """What the Pi model reads after the conversion. The restore oracle cannot see these losses, because the originals stay stashed."""
+
+    def test_subagent_coordination_reaches_the_pi_model_with_only_ciphertext_masked(self) -> None:
+        spawn_arguments = {"task_name": "hud", "agent_type": "worker", "model": "gpt-6-astra", "message": "gAAAAABq-sealed-by-openai"}
+        wait_output = '{"message":"hud finished: 3 files changed","timed_out":false}'
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            entries = convert_root(
+                pathlib.Path(temporary_directory),
+                [
+                    session_meta(ROOT_ID, 0),
+                    turn_context(1),
+                    message(2, "user-1", "user", "delegate the HUD work"),
+                    record(3, "response_item", {"type": "function_call", "id": "fc_1", "call_id": "call_spawn", "namespace": "collaboration", "name": "spawn_agent", "arguments": json.dumps(spawn_arguments)}),
+                    record(4, "response_item", {"type": "function_call_output", "call_id": "call_spawn", "output": '{"task_name":"/root/hud"}'}),
+                    record(5, "response_item", {"type": "function_call", "id": "fc_2", "call_id": "call_wait", "namespace": "collaboration", "name": "wait_agent", "arguments": '{"timeout_ms":60000}'}),
+                    record(6, "response_item", {"type": "function_call_output", "call_id": "call_wait", "output": wait_output}),
+                ],
+            )
+        spawn = tool_calls(entries).get("spawn_agent", {})
+        expected_arguments = {**spawn_arguments, "message": codex_to_pi.ENCRYPTED_PLACEHOLDER}
+        self.assertEqual(spawn.get("arguments"), expected_arguments, f"The Pi model must see the spawn call's readable fields, with only the ciphertext masked. Got tool calls: {tool_calls(entries)!r}")
+        self.assertIn(wait_output, tool_result_texts(entries), f"The Pi model must read what wait_agent returned. Got: {tool_result_texts(entries)!r}")
+
+
+    def test_the_compaction_summary_replays_subagent_messages_but_not_harness_injections(self) -> None:
+        replacement_history = [
+            {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "<permissions instructions>sandbox</permissions instructions>"}]},
+            {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "# AGENTS.md instructions for /tmp/project"}]},
+            {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "make the game faster"}]},
+            {"type": "agent_message", "author": "/root/hud", "recipient": "/root", "content": [{"type": "input_text", "text": "Message Type: FINAL_ANSWER\nThe HUD redraws every frame."}]},
+            {"type": "compaction", "id": "cmp_1", "encrypted_content": "gAAAAABq-compaction-summary"},
+        ]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            entries = convert_root(
+                pathlib.Path(temporary_directory),
+                [
+                    session_meta(ROOT_ID, 0),
+                    turn_context(1),
+                    message(2, "user-1", "user", "make the game faster"),
+                    record(3, "compacted", {"message": "", "replacement_history": replacement_history}),
+                    message(4, "msg-1", "assistant", "Next I will batch the draw calls."),
+                ],
+            )
+        summaries = [str(entry["summary"]) for entry in entries if entry.get("type") == "compaction"]
+        self.assertEqual(len(summaries), 1, f"Expected one compaction entry. Got: {summaries!r}")
+        self.assertIn("The HUD redraws every frame.", summaries[0], "Codex replayed the sub-agent answer, so the Pi model must see it after the compaction")
+        self.assertIn("make the game faster", summaries[0], "Codex replayed the user message, so the Pi model must see it after the compaction")
+        self.assertNotIn("AGENTS.md instructions", summaries[0], "Harness injections stay out of Pi's context, as everywhere else in the conversion")
+        self.assertNotIn("permissions instructions", summaries[0], "Developer messages stay out of Pi's context, as everywhere else in the conversion")
+
+
+    def test_bash_rendering_is_used_only_when_every_tool_call_runs_unconditionally(self) -> None:
+        conditional = 'if ((await tools.exec_command({cmd:"test -f a.txt"})).exit_code !== 0) {\n  text(await tools.exec_command({cmd:"rm -rf build"}));\n}'
+        straight_line = 'const r = await tools.exec_command({cmd:"ls -la"}); text(r.output);'
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            entries = convert_root(
+                pathlib.Path(temporary_directory),
+                [
+                    session_meta(ROOT_ID, 0),
+                    turn_context(1),
+                    message(2, "user-1", "user", "clean the build only if a.txt is missing"),
+                    record(3, "response_item", {"type": "custom_tool_call", "id": "ctc_1", "call_id": "call_1", "name": "exec", "input": conditional, "status": "completed"}),
+                    record(4, "response_item", {"type": "custom_tool_call_output", "call_id": "call_1", "output": [{"type": "input_text", "text": "Script completed"}]}),
+                    record(5, "response_item", {"type": "custom_tool_call", "id": "ctc_2", "call_id": "call_2", "name": "exec", "input": straight_line, "status": "completed"}),
+                    record(6, "response_item", {"type": "custom_tool_call_output", "call_id": "call_2", "output": [{"type": "input_text", "text": "Script completed"}]}),
+                ],
+            )
+        commands = [
+            str(block["arguments"]["command"])
+            for entry in entries
+            if entry.get("type") == "message" and entry["message"]["role"] == "assistant"
+            for block in entry["message"]["content"]
+            if block["type"] == "toolCall" and block["name"] == "bash"
+        ]
+        self.assertEqual(len(commands), 2, f"Expected two bash calls. Got: {commands!r}")
+        self.assertIn(conditional, commands[0], f"A script whose condition decides what runs must reach the Pi model whole. A bare 'rm -rf build' line claims it always ran. Got: {commands[0]!r}")
+        self.assertEqual(commands[1], "ls -la", "A straight-line script must still render as its shell command")
+
+
 if __name__ == "__main__":
     unittest.main()
