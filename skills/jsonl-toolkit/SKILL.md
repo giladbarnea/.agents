@@ -1,7 +1,7 @@
 ---
 name: jsonl-toolkit
 description: Tools and workflows for inspecting large JSONL files and AI session transcripts
-last_updated: 2026-08-05
+last_updated: 2026-09-23
 ---
 
 Use this skill to inspect, search, summarize, or transform large JSONL files without loading unwieldy lines into the terminal.
@@ -226,7 +226,7 @@ A Codex sub-agent becomes a pi-subagents task: one `subagent-notification` custo
 
 Codex side chats are ephemeral and pathless. Codex writes no rollout for them, so the converter ignores any surviving references.
 
-Codex-internal `notes`, `history`, and `collaboration` calls carry only ciphertext. They become out-of-context `codex-encrypted-call` custom entries, in sequence, so nothing unreadable enters Pi's context. Verify results with `scripts/pi-goldload.mjs`. A ported compaction makes `reached` smaller than `expected` by design.
+Codex-internal `notes`, `history`, and `collaboration` calls become out-of-context `codex-encrypted-call` custom entries, in sequence. The `notes` and `history` payloads are ciphertext. A `collaboration` call is ciphertext only in its `message` field: task names, agent types, models, and `wait_agent` results are plain text, and Pi's context does not show them either. Verify results with `scripts/pi-goldload.mjs`. A ported compaction makes `reached` smaller than `expected` by design.
 
 ## Restore a Codex rollout from a converted Pi session
 
@@ -236,6 +236,30 @@ Codex-internal `notes`, `history`, and `collaboration` calls carry only cipherte
 uv run --script scripts/pi_to_codex.py session.jsonl output-directory/
 ```
 
-The harness injections that codex_to_pi drops on purpose stay dropped: environment context, AGENTS.md, developer messages, events, and token usage. Codex will not resume such a rollout without them. The oracle for "lossless" is `model_facing` in `tests/test_roundtrip_codex_pi_codex.py`, which projects a rollout onto the fields that enter or leave the model. The suite runs it on synthetic shapes and on real September 2026 sessions under `tests/fixtures/codex/sessions`.
+The harness injections that codex_to_pi drops on purpose stay dropped: environment context, AGENTS.md, developer messages, events, and token usage. Codex resumes the rollout anyway and adds its own harness context on the next turn. Put the file under `$CODEX_HOME/sessions/` and run `codex resume <codex-session-id>`. Codex finds the session by the id at the end of the file name. A Codex home that already indexed the same thread id at another path can report `no rollout found`. These resume facts come from codex-cli 0.156.1. The oracle for "lossless" is `model_facing` in `tests/test_roundtrip_codex_pi_codex.py`, which projects a rollout onto the fields that enter or leave the model. The suite runs it on synthetic shapes and on real September 2026 sessions under `tests/fixtures/codex/sessions`.
 
 Shapes that stopped before July 2026 are out of scope. The function-call form of exec, `web_search_call`, and `multi_agent_v1` are not handled.
+
+## Port a Codex session into a native Claude Code session
+
+`scripts/codex_to_claude.py` accepts a Codex session ID or a `rollout-*.jsonl` path. It writes the session to the Claude Code project directory of the session's working directory, and prints the resume command.
+
+```bash
+uv run --script scripts/codex_to_claude.py SESSION_ID
+```
+
+Every rollout record rides verbatim on exactly one Claude line, under a top-level `codex` key, so `restore` gives back the identical records. Claude Code appends on `--resume` and keeps these lines. `--fork-session` keeps the `codex` keys on message entries but drops the inert `codex-record` lines.
+
+What Claude sees:
+
+- User messages, images, and assistant text.
+- Every tool call under its Codex name, such as `exec` with the exact JavaScript, or `collaboration__wait_agent`. Ciphertext strings in arguments become a placeholder.
+- Every tool output exactly as Codex's model saw it.
+- Sub-agent messages as user messages. Their encrypted parts become a placeholder.
+- After a Codex compaction, a summary of the messages that Codex replayed.
+
+What Claude cannot see is Codex reasoning, the encrypted compaction summary, and every other ciphertext. The reasoning stays in thinking blocks. The assistant entries carry the Codex model id, so Claude Code drops those blocks before each API call instead of failing on the foreign signature. Codex harness injections become inert lines, because Claude Code injects its own.
+
+These rules come from real API rejections, and `tests/test_codex_to_claude.py` checks them on the fixture sessions: no unknown key inside a content block, no Claude model id on a converted assistant entry, and every `tool_result` in the message right after its `tool_use`.
+
+The converter refuses fork children and sessions that span several rollout files, because a single file would lack part of their history.

@@ -63,6 +63,15 @@ def standalone_session_meta(header: JsonObject) -> JsonObject:
     return {key: value for key, value in header["codex"].items() if key not in FORK_KEYS}
 
 
+def rollout_filename(meta: JsonObject) -> str:
+    """Name the rollout the way Codex does, because `codex resume` finds a session by the id at the end of its file name.
+
+    >>> rollout_filename({"id": "01a0", "timestamp": "2026-09-08T07:32:19.851Z"})
+    'rollout-2026-09-08T07-32-19-01a0.jsonl'
+    """
+    return f"rollout-{str(meta['timestamp'])[:19].replace(':', '-')}-{meta['id']}.jsonl"
+
+
 def restore_records(header: JsonObject, active: list[JsonObject]) -> list[JsonObject]:
     records: list[JsonObject] = [{"timestamp": header["timestamp"], "type": "session_meta", "payload": standalone_session_meta(header)}]
     model: str | None = None
@@ -116,7 +125,7 @@ def main(session_path: Path, output_directory: Path) -> Path:
     header, active = extract_active_path(load_entries(Path(session_path)))
     records = restore_records(header, active)
     output_directory.mkdir(parents=True, exist_ok=True)
-    target = output_directory / f"rollout-{header['id']}.jsonl"
+    target = output_directory / rollout_filename(records[0]["payload"])
     with target.open("w", encoding="utf-8") as out:
         out.write("".join(dumps(record) + "\n" for record in records))
     print(f"wrote {target}", file=sys.stderr)

@@ -351,6 +351,18 @@ class RoundTripTests(unittest.TestCase):
             self.assert_same_model_facts(model_facing(load_records(subagent_rollout)), model_facing(load_records(restored_child)))
 
 
+    def test_the_restored_rollout_is_named_so_codex_resume_finds_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = pathlib.Path(temporary_directory)
+            rollout = write_rollout(temporary / "codex" / "sessions", ROOT_ID, [session_meta(ROOT_ID, 0), turn_context(1), message(2, "user-1", "user", "hello")])
+            converted = codex_to_pi.main(rollout, temporary / "pi" / "sessions", "Round trip")
+            restored = pi_to_codex.main(converted[ROOT_ID], temporary / "restored")
+        self.assertTrue(
+            restored.name.startswith("rollout-") and restored.name.endswith(f"-{ROOT_ID}.jsonl"),
+            f"`codex resume {ROOT_ID}` looks the session up by the id at the end of the file name, and reports 'no rollout found' otherwise. Got: {restored.name}",
+        )
+
+
 class RealRolloutRoundTripTests(unittest.TestCase):
     """Anchor the projection on real September 2026 Codex sessions copied into tests/fixtures."""
 

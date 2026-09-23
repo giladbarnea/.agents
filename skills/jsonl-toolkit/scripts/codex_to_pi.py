@@ -164,7 +164,14 @@ def parse_tool_calls(script: str) -> list[tuple[str, str]]:
 
 
 def js_string_field(source: str, name: str) -> str | None:
-    match = re.search(rf'(?<![\w"]){name}\s*:\s*"', source)
+    """Read a string field from a JavaScript object literal, whether its key is bare or quoted.
+
+    >>> js_string_field('{"cmd":"ls","workdir":"/tmp"}', "workdir")
+    '/tmp'
+    >>> js_string_field('{note:"cmd: ls"}', "cmd") is None
+    True
+    """
+    match = re.search(rf'(?<![\w"])(?:{name}|"{name}")\s*:\s*"', source)
     return read_js_string(source, match.end() - 1) if match else None
 
 
@@ -187,7 +194,7 @@ def tool_call_to_bash(name: str, arguments: str) -> str | None:
             return None
         return f"apply_patch <<'PATCH'\n{read_js_string(arguments, 0)}\nPATCH"
     if name == "write_stdin":
-        session = re.search(r"session_id\s*:\s*(\d+)", arguments)
+        session = re.search(r'(?<![\w"])(?:session_id|"session_id")\s*:\s*(\d+)', arguments)
         characters = js_string_field(arguments, "chars")
         if session is None or characters is None:
             return None
