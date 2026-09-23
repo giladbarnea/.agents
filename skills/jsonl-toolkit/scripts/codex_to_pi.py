@@ -9,11 +9,12 @@ The converter follows native fork ancestry in both directions, rebuilds paginate
 segments, copies each fork-point history into its Pi child, and sets `parentSession`.
 It ports messages, reasoning, shell tools, compaction, and native Codex sub-agents.
 
-Every model-facing Codex item rides verbatim inside the Pi object that replaced it, so
-`pi_to_codex.py` can restore the rollout: reasoning in `thinkingSignature`, assistant ids in
-`textSignature`, and the raw payload under a `codex` key on user entries, tool call blocks,
-tool result and compaction `details`, sub-agent notifications, and the session header.
-Sub-agents become pi-subagents notifications plus separate Pi child sessions. Namespaced calls,
+Every Codex record rides verbatim under a `codex` key, so `pi_to_codex.py` restores the same
+records: the session_meta on the header, and every other record, in order, in the list of the
+Pi entry written next. Records the model never reads, such as events and harness injections,
+ride along the same way. Reasoning also stays in `thinkingSignature` and assistant ids in
+`textSignature`, the slots Pi's own Codex provider reads back. Sub-agents, at any depth, become
+pi-subagents notifications plus separate Pi child sessions. Namespaced calls,
 including Codex-internal notes, history, and collaboration calls, keep their namespace in the
 tool name and stay in context with only their ciphertext strings masked. Codex side chats
 remain absent because Codex writes no rollout for them.
@@ -30,7 +31,6 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
 
 PROVIDER = "openai-codex"
 API = "openai-codex-responses"
@@ -45,12 +45,11 @@ ZERO_USAGE = {
 INJECTED_USER_PREFIXES = ("<environment_context>", "# AGENTS.md instructions", "<recommended_plugins>")
 SUBAGENT_NOTIFICATION_TYPE = "subagent-notification"
 SUBAGENT_RECORD_TYPE = "subagents:record"
+CODEX_RECORD_TYPE = "codex-record"
+FORK_KEYS = ("forked_from_id", "forked_from_ordinal_exclusive", "history_base")
 ENCRYPTED_PLACEHOLDER = "[Codex ciphertext: only OpenAI can read this part]"
 CIPHERTEXT_PREFIX = "gAAAAA"
 COMPACTION_PREFACE = "Codex compacted the context here. Its summary is encrypted and unreadable outside Codex. It replayed the following messages verbatim after the summary:\n\n"
-
-Role = Literal["root", "subagent"]
-
 
 def uuidv7(at_ms: int) -> str:
     value = (at_ms << 80) | (0x7 << 76) | (secrets.randbits(12) << 64) | (0b10 << 62) | secrets.randbits(62)
@@ -343,6 +342,7 @@ class Item:
     ordinal: int
     kind: str
     payload: dict[str, object]
+    record: dict[str, object]
 
 
 def item_from_record(record: dict[str, object], default_ordinal: int) -> Item:
@@ -351,6 +351,7 @@ def item_from_record(record: dict[str, object], default_ordinal: int) -> Item:
         int(record.get("ordinal", default_ordinal)),
         str(record["type"]),
         record["payload"],
+        record,
     )
 
 
@@ -403,7 +404,6 @@ class Subagent:
             "totalTokens": 0,
             "durationMs": epoch_ms(until) - epoch_ms(self.started_at),
             "resultPreview": text[:500],
-            "codex": payload,
         }
         content = "\n".join(
             [
@@ -483,7 +483,7 @@ class PiWriter:
                 selected_count = index
                 break
         residues = self.source_ordinals[selected_count:]
-        if any(ordinal is None or ordinal < source_ordinal for ordinal in residues):
+        if any(ordinal is not None and ordinal < source_ordinal for ordinal in residues):
             raise ValueError(f"Pi entries are not ordered at Codex fork ordinal {source_ordinal}")
         return PiPrefix(self.lines[:selected_count], self.source_ordinals[:selected_count])
 
@@ -544,7 +544,6 @@ class Conversion:
     rollout: Path
     sessions_root: Path
     name: str
-    role: Role
     session_id: str
     subagents: dict[str, Subagent] = field(default_factory=dict)
     parent_session: str | None = None
@@ -563,10 +562,19 @@ class Conversion:
         pending = PendingAssistant()
         call_names: dict[str, str] = {}
         call_pi_ids: dict[str, str] = {}
-        dropped: dict[str, int] = {}
+        staged: list[Item] = []
+        current: list[Item] = []
 
-        def drop(reason: str) -> None:
-            dropped[reason] = dropped.get(reason, 0) + 1
+        def carried(consume_current: bool) -> dict[str, object]:
+            """Take every staged record, and the item being converted when asked, for the entry written next."""
+            records = [*staged, *current] if consume_current else list(staged)
+            staged.clear()
+            if consume_current:
+                current.clear()
+            return {"codex": [item.record for item in records]} if records else {}
+
+        def emit(entry_type: str, timestamp: str, body: dict[str, object], entry_id: str | None = None) -> str:
+            return writer.append(entry_type, timestamp, {**body, **carried(True)}, source_ordinal=item.ordinal, entry_id=entry_id)
 
         def flush(stop_reason: str) -> None:
             if not pending.blocks:
@@ -581,13 +589,23 @@ class Conversion:
                 "stopReason": stop_reason,
                 "timestamp": epoch_ms(pending.timestamp),
             }
-            writer.append("message", pending.timestamp, {"message": message}, max(pending.source_ordinals))
+            source_ordinal = max(staged_item.ordinal for staged_item in staged)
+            writer.append("message", pending.timestamp, {"message": message, **carried(False)}, source_ordinal)
             pending.blocks, pending.source_ordinals, pending.timestamp = [], [], None
+
+        def flush_records() -> None:
+            """Write the assistant turn and any records still waiting, so nothing crosses a fork point."""
+            flush("stop")
+            if staged:
+                last = staged[-1]
+                writer.append("custom", last.timestamp, {"customType": CODEX_RECORD_TYPE, **carried(False)}, source_ordinal=last.ordinal)
 
         def add_pending(block: dict[str, object], timestamp: str, source_ordinal: int) -> None:
             pending.timestamp = pending.timestamp or timestamp
             pending.blocks.append(block)
             pending.source_ordinals.append(source_ordinal)
+            staged.extend(current)
+            current.clear()
 
         def add_tool_call(
             payload: dict[str, object],
@@ -599,7 +617,7 @@ class Conversion:
             pi_call_id = f"{payload['call_id']}|{payload['id']}"
             call_names[str(payload["call_id"])] = name
             call_pi_ids[str(payload["call_id"])] = pi_call_id
-            add_pending({"type": "toolCall", "id": pi_call_id, "name": name, "arguments": arguments, "codex": payload}, timestamp, source_ordinal)
+            add_pending({"type": "toolCall", "id": pi_call_id, "name": name, "arguments": arguments}, timestamp, source_ordinal)
 
         def add_tool_result(
             payload: dict[str, object],
@@ -615,21 +633,23 @@ class Conversion:
                 "toolCallId": call_pi_ids[call_id],
                 "toolName": call_names[call_id],
                 "content": content,
-                "details": {"codex": payload},
                 "isError": is_error,
                 "timestamp": epoch_ms(timestamp),
             }
-            writer.append("message", timestamp, {"message": message}, source_ordinal=source_ordinal)
+            emit("message", timestamp, {"message": message})
 
         def add_user_message(payload: dict[str, object], blocks: list[dict[str, object]], timestamp: str, source_ordinal: int) -> None:
             flush("stop")
             message = {"role": "user", "content": blocks, "timestamp": epoch_ms(timestamp)}
-            writer.append("message", timestamp, {"message": message, "codex": payload}, source_ordinal=source_ordinal)
+            emit("message", timestamp, {"message": message})
 
+        cutoffs_ahead = sorted(self.fork_cutoffs)
         for item in items[1:]:
             timestamp, payload = item.timestamp, item.payload
-            if item.ordinal in self.fork_cutoffs:
-                flush("stop")
+            if cutoffs_ahead and item.ordinal >= cutoffs_ahead[0]:
+                flush_records()
+                cutoffs_ahead = [cutoff for cutoff in cutoffs_ahead if cutoff > item.ordinal]
+            current.append(item)
 
             if item.kind == "turn_context":
                 next_model = str(payload["model"])
@@ -638,15 +658,12 @@ class Conversion:
                     flush("stop")
                 if next_model != model:
                     model = next_model
-                    writer.append("model_change", timestamp, {"provider": PROVIDER, "modelId": model}, source_ordinal=item.ordinal)
+                    emit("model_change", timestamp, {"provider": PROVIDER, "modelId": model})
                 if next_thinking_level != thinking_level:
                     thinking_level = next_thinking_level
-                    writer.append(
-                        "thinking_level_change",
-                        timestamp,
-                        {"thinkingLevel": thinking_level},
-                        source_ordinal=item.ordinal,
-                    )
+                    emit("thinking_level_change", timestamp, {"thinkingLevel": thinking_level})
+                staged.extend(current)
+                current.clear()
                 continue
 
             if item.kind == "compacted":
@@ -654,17 +671,12 @@ class Conversion:
                 summary = compaction_summary(payload["replacement_history"])
                 usage_record = payload.get("latest_token_usage_record") or {"usage": {"total_tokens": 0}}
                 entry_id = writer.new_id()
-                writer.append(
-                    "compaction",
-                    timestamp,
-                    {"summary": summary, "firstKeptEntryId": entry_id, "tokensBefore": usage_record["usage"]["total_tokens"], "details": {"codex": payload}},
-                    source_ordinal=item.ordinal,
-                    entry_id=entry_id,
-                )
+                emit("compaction", timestamp, {"summary": summary, "firstKeptEntryId": entry_id, "tokensBefore": usage_record["usage"]["total_tokens"]}, entry_id=entry_id)
                 continue
 
             if item.kind != "response_item":
-                drop(item.kind)
+                staged.extend(current)
+                current.clear()
                 continue
 
             item_type = payload["type"]
@@ -704,31 +716,28 @@ class Conversion:
                 add_tool_result(payload, [{"type": "text", "text": dumps(payload["tools"])}], False, timestamp, item.ordinal)
             elif item_type == "message" and payload["role"] == "user":
                 if text_of(payload["content"]).startswith(INJECTED_USER_PREFIXES):
-                    drop("injected_user_message")
+                    staged.extend(current)
+                    current.clear()
                     continue
                 add_user_message(payload, pi_content_blocks(payload["content"]), timestamp, item.ordinal)
             elif item_type == "message" and payload["role"] == "developer":
-                drop("developer_message")
-            elif item_type == "agent_message" and self.role == "subagent":
-                blocks = [{"type": "text", "text": text_of(payload["content"])}]
-                add_user_message(payload, blocks, timestamp, item.ordinal)
-            elif item_type == "agent_message":
+                staged.extend(current)
+                current.clear()
+            elif item_type == "agent_message" and str(payload["author"]) in self.subagents:
                 flush("stop")
                 subagent = self.subagents[str(payload["author"])]
-                writer.append("custom_message", timestamp, subagent.notification(payload, timestamp), source_ordinal=item.ordinal)
+                emit("custom_message", timestamp, subagent.notification(payload, timestamp))
                 if text_of(payload["content"]).startswith("Message Type: FINAL_ANSWER"):
-                    writer.append(
-                        "custom",
-                        timestamp,
-                        {"customType": SUBAGENT_RECORD_TYPE, "data": subagent.record(payload, timestamp)},
-                        source_ordinal=item.ordinal,
-                    )
+                    emit("custom", timestamp, {"customType": SUBAGENT_RECORD_TYPE, "data": subagent.record(payload, timestamp)})
+            elif item_type == "agent_message":
+                blocks = [{"type": "text", "text": text_of(payload["content"])}]
+                add_user_message(payload, blocks, timestamp, item.ordinal)
             else:
                 raise ValueError(f"Unhandled response_item type at {timestamp}: {item_type}")
 
-        flush("stop")
+        flush_records()
 
-        header: dict[str, object] = {"type": "session", "version": 3, "id": self.session_id, "timestamp": started_at, "cwd": cwd, "codex": meta}
+        header: dict[str, object] = {"type": "session", "version": 3, "id": self.session_id, "timestamp": started_at, "cwd": cwd, "codex": items[0].record}
         if self.parent_session:
             header["parentSession"] = self.parent_session
 
@@ -740,7 +749,6 @@ class Conversion:
             out.write("\n".join(writer.lines) + "\n")
         print(f"wrote {target}", file=sys.stderr)
         print(f"  entries: {len(writer.lines)}", file=sys.stderr)
-        print(f"  dropped: {dumps(dropped)}", file=sys.stderr)
         return ConvertedSession(target, writer)
 
 
@@ -850,8 +858,8 @@ def load_node_items(node: CodexSessionNode) -> tuple[Item, ...]:
             for item in items
             if item.kind != "session_meta" and (upper_bound is None or item.ordinal < upper_bound)
         )
-    ordinals = [item.ordinal for item in merged]
-    if ordinals != sorted(set(ordinals)):
+    ordinals = [item.ordinal for item in merged if "ordinal" in item.record]
+    if ordinals != sorted(set(ordinals)):  # A thread rename is written without an ordinal.
         raise ValueError(f"Codex rollout segments for {node.session_id} do not form one ordered history")
     return tuple(merged)
 
@@ -887,6 +895,19 @@ class CodexSessionGraph:
             children.sort()
         return cls(sessions_root, nodes, fork_children, load_session_names(sessions_root.parent / "session_index.jsonl"))
 
+    def descendants(self, session_id: str) -> list[str]:
+        """List every fork descendant of a session, because a grandchild can fork inside history its parent inherited."""
+        return [descendant for child_id in self.fork_children[session_id] for descendant in (child_id, *self.descendants(child_id))]
+
+    def ancestors(self, session_id: str) -> list[str]:
+        """List the fork ancestors of a session, nearest first."""
+        chain: list[str] = []
+        current = self.nodes[session_id].fork_parent_id
+        while current in self.nodes:
+            chain.append(current)
+            current = self.nodes[current].fork_parent_id
+        return chain
+
     def root_of(self, session_id: str) -> str:
         if session_id not in self.nodes:
             raise FileNotFoundError(f"Could not find Codex session {session_id} under {self.sessions_root}")
@@ -918,6 +939,7 @@ def load_session_names(index_path: Path) -> dict[str, str]:
 
 
 def find_subagents(items: list[Item], codex_sessions_root: Path) -> dict[str, Subagent]:
+    """Map the path of every sub-agent that these items start to the sub-agent."""
     subagents: dict[str, Subagent] = {}
     for item in items:
         activity = item.payload.get("item", {}) if item.kind == "event_msg" else {}
@@ -928,21 +950,62 @@ def find_subagents(items: list[Item], codex_sessions_root: Path) -> dict[str, Su
     return subagents
 
 
-def fork_prefix(node: CodexSessionNode, parent: ConvertedSession) -> PiPrefix | None:
+def fork_cutoff(node: CodexSessionNode, ancestry: list[str]) -> int | None:
+    """Return the parent ordinal where a fork child's own history starts, or None when its rollout holds its whole history.
+
+    The history before that ordinal can live in any ancestor's rollout, so `history_base` may name a grandparent.
+    """
     if node.fork_ordinal is None:
         if node.history_base is not None:
             raise ValueError(f"Codex fork {node.session_id} has history_base without a fork ordinal")
         return None
     if node.history_base is None:
         raise ValueError(f"Codex fork {node.session_id} has a fork ordinal without history_base")
-    expected = {
-        "thread_id": node.fork_parent_id,
-        "end_ordinal_exclusive": node.fork_ordinal,
-    }
-    actual = {key: node.history_base.get(key) for key in expected}
-    if actual != expected:
-        raise ValueError(f"Codex fork {node.session_id} has inconsistent history_base: {actual!r} != {expected!r}")
-    return parent.prefix_before(node.fork_ordinal)
+    if node.history_base.get("thread_id") not in ancestry or node.history_base.get("end_ordinal_exclusive") != node.fork_ordinal:
+        raise ValueError(f"Codex fork {node.session_id} has a history_base outside its ancestry {ancestry}: {node.history_base!r}")
+    return node.fork_ordinal
+
+
+def inlines_parent_history(meta: dict[str, object]) -> bool:
+    """Whether a session_meta record belongs to a fork child that reads its parent's history by reference."""
+    history_base = meta["payload"].get("history_base")
+    return isinstance(history_base, dict) and history_base.get("thread_id") != meta["payload"]["id"]
+
+
+def restored_rollout(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Return a converted session's Codex records as one rollout that Codex can resume on its own.
+
+    A converted fork child holds its parent's history inline, so its session_meta drops the fork links and takes ordinal 0.
+
+    >>> meta = {"type": "session_meta", "ordinal": 4, "payload": {"id": "child", "forked_from_id": "parent", "history_base": {"thread_id": "parent"}}}
+    >>> restored_rollout([meta])
+    [{'type': 'session_meta', 'ordinal': 0, 'payload': {'id': 'child'}}]
+    """
+    meta, *rest = records
+    if not inlines_parent_history(meta):
+        return records
+    standalone = {**meta, "payload": {key: value for key, value in meta["payload"].items() if key not in FORK_KEYS}}
+    if "ordinal" in meta:
+        standalone["ordinal"] = 0
+    return [standalone, *rest]
+
+
+def rollout_filename(meta: dict[str, object]) -> str:
+    """Name a rollout the way Codex does, because `codex resume` finds a session by the id at the end of its file name.
+
+    >>> rollout_filename({"id": "01a0", "timestamp": "2026-09-08T07:32:19.851Z"})
+    'rollout-2026-09-08T07-32-19-01a0.jsonl'
+    """
+    return f"rollout-{str(meta['timestamp'])[:19].replace(':', '-')}-{meta['id']}.jsonl"
+
+
+def write_restored_rollout(records: list[dict[str, object]], output_directory: Path) -> Path:
+    """Write restored Codex records under the file name that `codex resume` looks for."""
+    output_directory.mkdir(parents=True, exist_ok=True)
+    target = output_directory / rollout_filename(records[0]["payload"])
+    target.write_text("".join(dumps(record) + "\n" for record in records), encoding="utf-8")
+    print(f"wrote {target}", file=sys.stderr)
+    return target
 
 
 def convert_fork_tree(
@@ -959,11 +1022,22 @@ def convert_fork_tree(
     graph = CodexSessionGraph.load(codex_sessions_root)
     tree_root_id = graph.root_of(selected_session_id)
     converted_sessions: dict[str, ConvertedSession] = {}
+    subagent_paths: dict[str, Path] = {}
+
+    def convert_subagents(subagents: dict[str, Subagent], parent: ConvertedSession, parent_name: str) -> None:
+        for subagent in subagents.values():
+            items = load_items(subagent.rollout)
+            nested = find_subagents(items, codex_sessions_root)
+            name = f"{parent_name} — sub-agent {subagent.agent_path} ({subagent.nickname})"
+            converted = Conversion(subagent.rollout, pi_sessions_root, name, subagent.session_id, nested, str(parent.path), source_items=tuple(items)).run()
+            subagent_paths[str(items[0].payload["id"])] = converted.path
+            convert_subagents(nested, converted, name)
 
     def convert_node(session_id: str) -> None:
         node = graph.nodes[session_id]
         parent = converted_sessions.get(node.fork_parent_id) if node.fork_parent_id else None
-        prefix = fork_prefix(node, parent) if parent else None
+        cutoff = fork_cutoff(node, graph.ancestors(session_id)) if parent else None
+        prefix = parent.prefix_before(cutoff) if cutoff is not None else None
         parent_session = str(parent.path) if parent else None
         source_items = load_node_items(node)
         items = list(source_items)
@@ -971,42 +1045,31 @@ def convert_fork_tree(
         name = graph.names.get(session_id, f"{selected_name} — Codex fork {session_id}")
         if session_id == selected_session_id:
             name = selected_name
-        direct_cutoffs = {
-            graph.nodes[child_id].fork_ordinal
-            for child_id in graph.fork_children[session_id]
-            if graph.nodes[child_id].fork_ordinal is not None
+        descendant_cutoffs = {
+            graph.nodes[descendant_id].fork_ordinal
+            for descendant_id in graph.descendants(session_id)
+            if graph.nodes[descendant_id].fork_ordinal is not None
         }
         session_id_for_pi = uuidv7(epoch_ms(str(items[0].payload["timestamp"])))
         converted = Conversion(
             node.rollout,
             pi_sessions_root,
             name,
-            "root",
             session_id_for_pi,
             subagents,
             parent_session,
             prefix,
-            direct_cutoffs,
+            descendant_cutoffs,
             source_items,
         ).run()
         converted_sessions[session_id] = converted
-
-        for subagent in subagents.values():
-            child_name = f"{name} — sub-agent {subagent.agent_path} ({subagent.nickname})"
-            Conversion(
-                subagent.rollout,
-                pi_sessions_root,
-                child_name,
-                "subagent",
-                subagent.session_id,
-                parent_session=str(converted.path),
-            ).run()
+        convert_subagents(subagents, converted, name)
 
         for child_id in graph.fork_children[session_id]:
             convert_node(child_id)
 
     convert_node(tree_root_id)
-    return {session_id: converted.path for session_id, converted in converted_sessions.items()}
+    return {**{session_id: converted.path for session_id, converted in converted_sessions.items()}, **subagent_paths}
 
 
 def sessions_root_for_rollout(rollout: Path) -> Path:

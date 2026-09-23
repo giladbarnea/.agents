@@ -3,28 +3,46 @@
 # requires-python = "==3.12.*"
 # dependencies = []
 # ///
-"""Convert one Codex session into a native Claude Code session that restores to the same rollout.
+"""Convert the Codex fork tree that holds one session into native Claude Code sessions that restore to the same records.
 
-Every rollout record rides verbatim on exactly one Claude line, under a top-level `codex` key.
+Every Codex record rides verbatim on exactly one Claude line, under a top-level `codex` key.
 Records the model reads or writes become Claude message entries, one content block per entry,
 which is how Claude Code itself stores assistant turns. Tool calls keep their Codex name and
 input, with ciphertext strings shown as a placeholder. Every other record becomes an inert
-`codex-record` line that Claude Code ignores. `restore` is therefore a plain unfold.
+`codex-record` line that Claude Code ignores. `claude_to_codex.py` unfolds the lines again.
 
-Claude cannot read Codex reasoning or any other OpenAI ciphertext. The assistant entries carry the
-Codex model id, so Claude Code drops the reasoning before each API call instead of failing on it.
+A fork child copies its parent's lines before the fork point, the way `claude --fork-session`
+copies a session. Sub-agents, at any depth, become sessions of their own, titled after their parent.
 
-Fork children and sessions that span several rollout files are refused. Shapes that stopped
-before July 2026, such as `web_search_call` and `image_generation_call`, are not handled.
+Claude cannot read Codex reasoning ciphertext. A reasoning summary becomes visible assistant text,
+the way Pi shows another vendor's thinking. A reasoning item without a summary stays a thinking
+block, and the Codex model id on the entry makes Claude Code drop it before each API call.
 """
 
 import json
 import re
 import sys
 import uuid
+from collections.abc import Sequence
 from pathlib import Path
 
-from codex_to_pi import ENCRYPTED_PLACEHOLDER, INJECTED_USER_PREFIXES, CodexSessionGraph, compaction_summary, hide_ciphertext, resolve_codex_input, text_of, tool_name
+from codex_to_pi import (
+    ENCRYPTED_PLACEHOLDER,
+    INJECTED_USER_PREFIXES,
+    CodexSessionGraph,
+    Item,
+    Subagent,
+    compaction_summary,
+    dumps,
+    find_subagents,
+    fork_cutoff,
+    hide_ciphertext,
+    load_items,
+    load_node_items,
+    resolve_codex_input,
+    text_of,
+    tool_name,
+)
 
 CLAUDE_VERSION = "2.1.280"
 INERT_TYPE = "codex-record"
@@ -74,13 +92,23 @@ def claude_project_directory(projects_root: Path, cwd: str) -> Path:
     return projects_root / re.sub(r"[^A-Za-z0-9]", "-", cwd)
 
 
-def convert(rollout: Path) -> list[Record]:
-    """Turn every record of one rollout into exactly one Claude line, plus a summary line per compaction."""
-    records = [json.loads(line) for line in rollout.read_text().split("\n") if line]
-    cwd = records[0]["payload"]["cwd"]
-    session_id = str(uuid.uuid4())
-    lines: list[Record] = []
-    state = {"parent": None, "model": "gpt-codex", "message_id": None}
+def inherited_lines(parent_lines: Sequence[Record], cutoff: int) -> list[Record]:
+    """Return the parent's lines before a fork point, without the parent's own session_meta line."""
+    inherited: list[Record] = []
+    for line in parent_lines[1:]:
+        ordinal = line.get("codex", {}).get("ordinal")
+        if ordinal is not None and ordinal >= cutoff:
+            break
+        inherited.append(line)
+    return inherited
+
+
+def convert_session(items: Sequence[Item], session_id: str, prefix: Sequence[Record]) -> list[Record]:
+    """Turn every Codex record into exactly one Claude line, after the session_meta line and any inherited parent lines."""
+    cwd = str(items[0].payload["cwd"])
+    lines: list[Record] = [{"type": INERT_TYPE, "sessionId": session_id, "codex": items[0].record}, *({**line, "sessionId": session_id} for line in prefix)]
+    inherited_models = [line["codex"]["payload"]["model"] for line in prefix if line.get("codex", {}).get("type") == "turn_context"]
+    state = {"parent": next((line["uuid"] for line in reversed(prefix) if "uuid" in line), None), "model": (inherited_models or ["gpt-codex"])[-1], "message_id": None}
 
     def entry(kind: str, record: Record, body: Record, stash: bool = True) -> None:
         entry_uuid = str(uuid.uuid4())
@@ -99,25 +127,26 @@ def convert(rollout: Path) -> list[Record]:
         state["message_id"] = None
         entry("user", record, {"message": {"role": "user", "content": content}, **extra}, stash)
 
-    for record in records:
-        payload = record["payload"]
-        if record["type"] == "turn_context":
+    for item in items[1:]:
+        record, payload = item.record, item.payload
+        if item.kind == "turn_context":
             state["model"] = payload["model"]
-        if record["type"] == "compacted":
+        if item.kind == "compacted":
             logical_parent = state["parent"]
             state["parent"] = None
             entry("system", record, {"subtype": "compact_boundary", "content": "Conversation compacted", "logicalParentUuid": logical_parent, "level": "info", "isMeta": False,
                                      "compactMetadata": {"trigger": "auto", "preTokens": (payload.get("latest_token_usage_record") or {"usage": {"total_tokens": 0}})["usage"]["total_tokens"]}})
             user(record, compaction_summary(payload["replacement_history"]), stash=False, isCompactSummary=True, isVisibleInTranscriptOnly=True)
             continue
-        if record["type"] != "response_item" or not is_model_facing(payload):
+        if item.kind != "response_item" or not is_model_facing(payload):
             lines.append({"type": INERT_TYPE, "sessionId": session_id, "codex": record})
             continue
 
         item_type = payload["type"]
         if item_type == "reasoning":
             summary = "\n\n".join(str(part["text"]) for part in payload.get("summary") or [])
-            assistant(record, {"type": "thinking", "thinking": summary, "signature": payload["encrypted_content"]}, None)
+            block = {"type": "text", "text": summary} if summary.strip() else {"type": "thinking", "thinking": "", "signature": payload["encrypted_content"]}
+            assistant(record, block, None)
         elif item_type == "message" and payload["role"] == "assistant":
             assistant(record, {"type": "text", "text": text_of(payload["content"])}, "end_turn")
         elif item_type == "custom_tool_call":
@@ -139,29 +168,44 @@ def convert(rollout: Path) -> list[Record]:
     return lines
 
 
-def restore(claude_lines: list[Record]) -> list[Record]:
-    """Unfold the stash: every line that carries a Codex record gives it back, in file order."""
-    return [line["codex"] for line in claude_lines if "codex" in line]
+def main(source: str | Path, projects_root: Path) -> dict[str, Path]:
+    """Write a Claude Code session for every session in the selected Codex session's fork tree, and for every sub-agent."""
+    selected_session_id, codex_sessions_root = resolve_codex_input(source)
+    graph = CodexSessionGraph.load(codex_sessions_root)
+    converted: dict[str, list[Record]] = {}
+    paths: dict[str, Path] = {}
 
+    def write(codex_session_id: str, lines: list[Record], title: str) -> None:
+        claude_session_id = str(lines[0]["sessionId"])
+        cwd = str(lines[0]["codex"]["payload"]["cwd"])
+        target = claude_project_directory(projects_root, cwd) / f"{claude_session_id}.jsonl"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        title_line = {"type": "custom-title", "customTitle": f"{title} (from Codex)", "sessionId": claude_session_id}
+        target.write_text("".join(dumps(line) + "\n" for line in [*lines, title_line]))
+        paths[codex_session_id] = target
+        print(f"wrote {target}\n  resume with: cd {cwd} && claude --resume {claude_session_id}", file=sys.stderr)
 
-def main(source: str | Path, projects_root: Path) -> Path:
-    """Write the Claude session for one Codex session. Raises NotImplementedError for forks and multi-file sessions."""
-    session_id, sessions_root = resolve_codex_input(source)
-    graph = CodexSessionGraph.load(sessions_root)
-    node = graph.nodes[session_id]
-    if node.fork_parent_id or len(node.segments) > 1:
-        raise NotImplementedError(f"Codex session {session_id} is a fork child or spans {len(node.segments)} rollout files. Only single-file sessions are supported.")
-    lines = convert(node.rollout)
-    claude_session_id = str(lines[0]["sessionId"])
-    if session_id in graph.names:
-        lines.append({"type": "custom-title", "customTitle": f"{graph.names[session_id]} (from Codex)", "sessionId": claude_session_id})
-    cwd = str(lines[0]["codex"]["payload"]["cwd"])
-    target = claude_project_directory(projects_root, cwd) / f"{claude_session_id}.jsonl"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text("".join(json.dumps(line, ensure_ascii=False, separators=(",", ":")) + "\n" for line in lines))
-    print(f"wrote {target}", file=sys.stderr)
-    print(f"resume with: cd {cwd} && claude --resume {claude_session_id}", file=sys.stderr)
-    return target
+    def convert_subagents(subagents: dict[str, Subagent], parent_title: str) -> None:
+        for subagent in subagents.values():
+            items = load_items(subagent.rollout)
+            title = f"{parent_title} — sub-agent {subagent.agent_path} ({subagent.nickname})"
+            write(str(items[0].payload["id"]), convert_session(items, str(uuid.uuid4()), []), title)
+            convert_subagents(find_subagents(items, codex_sessions_root), title)
+
+    def convert_node(session_id: str) -> None:
+        node = graph.nodes[session_id]
+        items = list(load_node_items(node))
+        cutoff = fork_cutoff(node, graph.ancestors(session_id)) if node.fork_parent_id in converted else None
+        prefix = inherited_lines(converted[node.fork_parent_id], cutoff) if cutoff is not None else []
+        converted[session_id] = convert_session(items, str(uuid.uuid4()), prefix)
+        title = graph.names.get(session_id, f"Codex session {session_id}")
+        write(session_id, converted[session_id], title)
+        convert_subagents(find_subagents(items, codex_sessions_root), title)
+        for child_id in graph.fork_children[session_id]:
+            convert_node(child_id)
+
+    convert_node(graph.root_of(selected_session_id))
+    return paths
 
 
 if __name__ == "__main__":

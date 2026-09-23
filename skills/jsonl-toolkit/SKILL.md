@@ -6,7 +6,7 @@ last_updated: 2026-09-23
 
 Use this skill to inspect, search, summarize, or transform large JSONL files without loading unwieldy lines into the terminal.
 
-The toolkit also has specialized support for AI session collections, exported transcripts, and native Pi sessions.
+The toolkit also has specialized support for AI session collections, exported transcripts, native Pi sessions, and conversion of Codex sessions into Pi and Claude Code sessions.
 
 Load [`smart-compact/SKILL.md`](smart-compact/SKILL.md) only when the task is session compaction.
 
@@ -212,54 +212,60 @@ added_indices = sorted(after_indices - before_indices)
 uv run --script scripts/codex_to_pi.py SESSION_ID ~/.pi/agent/sessions "Session name"
 ```
 
-The selected session can sit anywhere in a persisted native fork tree. The converter climbs to the root, recursively converts every fork descendant, and links each Pi child to its converted parent through `parentSession`. Each child copies only the converted parent history before its Codex fork point. The converter also joins paginated rollout segments that belong to one Codex session.
+The selected session can sit anywhere in a persisted native fork tree. The converter climbs to the root, recursively converts every fork descendant, and links each Pi child to its converted parent through `parentSession`. Each child copies only the converted parent history before its Codex fork point, even when that history lives in a grandparent's rollout. The converter also joins paginated rollout segments that belong to one Codex session.
 
 It keeps user messages with their images, assistant text, reasoning summaries as thinking blocks, and the Codex compaction point. Codex `exec` scripts and `wait` calls become Pi `bash` calls: each `exec_command` becomes its shell command, `apply_patch` becomes an `apply_patch` heredoc, and background polls become comment lines. A script the renderer cannot parse stays verbatim under a comment header. So does a script with control flow around its tool calls, such as a condition or a loop, because one line per call would claim that every call ran. The compaction summary lists every message that Codex replayed after the compaction, including sub-agent messages, and leaves out harness injections. Results unwrap to the command output, and a non-zero exit code marks the result as an error the way Pi's bash tool does. Every other function call, including `request_user_input_async`, becomes a Pi tool call under its own name, prefixed with its namespace when it has one, such as `mcp__cua_repl__js`.
 
-The conversion is lossless for everything the model reads or writes. Each model-facing Codex item rides verbatim inside the Pi object that replaced it, in a slot Pi keeps but never sends to the API:
+Every Codex record rides verbatim under a `codex` key, so `pi_to_codex.py` gives back the same records. The header holds the session_meta record. Every other record sits, in order, in the `codex` list of the Pi entry written next. That includes records the model never reads, such as events, token usage, and harness injections. Pi never sends these lists to a model. Reasoning also stays in `thinkingSignature`, and assistant ids stay in `textSignature`, the slots that Pi's own Codex provider reads back.
 
-- Reasoning: the whole item in `thinkingSignature`. Assistant text: id and phase in `textSignature`.
-- Tool calls: the payload under `codex` on the block. Tool results and compaction: under `details.codex`.
-- User messages and the session header: under a top-level `codex` key.
-
-A Codex sub-agent becomes a pi-subagents task: one `subagent-notification` custom message per delivery from the sub-agent, and a `subagents:record` entry at its final answer. The sub-agent's own rollout becomes a second Pi session whose header carries `parentSession`. Codex encrypts the task and steering text, so those appear as placeholders in the child session.
+A Codex sub-agent, at any depth, becomes a pi-subagents task: one `subagent-notification` custom message per delivery from the sub-agent, and a `subagents:record` entry at its final answer. The sub-agent's own rollout becomes a Pi session whose header carries `parentSession`. A message from any other sender, such as the parent, becomes a user message. Codex encrypts the task and steering text, so those appear as placeholders.
 
 Codex side chats are ephemeral and pathless. Codex writes no rollout for them, so the converter ignores any surviving references.
 
-Codex-internal `notes`, `history`, and `collaboration` calls stay normal tool calls, because most of their fields are plain text: note paths, history filters, task names, agent types, models, and `wait_agent` results. Every ciphertext string in the arguments, and every ciphertext block in outputs and sub-agent messages, becomes a placeholder. Pi sessions converted before 2026-09-23 hold these calls in out-of-context `codex-encrypted-call` custom entries, which `pi_to_codex.py` still restores. Verify results with `scripts/pi-goldload.mjs`. A ported compaction makes `reached` smaller than `expected` by design.
+Codex-internal `notes`, `history`, and `collaboration` calls stay normal tool calls, because most of their fields are plain text: note paths, history filters, task names, agent types, models, and `wait_agent` results. Every ciphertext string in the arguments, and every ciphertext block in outputs and sub-agent messages, becomes a placeholder. Verify results with `scripts/pi-goldload.mjs`. A ported compaction makes `reached` smaller than `expected` by design.
 
-## Restore a Codex rollout from a converted Pi session
+## Port a Codex session tree into native Claude Code sessions
 
-`scripts/pi_to_codex.py` unfolds the stashed items along the active path into one standalone rollout. A Pi fork child already holds its whole history inline, so the rollout carries no fork links.
-
-```bash
-uv run --script scripts/pi_to_codex.py session.jsonl output-directory/
-```
-
-The harness injections that codex_to_pi drops on purpose stay dropped: environment context, AGENTS.md, developer messages, events, and token usage. Codex resumes the rollout anyway and adds its own harness context on the next turn. Put the file under `$CODEX_HOME/sessions/` and run `codex resume <codex-session-id>`. Codex finds the session by the id at the end of the file name. A Codex home that already indexed the same thread id at another path can report `no rollout found`. These resume facts come from codex-cli 0.156.1. The oracle for "lossless" is `model_facing` in `tests/test_roundtrip_codex_pi_codex.py`, which projects a rollout onto the fields that enter or leave the model. The suite runs it on synthetic shapes and on real September 2026 sessions under `tests/fixtures/codex/sessions`.
-
-Shapes that stopped before July 2026 are out of scope. The function-call form of exec, `web_search_call`, and `multi_agent_v1` are not handled.
-
-## Port a Codex session into a native Claude Code session
-
-`scripts/codex_to_claude.py` accepts a Codex session ID or a `rollout-*.jsonl` path. It writes the session to the Claude Code project directory of the session's working directory, and prints the resume command.
+`scripts/codex_to_claude.py` accepts a Codex session ID or a `rollout-*.jsonl` path.
 
 ```bash
 uv run --script scripts/codex_to_claude.py SESSION_ID
 ```
 
-Every rollout record rides verbatim on exactly one Claude line, under a top-level `codex` key, so `restore` gives back the identical records. Claude Code appends on `--resume` and keeps these lines. `--fork-session` keeps the `codex` keys on message entries but drops the inert `codex-record` lines.
+It converts the same trees as the Pi converter: it climbs to the root, converts every fork descendant, joins paginated rollout segments, and converts every sub-agent at any depth. Each session lands in the Claude Code project directory of its working directory, titled with the Codex thread name and `(from Codex)`. The converter prints the resume command of each session.
+
+A fork child copies its parent's lines before the fork point with their ids, the way `claude --fork-session` copies a session. Claude Code has no parent link, so a sub-agent session names the chain of sessions above it in its title.
+
+Every Codex record rides verbatim on exactly one Claude line, under a top-level `codex` key. Claude Code appends on `--resume` and keeps these lines. `--fork-session` keeps the `codex` keys on message entries but drops the inert `codex-record` lines, including the session_meta line.
 
 What Claude sees:
 
 - User messages, images, and assistant text.
+- Reasoning summaries, as visible assistant text. Pi shows another vendor's thinking the same way.
 - Every tool call under its Codex name, such as `exec` with the exact JavaScript, or `collaboration__wait_agent`. Ciphertext strings in arguments become a placeholder.
 - Every tool output exactly as Codex's model saw it.
 - Sub-agent messages as user messages. Their encrypted parts become a placeholder.
 - After a Codex compaction, a summary of the messages that Codex replayed.
 
-What Claude cannot see is Codex reasoning, the encrypted compaction summary, and every other ciphertext. The reasoning stays in thinking blocks. The assistant entries carry the Codex model id, so Claude Code drops those blocks before each API call instead of failing on the foreign signature. Codex harness injections become inert lines, because Claude Code injects its own.
+What Claude cannot see is reasoning without a summary, the encrypted compaction summary, and every other ciphertext. Reasoning without a summary stays a thinking block. The assistant entries carry the Codex model id, so Claude Code drops those blocks before each API call instead of failing on the foreign signature. Codex harness injections become inert lines, because Claude Code injects its own.
 
 These rules come from real API rejections, and `tests/test_codex_to_claude.py` checks them on the fixture sessions: no unknown key inside a content block, no Claude model id on a converted assistant entry, and every `tool_result` in the message right after its `tool_use`.
 
-The converter refuses fork children and sessions that span several rollout files, because a single file would lack part of their history.
+## Restore a Codex rollout from a converted Pi or Claude Code session
+
+`scripts/pi_to_codex.py` and `scripts/claude_to_codex.py` unfold the `codex` records of a converted session into one rollout. A Pi session is read along its active path.
+
+```bash
+uv run --script scripts/pi_to_codex.py pi-session.jsonl output-directory/
+uv run --script scripts/claude_to_codex.py claude-session.jsonl output-directory/
+```
+
+The restore gives back every record of the Codex session. A single-file session comes back record for record, and byte for byte unless the original used a different JSON escape for a character. A fork child comes back standalone: it holds its parent's history inline, so its session_meta loses the fork links and takes ordinal 0. A session that spans several rollout files comes back as one file with its active history. Records that a later file superseded are left out.
+
+The restore stops with an error when the session holds a turn added in Pi or Claude Code after the conversion, because Codex cannot express that turn yet. It also stops for a Pi session that an older `codex_to_pi.py` wrote, and for a copy that `claude --fork-session` made. Convert the Codex session again in both cases.
+
+Codex resumes a restored rollout and adds its own harness context on the next turn. Put the file under `$CODEX_HOME/sessions/` and run `codex resume <codex-session-id>`. Codex finds the session by the id at the end of the file name. A Codex home that already indexed the same thread id at another path can report `no rollout found`. These resume facts come from codex-cli 0.156.1.
+
+`tests/test_codex_restore.py` runs every scenario through both converters and compares the restored records with records written out from the Codex format. `tests/test_roundtrip_codex_pi_codex.py` projects rollouts onto the facts the model reads or writes. Both suites run on real September 2026 sessions under `tests/fixtures/codex/sessions`.
+
+Shapes that stopped before July 2026 are out of scope. The function-call form of exec, `web_search_call`, `image_generation_call`, and `multi_agent_v1` are not handled.

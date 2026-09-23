@@ -6,8 +6,7 @@
 """Codex → Pi → Codex must keep every byte the model reads or writes.
 
 The oracle is `model_facing`: a projection of a Codex rollout onto the fields that enter
-or leave the model. Ids, timestamps, ordinals, token usage, events, and the harness
-injections that codex_to_pi drops on purpose are outside the projection.
+or leave the model. `test_codex_restore.py` checks the stronger claim that every record comes back.
 """
 
 import json
@@ -379,7 +378,7 @@ class RealRolloutRoundTripTests(unittest.TestCase):
             pi_sessions = sorted((temporary / "pi").rglob("*.jsonl"))
             self.assertEqual(len(pi_sessions), len(rollouts), f"Every fixture rollout must become one Pi session. Got {len(pi_sessions)} for {len(rollouts)} rollouts")
             for pi_session in pi_sessions:
-                codex_id = load_records(pi_session)[0]["codex"]["id"]
+                codex_id = load_records(pi_session)[0]["codex"]["payload"]["id"]
                 with self.subTest(codex_session=codex_id):
                     restored = pi_to_codex.main(pi_session, temporary / "restored")
                     original = model_facing(load_records(rollouts[codex_id]))
