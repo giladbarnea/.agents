@@ -14,10 +14,12 @@ import json
 import sys
 from pathlib import Path
 
-from codex_to_pi import ENCRYPTED_CALL_TYPE, SUBAGENT_NOTIFICATION_TYPE, SUBAGENT_RECORD_TYPE
+from codex_to_pi import SUBAGENT_NOTIFICATION_TYPE, SUBAGENT_RECORD_TYPE
 from pi_session import JsonObject, extract_active_path, load_entries
 
 RESPONSE_ITEM = "response_item"
+# Pi sessions converted before 2026-09-23 hold Codex notes, history, and collaboration calls in these entries.
+ENCRYPTED_CALL_TYPE = "codex-encrypted-call"
 
 
 def dumps(value: object) -> str:

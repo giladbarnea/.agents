@@ -397,7 +397,7 @@ class PiContextTests(unittest.TestCase):
                     record(6, "response_item", {"type": "function_call_output", "call_id": "call_wait", "output": wait_output}),
                 ],
             )
-        spawn = tool_calls(entries).get("spawn_agent", {})
+        spawn = tool_calls(entries).get("collaboration__spawn_agent", {})
         expected_arguments = {**spawn_arguments, "message": codex_to_pi.ENCRYPTED_PLACEHOLDER}
         self.assertEqual(spawn.get("arguments"), expected_arguments, f"The Pi model must see the spawn call's readable fields, with only the ciphertext masked. Got tool calls: {tool_calls(entries)!r}")
         self.assertIn(wait_output, tool_result_texts(entries), f"The Pi model must read what wait_agent returned. Got: {tool_result_texts(entries)!r}")
@@ -456,6 +456,84 @@ class PiContextTests(unittest.TestCase):
         self.assertEqual(len(commands), 2, f"Expected two bash calls. Got: {commands!r}")
         self.assertIn(conditional, commands[0], f"A script whose condition decides what runs must reach the Pi model whole. A bare 'rm -rf build' line claims it always ran. Got: {commands[0]!r}")
         self.assertEqual(commands[1], "ls -la", "A straight-line script must still render as its shell command")
+
+
+    def test_namespaced_calls_keep_their_namespace_so_same_named_tools_stay_distinct(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            entries = convert_root(
+                pathlib.Path(temporary_directory),
+                [
+                    session_meta(ROOT_ID, 0),
+                    turn_context(1),
+                    message(2, "user-1", "user", "take a screenshot, then evaluate 1+1"),
+                    record(3, "response_item", {"type": "function_call", "id": "fc_1", "call_id": "call_cua", "namespace": "mcp__cua_repl", "name": "js", "arguments": '{"code":"screenshot()"}'}),
+                    record(4, "response_item", {"type": "function_call_output", "call_id": "call_cua", "output": "saved shot.png"}),
+                    record(5, "response_item", {"type": "function_call", "id": "fc_2", "call_id": "call_node", "namespace": "mcp__node_repl", "name": "js", "arguments": '{"code":"1+1"}'}),
+                    record(6, "response_item", {"type": "function_call_output", "call_id": "call_node", "output": "2"}),
+                ],
+            )
+        names = sorted(
+            str(block["name"])
+            for entry in entries
+            if entry.get("type") == "message" and entry["message"]["role"] == "assistant"
+            for block in entry["message"]["content"]
+            if block["type"] == "toolCall"
+        )
+        self.assertEqual(names, ["mcp__cua_repl__js", "mcp__node_repl__js"], f"Two servers' js tools must stay distinct for the Pi model, as they do in the Claude conversion. Got: {names!r}")
+
+
+    def test_notes_and_history_calls_reach_the_pi_model_with_only_ciphertext_masked(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            entries = convert_root(
+                pathlib.Path(temporary_directory),
+                [
+                    session_meta(ROOT_ID, 0),
+                    turn_context(1),
+                    message(2, "user-1", "user", "save a checkpoint, then find my earlier request"),
+                    record(3, "response_item", {"type": "function_call", "id": "fc_1", "call_id": "call_note", "namespace": "notes", "name": "append_to_file", "arguments": '{"path":"checkpoint","text":"gAAAAABq-note"}'}),
+                    record(4, "response_item", {"type": "function_call_output", "call_id": "call_note", "output": [{"type": "encrypted_content", "encrypted_content": "gAAAAABq-ack"}]}),
+                    record(5, "response_item", {"type": "function_call", "id": "fc_2", "call_id": "call_search", "namespace": "history", "name": "search_contents", "arguments": '{"role":"user","limit":2,"query":"gAAAAABq-query"}'}),
+                    record(6, "response_item", {"type": "function_call_output", "call_id": "call_search", "output": [{"type": "encrypted_content", "encrypted_content": "gAAAAABq-results"}]}),
+                ],
+            )
+        calls = tool_calls(entries)
+        placeholder = codex_to_pi.ENCRYPTED_PLACEHOLDER
+        self.assertEqual(calls.get("notes__append_to_file", {}).get("arguments"), {"path": "checkpoint", "text": placeholder}, f"The Pi model must see which note was written, with only its text masked. Got tool calls: {calls!r}")
+        self.assertEqual(calls.get("history__search_contents", {}).get("arguments"), {"role": "user", "limit": 2, "query": placeholder}, f"The Pi model must see the history search, with only its query masked. Got tool calls: {calls!r}")
+
+
+    def test_ciphertext_inside_messages_and_outputs_shows_as_a_placeholder(self) -> None:
+        delivery = [
+            {"type": "input_text", "text": "Message Type: MESSAGE\nTask name: /root\nSender: /root/worker\nPayload:\n"},
+            {"type": "encrypted_content", "encrypted_content": "gAAAAABq-progress"},
+        ]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = pathlib.Path(temporary_directory)
+            sessions = temporary / "codex" / "sessions"
+            write_rollout(
+                sessions,
+                SUBAGENT_ID,
+                [session_meta(SUBAGENT_ID, 0, source={"subagent": {"thread_spawn": {"parent_thread_id": ROOT_ID, "agent_nickname": "worker"}}}), turn_context(1)],
+            )
+            rollout = write_rollout(
+                sessions,
+                ROOT_ID,
+                [
+                    session_meta(ROOT_ID, 0),
+                    turn_context(1),
+                    message(2, "user-1", "user", "save a checkpoint and delegate"),
+                    record(3, "response_item", {"type": "function_call", "id": "fc_1", "call_id": "call_note", "namespace": "notes", "name": "append_to_file", "arguments": '{"path":"checkpoint","text":"gAAAAABq-note"}'}),
+                    record(4, "response_item", {"type": "function_call_output", "call_id": "call_note", "output": [{"type": "encrypted_content", "encrypted_content": "gAAAAABq-ack"}]}),
+                    record(5, "event_msg", {"type": "sub_agent_activity", "item": {"type": "SubAgentActivity", "kind": "started", "agent_thread_id": SUBAGENT_ID, "agent_path": "/root/worker"}}),
+                    record(6, "response_item", {"type": "agent_message", "author": "/root/worker", "recipient": "/root", "content": delivery}),
+                ],
+            )
+            entries = load_session(codex_to_pi.main(rollout, temporary / "pi" / "sessions", "Pi context")[ROOT_ID])
+        placeholder = codex_to_pi.ENCRYPTED_PLACEHOLDER
+        notifications = [str(entry["content"]) for entry in entries if entry.get("type") == "custom_message"]
+        self.assertEqual(len(notifications), 1, f"Expected one sub-agent notification. Got: {notifications!r}")
+        self.assertIn(placeholder, notifications[0], f"The sub-agent's encrypted payload must show as a placeholder, not as an empty payload. Got: {notifications[0]!r}")
+        self.assertIn(placeholder, tool_result_texts(entries), f"The encrypted notes output must show as a placeholder, not as an empty result. Got: {tool_result_texts(entries)!r}")
 
 
 if __name__ == "__main__":

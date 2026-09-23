@@ -24,7 +24,7 @@ import sys
 import uuid
 from pathlib import Path
 
-from codex_to_pi import ENCRYPTED_PLACEHOLDER, INJECTED_USER_PREFIXES, CodexSessionGraph, compaction_summary, hide_ciphertext, resolve_codex_input, text_of
+from codex_to_pi import ENCRYPTED_PLACEHOLDER, INJECTED_USER_PREFIXES, CodexSessionGraph, compaction_summary, hide_ciphertext, resolve_codex_input, text_of, tool_name
 
 CLAUDE_VERSION = "2.1.280"
 INERT_TYPE = "codex-record"
@@ -123,8 +123,7 @@ def convert(rollout: Path) -> list[Record]:
         elif item_type == "custom_tool_call":
             assistant(record, {"type": "tool_use", "id": payload["call_id"], "name": payload["name"], "input": {"input": payload["input"]}}, "tool_use")
         elif item_type == "function_call":
-            name = "__".join(part for part in (payload.get("namespace"), payload["name"]) if part)
-            assistant(record, {"type": "tool_use", "id": payload["call_id"], "name": name, "input": hide_ciphertext(json.loads(payload["arguments"]))}, "tool_use")
+            assistant(record, {"type": "tool_use", "id": payload["call_id"], "name": tool_name(payload), "input": hide_ciphertext(json.loads(payload["arguments"]))}, "tool_use")
         elif item_type == "tool_search_call":
             assistant(record, {"type": "tool_use", "id": payload["call_id"], "name": "tool_search", "input": payload["arguments"]}, "tool_use")
         elif item_type in OUTPUT_ITEMS:

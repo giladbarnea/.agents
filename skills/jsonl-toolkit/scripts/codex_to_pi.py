@@ -13,9 +13,10 @@ Every model-facing Codex item rides verbatim inside the Pi object that replaced 
 `pi_to_codex.py` can restore the rollout: reasoning in `thinkingSignature`, assistant ids in
 `textSignature`, and the raw payload under a `codex` key on user entries, tool call blocks,
 tool result and compaction `details`, sub-agent notifications, and the session header.
-Sub-agents become pi-subagents notifications plus separate Pi child sessions. Codex-internal
-notes/history calls carry only ciphertext, so they become out-of-context `custom` entries.
-Collaboration calls stay in context with only their ciphertext strings masked. Codex side chats remain absent because Codex writes no rollout for them.
+Sub-agents become pi-subagents notifications plus separate Pi child sessions. Namespaced calls,
+including Codex-internal notes, history, and collaboration calls, keep their namespace in the
+tool name and stay in context with only their ciphertext strings masked. Codex side chats
+remain absent because Codex writes no rollout for them.
 
 Shapes that stopped before July 2026 are out of scope. The function-call form of exec,
 `web_search_call`, and `multi_agent_v1` are not handled.
@@ -42,11 +43,8 @@ ZERO_USAGE = {
     "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0},
 }
 INJECTED_USER_PREFIXES = ("<environment_context>", "# AGENTS.md instructions", "<recommended_plugins>")
-ENCRYPTED_NAMESPACES = {"notes", "history"}
-ENCRYPTED_CALL_TYPE = "codex-encrypted-call"
 SUBAGENT_NOTIFICATION_TYPE = "subagent-notification"
 SUBAGENT_RECORD_TYPE = "subagents:record"
-ENCRYPTED_NOTE = "[Encrypted by Codex. Only the ciphertext was stored.]"
 ENCRYPTED_PLACEHOLDER = "[Codex ciphertext: only OpenAI can read this part]"
 CIPHERTEXT_PREFIX = "gAAAAA"
 COMPACTION_PREFACE = "Codex compacted the context here. Its summary is encrypted and unreadable outside Codex. It replayed the following messages verbatim after the summary:\n\n"
@@ -69,9 +67,14 @@ def dumps(value: object) -> str:
 
 
 def text_of(content: str | list[dict[str, object]]) -> str:
+    """Join the text of Codex content, with a placeholder where Codex stored ciphertext.
+
+    >>> text_of([{"type": "input_text", "text": "Payload:\\n"}, {"type": "encrypted_content", "encrypted_content": "gAAAAABq"}])
+    'Payload:\\n[Codex ciphertext: only OpenAI can read this part]'
+    """
     if isinstance(content, str):
         return content
-    return "".join(str(block.get("text", "")) for block in content if block.get("type") in ("input_text", "output_text"))
+    return "".join(ENCRYPTED_PLACEHOLDER if block.get("type") == "encrypted_content" else str(block.get("text", "")) for block in content if block.get("type") in ("input_text", "output_text", "encrypted_content"))
 
 
 def replay_text(item: dict[str, object]) -> str | None:
@@ -105,7 +108,7 @@ def image_block(data_url: str) -> dict[str, object]:
 
 
 def pi_content_blocks(content: str | list[dict[str, object]]) -> list[dict[str, object]]:
-    """Render Codex message content as Pi content blocks: text stays text, images become image blocks."""
+    """Render Codex message content as Pi content blocks: text stays text, images become image blocks, ciphertext becomes a placeholder."""
     if isinstance(content, str):
         return [{"type": "text", "text": content}]
     blocks: list[dict[str, object]] = []
@@ -114,9 +117,22 @@ def pi_content_blocks(content: str | list[dict[str, object]]) -> list[dict[str, 
             blocks.append({"type": "text", "text": block["text"]})
         elif block["type"] == "input_image":
             blocks.append(image_block(str(block["image_url"])))
+        elif block["type"] == "encrypted_content":
+            blocks.append({"type": "text", "text": ENCRYPTED_PLACEHOLDER})
         else:
             raise ValueError(f"Cannot render Codex content block {block['type']!r} in Pi")
     return blocks
+
+
+def tool_name(payload: dict[str, object]) -> str:
+    """Name a Codex function call for another harness, keeping its namespace so same-named tools stay distinct.
+
+    >>> tool_name({"namespace": "mcp__cua_repl", "name": "js"})
+    'mcp__cua_repl__js'
+    >>> tool_name({"name": "wait"})
+    'wait'
+    """
+    return "__".join(str(part) for part in (payload.get("namespace"), payload["name"]) if part)
 
 
 def hide_ciphertext(value: object) -> object:
@@ -547,7 +563,6 @@ class Conversion:
         pending = PendingAssistant()
         call_names: dict[str, str] = {}
         call_pi_ids: dict[str, str] = {}
-        encrypted_call_ids: set[str] = set()
         dropped: dict[str, int] = {}
 
         def drop(reason: str) -> None:
@@ -605,10 +620,6 @@ class Conversion:
                 "timestamp": epoch_ms(timestamp),
             }
             writer.append("message", timestamp, {"message": message}, source_ordinal=source_ordinal)
-
-        def add_encrypted_call(payload: dict[str, object], timestamp: str, source_ordinal: int) -> None:
-            flush("stop")
-            writer.append("custom", timestamp, {"customType": ENCRYPTED_CALL_TYPE, "data": {"codex": payload}}, source_ordinal=source_ordinal)
 
         def add_user_message(payload: dict[str, object], blocks: list[dict[str, object]], timestamp: str, source_ordinal: int) -> None:
             flush("stop")
@@ -672,11 +683,8 @@ class Conversion:
                 )
             elif item_type == "function_call":
                 arguments = hide_ciphertext(json.loads(str(payload["arguments"])))
-                name = str(payload["name"])
-                if payload.get("namespace") in ENCRYPTED_NAMESPACES:
-                    encrypted_call_ids.add(str(payload["call_id"]))
-                    add_encrypted_call(payload, timestamp, item.ordinal)
-                elif name == "wait":
+                name = tool_name(payload)
+                if name == "wait":
                     add_tool_call(
                         payload,
                         "bash",
@@ -687,9 +695,6 @@ class Conversion:
                 else:
                     add_tool_call(payload, name, arguments, timestamp, item.ordinal)
             elif item_type in ("custom_tool_call_output", "function_call_output"):
-                if payload["call_id"] in encrypted_call_ids:
-                    add_encrypted_call(payload, timestamp, item.ordinal)
-                    continue
                 text, is_error = bash_result(text_of(payload["output"]))
                 images = [block for block in pi_content_blocks(payload["output"]) if block["type"] == "image"]
                 add_tool_result(payload, [{"type": "text", "text": text}] * bool(text) + images, is_error, timestamp, item.ordinal)
@@ -705,7 +710,7 @@ class Conversion:
             elif item_type == "message" and payload["role"] == "developer":
                 drop("developer_message")
             elif item_type == "agent_message" and self.role == "subagent":
-                blocks = [{"type": "text", "text": text_of(payload["content"]) + ENCRYPTED_NOTE}]
+                blocks = [{"type": "text", "text": text_of(payload["content"])}]
                 add_user_message(payload, blocks, timestamp, item.ordinal)
             elif item_type == "agent_message":
                 flush("stop")
