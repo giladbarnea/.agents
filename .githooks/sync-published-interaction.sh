@@ -298,7 +298,7 @@ EOF
     echo "[debug] Skipping Pi anonymization because AGENTS_SKIP_ANONYMIZATION=1." >&2
   else
     echo "[debug] Launching Pi to (maybe) anonymize files. anonymization_prompt is "${#anonymization_prompt}" chars long." >&2
-    pi --model openai-codex/gpt-5.6-terra --thinking high --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files -p "$anonymization_prompt"
+    pi --model openai-codex/gpt-6-luna --thinking high --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files -p "$anonymization_prompt"
     echo "[debug] Pi finished." >&2
   fi
 

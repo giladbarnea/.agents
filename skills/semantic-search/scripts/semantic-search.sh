@@ -24,7 +24,7 @@ fi
 
 prompt_template="$(<"$script_dir/../references/prompt.md")"
 full_prompt="$(printf "$prompt_template" "$search_path" "$query")"
-pi_args=(--model openai-codex/gpt-5.6-luna --thinking medium --no-skills -np --no-extensions -e npm:@ff-labs/pi-fff -e npm:@monotykamary/pi-vcc -e ~/.pi/agent/extensions/read-many-files/index.ts -e ~/.pi/agent/extensions/smart-truncation/index.ts -a --no-session)
+pi_args=(--model openai-codex/gpt-6-luna --thinking high --no-skills -np --no-extensions -e npm:@ff-labs/pi-fff -e npm:@monotykamary/pi-vcc -e ~/.pi/agent/extensions/read-many-files/index.ts -e ~/.pi/agent/extensions/smart-truncation/index.ts -a --no-session)
 
 if [[ $interactive = false ]]; then
   pi_args+=(--print)
