@@ -47,7 +47,8 @@ Anonymize exactly these files in the published repository at __PUBLISHED_REPOSIT
 They were copied from ~/.agents/plugins/interaction/, which speaks in Gilad's personal voice (Gilad, ADHD, first person).
 The published copies must be anonymized (a generic human leader, cognitive overload, direct assertions softened).
 Preserve current skill-loading instructions even when the historical examples use older reference paths.
-Here are signed-off before-and-after past anonymizations of these files. Note what’s modified and what’s left untouched. Apply this principle on the whitelisted files.
+Here are signed-off before-and-after past anonymizations of these files. Note what’s modified and what’s left untouched. Apply this principle on the whitelisted files. Wording, phrases and structure of the equivalent actual files you will see on the file system may differ from their counterparts in the examples below: ignore such differences. Focus narrowly only on surgically anonymizing Gilad-ADHD-firstperson.
+
 <human.md pre-anonymization: gilad personal voice>
     ---
     name: human
@@ -298,7 +299,7 @@ EOF
     echo "[debug] Skipping Pi anonymization because AGENTS_SKIP_ANONYMIZATION=1." >&2
   else
     echo "[debug] Launching Pi to (maybe) anonymize files. anonymization_prompt is "${#anonymization_prompt}" chars long." >&2
-    pi --model openai-codex/gpt-6-luna --thinking high --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files -p "$anonymization_prompt"
+    pi --model openai-codex/gpt-6-sol --thinking low --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files -p "$anonymization_prompt"
     echo "[debug] Pi finished." >&2
   fi
 
