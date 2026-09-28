@@ -1,24 +1,28 @@
 #!/usr/bin/env bash
-set -eo pipefail
+set -euo pipefail
+
+other_files_checksum() (
+  cd "$1"
+  find . \( -type f -o -type l \) ! -name .git -print0 | sort -z | while IFS= read -r -d '' file; do
+    case "$file" in
+      ./plugins/interaction/skills/ai-to-leader/references/human.md|\
+      ./plugins/interaction/skills/ai-to-leader/references/help.md|\
+      ./plugins/interaction/skills/ai-to-delegated/coordination/leading-leaders.md|\
+      ./plugins/interaction/roles.md) continue ;;
+    esac
+    if [[ -L "$file" ]]; then
+      printf '%s -> %s\n' "$file" "$(readlink "$file")"
+      continue
+    fi
+    stat -f '%Sp' "$file"
+    shasum -a 256 "$file"
+  done | shasum -a 256 | awk '{print $1}'
+)
 
 main() {
-  local githooks_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  local repository_root="$(cd "$githooks_directory/.." && pwd)"
-  local personal_plugin_directory="$repository_root/plugins/interaction"
-  local published_repository="$repository_root/plugins/.published-interaction"
+  local personal_plugin_directory="$1"
+  local published_repository="$2"
   local published_plugin_directory="$published_repository/plugins/interaction"
-  [[ -d "$personal_plugin_directory" && -d "$published_repository" ]] || return 0
-
-  # The committed checksum records which personal-plugin state was last
-  # synced, anonymized, and human-reviewed. A match means there is nothing
-  # to do; a mismatch triggers a re-sync whose LLM output the human reviews
-  # and commits in the published repository.
-  local checksum_file="$published_repository/.plugin-source-checksum"
-  local source_checksum
-  source_checksum="$(find "$personal_plugin_directory" -mindepth 1 \( -type d -name '.*' -prune \) -o \( -type f -name '*.md' ! -name '.*' -print0 \) | sort -z | xargs -0 shasum -a 256 | shasum -a 256 | awk '{print $1}')"
-  if [[ "$source_checksum" == "$(cat "$checksum_file" 2>/dev/null)" ]]; then
-    return 0
-  fi
 
   cd "$published_repository"
 
@@ -295,23 +299,26 @@ Note the head-of-product.md example: details true only of Gilad's specific situa
 EOF
   anonymization_prompt="${anonymization_prompt//__PUBLISHED_REPOSITORY__/$published_repository}"
 
-  if [[ "${AGENTS_SKIP_ANONYMIZATION:-}" == "1" ]]; then
-    echo "[debug] Skipping Pi anonymization because AGENTS_SKIP_ANONYMIZATION=1." >&2
-  else
-    echo "[debug] Launching Pi to (maybe) anonymize files. anonymization_prompt is "${#anonymization_prompt}" chars long." >&2
-    pi --model openai-codex/gpt-6-sol --thinking low --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files -p "$anonymization_prompt"
-    echo "[debug] Pi finished." >&2
+  local unchanged_checksum="$(other_files_checksum "$published_repository")"
+  pi --model openai-codex/gpt-6-sol --thinking low --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files -p "$anonymization_prompt"
+  [[ "$unchanged_checksum" == "$(other_files_checksum "$published_repository")" ]] || {
+    printf 'Anonymization changed a file outside its four-file list.\n' >&2
+    return 1
+  }
+  local anonymized_files=(
+    "$published_plugin_directory/skills/ai-to-leader/references/human.md"
+    "$published_plugin_directory/skills/ai-to-leader/references/help.md"
+    "$published_plugin_directory/skills/ai-to-delegated/coordination/leading-leaders.md"
+    "$published_plugin_directory/roles.md"
+  )
+  local file
+  for file in "${anonymized_files[@]}"; do
+    [[ -f "$file" && ! -L "$file" ]] || { printf 'Anonymization removed or replaced %s.\n' "$file" >&2; return 1; }
+  done
+  if rg -il 'gilad|adhd' "$published_plugin_directory/skills" "$published_plugin_directory/roles.md"; then
+    printf 'Anonymization left private names in a published file.\n' >&2
+    return 1
   fi
-
-  echo "$source_checksum" >"$checksum_file"
-
-  cat >&2 <<'MSG'
-sync-published-interaction: the personal interaction plugin changed. It was synced into plugins/.published-interaction and is ready for review.
-Review and ship it in plugins/.published-interaction:
-1. Review the changes (git diff).
-2. Run ./build-plugins.sh.
-3. Commit and push (include .plugin-source-checksum).
-MSG
 }
 
-main
+main "$@"

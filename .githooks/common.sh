@@ -307,11 +307,3 @@ clean_orphaned_skill_links() {
     dim "No orphaned skill links"
   fi
 }
-
-sync_plugins() {
-  export Cb Cb0 Cgrn Cylw Cred CbrBlk C0
-  # Claude and Codex consume the interaction plugin from the published GitHub
-  # marketplace, so there is no local plugin sync. The hub instead syncs the
-  # personal plugin into the published repository for review and release.
-  "$GITHOOKS_DIRECTORY/sync-published-interaction.sh" || return 1
-}

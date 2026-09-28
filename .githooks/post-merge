@@ -7,5 +7,3 @@ render_agents_md || exit 1
 section "skills"
 render_skills || exit 1
 clean_orphaned_skill_links
-section "plugins"
-sync_plugins || exit 1
