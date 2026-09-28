@@ -23,6 +23,7 @@ for repository in "$hub" "$published"; do
 done
 git -C "$hub" add plugins/interaction
 git -C "$hub" -c core.hooksPath=/dev/null commit -qm 'Initial source'
+git -C "$hub" config core.hooksPath .githooks
 printf '%s\n' 'old public' >"$published/manual.md"
 git -C "$published" add manual.md
 git -C "$published" -c core.hooksPath=/dev/null commit -qm 'Initial public'
@@ -30,7 +31,7 @@ printf '%s\n' 'user edit' >"$published/manual.md"
 printf '%s\n' 'new source' >"$hub/plugins/interaction/skills/example/SKILL.md"
 git -C "$hub" add plugins/interaction
 
-if (cd "$hub" && .githooks/pre-commit >"$temporary_directory/report" 2>&1); then
+if (cd "$hub" && git commit -qm 'Blocked source' >"$temporary_directory/report" 2>&1); then
   printf '%s\n' 'A dirty public repository did not block the source commit.' >&2
   exit 1
 fi
@@ -53,7 +54,7 @@ git -C "$published" push -q origin HEAD:main
 printf '%s\n' 'Unpublished local commit' >"$published/other.md"
 git -C "$published" add other.md
 git -C "$published" -c core.hooksPath=/dev/null commit -qm 'Unpublished change'
-if (cd "$hub" && .githooks/pre-commit >"$temporary_directory/ahead-report" 2>&1); then
+if (cd "$hub" && git commit -qm 'Blocked by unpublished public commit' >"$temporary_directory/ahead-report" 2>&1); then
   printf '%s\n' 'An unpublished public commit did not block the source commit.' >&2
   exit 1
 fi
