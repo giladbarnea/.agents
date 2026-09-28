@@ -79,7 +79,8 @@ if ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$expected_ver
 fi
 git -C "$hub" show HEAD:plugins/interaction/skills/ai-to-delegated/briefing/forked-context.md | cmp - "$published/plugins/interaction/skills/ai-to-delegated/briefing/forked-context.md"
 ! rg -q 'Unstaged change' "$published/plugins/interaction/skills/ai-to-delegated/briefing/forked-context.md"
-! git -C "$published" show --format= --name-only HEAD | rg -q '^\.venv/'
+changed_paths="$(git -C "$published" show --format= --name-only HEAD)"
+! rg -q '^\.venv/' <<<"$changed_paths"
 [[ -z "$(git -C "$published" status --porcelain --untracked-files=all)" ]]
 git -C "$hub" restore "$source_file"
 
