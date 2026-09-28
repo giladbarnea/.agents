@@ -1,6 +1,6 @@
 ---
 description: Hub ownership model and current instruction and skill materialization behavior
-last_updated: 2026-09-28 13:20
+last_updated: 2026-09-28 22:56
 ---
 # Hub materialization
 
