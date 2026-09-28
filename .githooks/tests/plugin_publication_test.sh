@@ -9,7 +9,7 @@ published="$hub/plugins/.published-interaction"
 remote="$temporary_directory/public.git"
 mkdir -p "$hub/.githooks" "$hub/plugins" "$temporary_directory/bin"
 git -C "$hub_source" archive HEAD plugins/interaction | tar -x -C "$hub"
-for script in pre-commit post-commit guard-published-interaction.sh publish-interaction.sh sync-published-interaction.sh; do
+for script in pre-commit post-commit post-merge guard-published-interaction.sh publish-interaction.sh sync-published-interaction.sh; do
   [[ -e "$hub_source/.githooks/$script" ]] && cp "$hub_source/.githooks/$script" "$hub/.githooks/$script"
 done
 cat >"$hub/.githooks/common.sh" <<'EOF'
@@ -71,7 +71,31 @@ original_source_hash="$(git -C "$hub" hash-object "$source_file")"
 printf '\nTest addition.\n' >>"$source_file"
 git -C "$hub" add plugins/interaction
 printf '\nUnstaged change.\n' >>"$source_file"
+cat >"$remote/hooks/update" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1" == refs/heads/main && -e "$(git rev-parse --git-dir)/reject-main" ]]; then
+  printf '%s\n' 'Main push refused for retry test.' >&2
+  exit 1
+fi
+EOF
+chmod +x "$remote/hooks/update"
+touch "$remote/reject-main"
 (cd "$hub" && git commit -qm 'Change plugin source' 2>"$temporary_directory/publish.log")
+! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$expected_version"
+[[ -f "$hub/.git/interaction-publication-pending" ]]
+git -C "$hub" restore "$source_file"
+git -C "$hub" restore --source=HEAD^ "$source_file"
+git -C "$hub" add plugins/interaction
+if (cd "$hub" && git commit -qm 'Revert while release is pending' >"$temporary_directory/blocked-pending.log" 2>&1); then
+  printf '%s\n' 'A second plugin commit passed while the first release was pending.' >&2
+  exit 1
+fi
+rg -q 'Publication pending' "$temporary_directory/blocked-pending.log"
+git -C "$hub" reset -q HEAD -- plugins/interaction
+git -C "$hub" restore "$source_file"
+rm "$remote/reject-main"
+(cd "$hub" && .githooks/publish-interaction.sh --retry >"$temporary_directory/main-retry.log" 2>&1)
+[[ ! -e "$hub/.git/interaction-publication-pending" ]]
 if ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$expected_version"; then
   printf '%s\n' 'The source commit did not publish a new version.' >&2
   cat "$temporary_directory/publish.log" >&2
@@ -116,7 +140,7 @@ if (cd "$hub" && .githooks/pre-commit >"$temporary_directory/pending-guard.log" 
   printf '%s\n' 'The next plugin commit did not wait for the unfinished release.' >&2
   exit 1
 fi
-rg -q 'release pending' "$temporary_directory/pending-guard.log"
+rg -q 'Publication pending' "$temporary_directory/pending-guard.log"
 git -C "$hub" reset -q HEAD -- plugins/interaction
 git -C "$hub" restore "$source_file"
 printf '\nNew source while release pending.\n' >>"$source_file"
@@ -126,7 +150,9 @@ if (cd "$hub" && .githooks/publish-interaction.sh --retry >"$temporary_directory
   printf '%s\n' 'A later source commit published over an unfinished release.' >&2
   exit 1
 fi
-rg -q 'earlier release is pending' "$temporary_directory/out-of-order.log"
+rg -q 'Tag push refused' "$temporary_directory/out-of-order.log"
+[[ "$(jq -r .version "$published/plugins/interaction/.claude-plugin/plugin.json")" == "$pending_version" ]]
+! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v${pending_version%.*}.$((${pending_version##*.} + 1))"
 git -C "$hub" -c core.hooksPath=/dev/null revert --no-edit HEAD >/dev/null
 rm "$remote/reject-tag"
 (cd "$hub" && .githooks/publish-interaction.sh --retry >"$temporary_directory/retry.log" 2>&1)
@@ -150,6 +176,19 @@ rg -q 'outside its four-file list' "$temporary_directory/symlink.log"
 [[ "$(git --git-dir="$remote" rev-parse refs/heads/main)" == "$remote_head" ]]
 (cd "$hub" && .githooks/publish-interaction.sh --retry >"$temporary_directory/ai-retry.log" 2>&1)
 git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$private_version"
+
+merge_version="${private_version%.*}.$((${private_version##*.} + 1))"
+git -C "$hub" checkout -qb feature
+printf '\nMerged plugin change.\n' >>"$source_file"
+git -C "$hub" add plugins/interaction
+git -C "$hub" -c core.hooksPath=/dev/null commit -qm 'Change plugin on branch'
+git -C "$hub" checkout -q main
+(cd "$hub" && git merge --no-ff --no-edit feature >"$temporary_directory/merge.log" 2>&1)
+if ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$merge_version"; then
+  printf '%s\n' 'The merged plugin change did not publish.' >&2
+  cat "$temporary_directory/merge.log" >&2
+  exit 1
+fi
 
 remote_head="$(git --git-dir="$remote" rev-parse refs/heads/main)"
 printf '\nGilad is private.\n' >>"$source_file"

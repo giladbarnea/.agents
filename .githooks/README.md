@@ -119,9 +119,9 @@ No interactive terminal
 
 ## Hooks render instructions and materialize skills
 
-`pre-commit` first blocks staged plugin changes if the public repository has local edits, unpublished commits, or a pending release. Both `pre-commit` and `post-merge` then render instruction files, generate runtime skills, link shared skills, materialize local Pi plugin skills, and inspect broken links. Neither hook writes to the public repository.
+`pre-commit` first blocks staged plugin changes if the public repository has local edits, unpublished commits, or a pending release. It then renders instruction files, generates runtime skills, links shared skills, materializes local Pi plugin skills, and inspects broken links. It never writes to the public repository.
 
-`pre-commit` also stages the local `AGENTS.md` and generated runtime `SKILL.md` files. `post-commit` publishes a changed plugin from the new commit. The submodule update in `post-merge` is commented out.
+`pre-commit` also stages the local `AGENTS.md` and generated runtime `SKILL.md` files. `post-commit` publishes changed plugin commits. `post-merge` materializes local files and publishes plugin changes introduced by a merge. The submodule update in `post-merge` is commented out.
 
 Rendering does not require existing consumer links.
 When a consumer-relative import is absent, the loader falls back to the canonical hub source.
@@ -179,15 +179,15 @@ Claude Code uses `.claude-plugin` metadata.
 Codex uses `.agents/plugins/marketplace.json` and `.codex-plugin/plugin.json`, whose `skills` field points to `./skills/`.
 Gemini receives no plugin materialization from these hooks.
 
-### A source commit publishes the public plugin
+### A source commit or merge publishes the public plugin
 
-`post-commit` calls `publish-interaction.sh` when the commit changes `plugins/interaction`. It reads the committed plugin tree, not unstaged files. It refuses a dirty public repository and builds in an isolated Git worktree.
+`post-commit` calls `publish-interaction.sh` when the commit changes `plugins/interaction`. `post-merge` also calls it when a merge changes that path. It reads the committed plugin tree, not unstaged files. It refuses a dirty public repository and builds in an isolated Git worktree.
 
 `sync-published-interaction.sh` mirrors five named skills and the root `roles.md`, then asks Pi to anonymize `human.md`, `help.md`, `coordination/leading-leaders.md`, and `roles.md`. It rejects AI edits outside those files and rejects `Gilad` or `ADHD` in the published skill content. These checks catch known leaks, but cannot prove that anonymization removed every private detail.
 
 The publisher then bumps both plugin manifests by one patch version, builds the Pi archive, runs the packaging tests, commits, pushes, tags, and waits for the existing GitHub release workflow. `.plugin-source-checksum` identifies the current published source. The publisher skips only when that source matches the current public commit and its release succeeded. A return to earlier content makes a new release.
 
-A failed `post-commit` cannot undo the source commit. It reports publication as pending. Run `.githooks/publish-interaction.sh --retry` after fixing the cause. A partial push resumes the same public version instead of creating another one. The skill and root-file whitelists remain hardcoded in `sync-published-interaction.sh`.
+A failed publication cannot undo the source commit or merge. The publisher records its source commit under `.git/interaction-publication-pending`; `pre-commit` blocks another plugin commit until that release succeeds. Run `.githooks/publish-interaction.sh --retry` after fixing the cause. A partial push resumes the same source commit and public version. The skill and root-file whitelists remain hardcoded in `sync-published-interaction.sh`.
 
 ## Local Pi skills and published Pi skills use different builds
 
@@ -249,7 +249,7 @@ A non-interactive run reports each link and leaves it unchanged.
 An instruction-rendering, runtime-generation, structure-validation, or symlink-creation failure stops the hook before broken-link cleanup.
 A concrete destination refusal does not stop the hook.
 Cleanup's result does not control the final hook exit status.
-A dirty or pending public repository blocks a staged plugin change before rendering. A publication failure after the source commit reports a pending release but cannot undo that commit.
+A dirty or pending public repository blocks a staged plugin change before rendering. A publication failure after a commit or merge reports a pending release but cannot undo the Git operation.
 
 ---
 

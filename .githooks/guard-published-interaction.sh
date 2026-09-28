@@ -5,6 +5,11 @@ repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if git -C "$repository_root" diff --cached --quiet HEAD -- plugins/interaction; then
   exit 0
 fi
+pending_file="$(git -C "$repository_root" rev-parse --path-format=absolute --git-path interaction-publication-pending)"
+[[ ! -f "$pending_file" ]] || {
+  printf 'Publication pending for source commit %s. Retry with .githooks/publish-interaction.sh --retry before committing plugin changes.\n' "$(<"$pending_file")" >&2
+  exit 1
+}
 
 published_repository="$repository_root/plugins/.published-interaction"
 [[ -d "$published_repository/.git" ]] || {

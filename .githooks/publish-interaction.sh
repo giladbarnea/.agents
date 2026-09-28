@@ -20,8 +20,22 @@ wait_for_release() {
   return 1
 }
 
-if [[ "${1:-}" != '--retry' ]] && git -C "$repository_root" diff --quiet HEAD^ HEAD -- plugins/interaction; then
-  exit 0
+case "${1:-}" in
+  --retry) ;;
+  --merge) git -C "$repository_root" diff --quiet ORIG_HEAD HEAD -- plugins/interaction && exit 0 ;;
+  *) git -C "$repository_root" diff --quiet HEAD^ HEAD -- plugins/interaction && exit 0 ;;
+esac
+pending_file="$(git -C "$repository_root" rev-parse --path-format=absolute --git-path interaction-publication-pending)"
+source_commit="$(git -C "$repository_root" rev-parse HEAD)"
+if [[ -f "$pending_file" ]]; then
+  pending_commit="$(<"$pending_file")"
+  [[ "${1:-}" == '--retry' || "$pending_commit" == "$source_commit" ]] || {
+    printf 'Publication pending for earlier source commit %s. Retry it before publishing another commit.\n' "$pending_commit" >&2
+    exit 1
+  }
+  source_commit="$pending_commit"
+else
+  printf '%s\n' "$source_commit" >"$pending_file"
 fi
 
 [[ -d "$published_repository/.git" ]] || {
@@ -51,7 +65,7 @@ cleanup() {
 }
 trap cleanup EXIT
 mkdir "$temporary_directory/source"
-git -C "$repository_root" archive HEAD plugins/interaction | tar -x -C "$temporary_directory/source"
+git -C "$repository_root" archive "$source_commit" plugins/interaction | tar -x -C "$temporary_directory/source"
 personal_plugin_directory="$temporary_directory/source/plugins/interaction"
 source_checksum="$(cd "$personal_plugin_directory" && find . -mindepth 1 \( -type d -name '.*' -prune \) -o \( -type f -name '*.md' ! -name '.*' -print0 \) | sort -z | xargs -0 shasum -a 256 | shasum -a 256 | awk '{print $1}')"
 checksum_file="$published_repository/.plugin-source-checksum"
@@ -67,6 +81,7 @@ if [[ "$source_checksum" == "$(<"$checksum_file")" ]]; then
   [[ -n "$tagged_commit" ]] || git -C "$published_repository" tag -a "$tag" -m "Interaction $tag"
   git -C "$published_repository" push origin "$tag"
   wait_for_release "$tag"
+  rm "$pending_file"
   exit
 fi
 
@@ -97,10 +112,10 @@ for manifest in \
   mv "$manifest.tmp" "$manifest"
 done
 printf '%s\n' "$source_checksum" >"$worktree/.plugin-source-checksum"
-(cd "$worktree" && ./build-plugins.sh && uv run -p python3 -m unittest -q test_package_pi_skill_globals)
+(cd "$worktree" && ./build-plugins.sh && unzip -tq interaction-pi-skills.zip && uv run -p python3 -m unittest -q test_package_pi_skill_globals)
 git -C "$worktree" add --all
 git -C "$worktree" diff --cached --check
-git -C "$worktree" -c core.hooksPath=/dev/null commit -m "Release interaction $tag from $(git -C "$repository_root" rev-parse --short HEAD)"
+git -C "$worktree" -c core.hooksPath=/dev/null commit -m "Release interaction $tag from ${source_commit:0:12}"
 published_commit="$(git -C "$worktree" rev-parse HEAD)"
 [[ -z "$(git -C "$published_repository" status --porcelain --untracked-files=all)" ]] || {
   printf 'Publication pending: the public repository changed during the build.\n' >&2
@@ -111,3 +126,4 @@ git -C "$published_repository" merge --ff-only --quiet "$published_commit"
 git -C "$published_repository" tag -a "$tag" -m "Interaction $tag"
 git -C "$published_repository" push origin "$tag"
 wait_for_release "$tag"
+rm "$pending_file"
