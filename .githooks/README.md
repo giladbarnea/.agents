@@ -187,7 +187,7 @@ Gemini receives no plugin materialization from these hooks.
 
 The publisher then bumps both plugin manifests by one patch version, builds the Pi archive, runs the packaging tests, commits, pushes, tags, and waits for the existing GitHub release workflow. `.plugin-source-checksum` identifies the current published source. The publisher skips only when that source matches the current public commit and its release succeeded. A return to earlier content makes a new release.
 
-A failed publication cannot undo the source commit or merge. The publisher records its source commit under `.git/interaction-publication-pending`; `pre-commit` blocks another plugin commit until that release succeeds. Run `.githooks/publish-interaction.sh --retry` after fixing the cause. A partial push resumes the same source commit and public version. The skill and root-file whitelists remain hardcoded in `sync-published-interaction.sh`.
+A failed publication cannot undo the source commit or merge. The publisher records its source commit under `.git/interaction-publication-pending`; `pre-commit` blocks another plugin commit until that release succeeds. Run `.githooks/publish-interaction.sh --retry` after fixing the cause. If validation rejects the source, run `--cancel-pending` before committing a correction; cancellation works only while the current public commit has a successful release. A partial push resumes the same version, and retry reruns a completed GitHub workflow when the release is missing. The skill and root-file whitelists remain hardcoded in `sync-published-interaction.sh`.
 
 ## Local Pi skills and published Pi skills use different builds
 

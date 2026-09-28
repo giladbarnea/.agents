@@ -20,8 +20,18 @@ wait_for_release() {
   return 1
 }
 
+rerun_completed_release() {
+  local tag="$1" commit="$2" run
+  if gh release view "$tag" --repo giladbarnea/interaction --json tagName --jq .tagName >/dev/null 2>&1; then
+    return 0
+  fi
+  run="$(gh run list --repo giladbarnea/interaction --workflow release.yml --branch "$tag" --commit "$commit" --json databaseId,status,headSha --limit 5 | jq -c --arg commit "$commit" '[.[] | select(.headSha == $commit)][0] // empty')"
+  [[ "$(jq -r '.status // empty' <<<"$run")" == completed ]] || return 0
+  gh run rerun "$(jq -r .databaseId <<<"$run")" --repo giladbarnea/interaction
+}
+
 case "${1:-}" in
-  --retry) ;;
+  --retry|--cancel-pending) ;;
   --merge) git -C "$repository_root" diff --quiet ORIG_HEAD HEAD -- plugins/interaction && exit 0 ;;
   *) git -C "$repository_root" diff --quiet HEAD^ HEAD -- plugins/interaction && exit 0 ;;
 esac
@@ -29,12 +39,13 @@ pending_file="$(git -C "$repository_root" rev-parse --path-format=absolute --git
 source_commit="$(git -C "$repository_root" rev-parse HEAD)"
 if [[ -f "$pending_file" ]]; then
   pending_commit="$(<"$pending_file")"
-  [[ "${1:-}" == '--retry' || "$pending_commit" == "$source_commit" ]] || {
+  [[ "${1:-}" == '--retry' || "${1:-}" == '--cancel-pending' || "$pending_commit" == "$source_commit" ]] || {
     printf 'Publication pending for earlier source commit %s. Retry it before publishing another commit.\n' "$pending_commit" >&2
     exit 1
   }
   source_commit="$pending_commit"
 else
+  [[ "${1:-}" != '--cancel-pending' ]] || { printf 'There is no pending publication to cancel.\n' >&2; exit 1; }
   printf '%s\n' "$source_commit" >"$pending_file"
 fi
 
@@ -54,6 +65,17 @@ fi
 git -C "$published_repository" fetch --quiet origin main --tags
 if [[ "$(git -C "$published_repository" rev-parse HEAD)" != "$(git -C "$published_repository" rev-parse origin/main)" ]]; then
   git -C "$published_repository" merge --ff-only --quiet origin/main
+fi
+if [[ "${1:-}" == '--cancel-pending' ]]; then
+  released_version="$(jq -r .version "$published_repository/plugins/interaction/.claude-plugin/plugin.json")"
+  [[ "$(git -C "$published_repository" rev-parse -q --verify "refs/tags/v$released_version^{}" 2>/dev/null || true)" == "$(git -C "$published_repository" rev-parse HEAD)" ]] &&
+    gh release view "v$released_version" --repo giladbarnea/interaction --json tagName --jq .tagName >/dev/null 2>&1 || {
+      printf 'Cannot cancel: the public commit has not completed its release. Retry that release instead.\n' >&2
+      exit 1
+    }
+  rm "$pending_file"
+  printf 'Cancelled pending publication for %s. Commit the corrected plugin source.\n' "$source_commit" >&2
+  exit 0
 fi
 
 temporary_directory="$(mktemp -d)"
@@ -80,6 +102,9 @@ if [[ "$source_checksum" == "$(<"$checksum_file")" ]]; then
   }
   [[ -n "$tagged_commit" ]] || git -C "$published_repository" tag -a "$tag" -m "Interaction $tag"
   git -C "$published_repository" push origin "$tag"
+  if [[ "${1:-}" == '--retry' ]]; then
+    rerun_completed_release "$tag" "$(git -C "$published_repository" rev-parse HEAD)"
+  fi
   wait_for_release "$tag"
   rm "$pending_file"
   exit

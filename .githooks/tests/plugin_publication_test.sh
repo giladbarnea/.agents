@@ -59,10 +59,29 @@ fi
 EOF
 cat >"$temporary_directory/bin/gh" <<'EOF'
 #!/usr/bin/env bash
-[[ "$1 $2" == 'release view' ]]
-git --git-dir="$TEST_REMOTE" show-ref --verify --quiet "refs/tags/$3"
+set -euo pipefail
+case "$1 $2" in
+  'release view')
+    git --git-dir="$TEST_REMOTE" show-ref --verify --quiet "refs/tags/$3"
+    [[ ! -f "$TEST_RELEASE_PENDING_FILE" || "$3" != "$(<"$TEST_RELEASE_PENDING_FILE")" ]]
+    ;;
+  'run list')
+    printf '[{"databaseId":42,"status":"completed","headSha":"%s"}]\n' "$(git --git-dir="$TEST_REMOTE" rev-parse refs/heads/main)"
+    ;;
+  'run rerun')
+    [[ "$3" == '42' ]]
+    touch "$TEST_RERUN_MARKER"
+    rm "$TEST_RELEASE_PENDING_FILE"
+    ;;
+  *) exit 1 ;;
+esac
 EOF
-chmod +x "$temporary_directory/bin/pi" "$temporary_directory/bin/gh"
+cat >"$temporary_directory/bin/sleep" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$temporary_directory/bin/pi" "$temporary_directory/bin/gh" "$temporary_directory/bin/sleep"
+export TEST_RELEASE_PENDING_FILE="$temporary_directory/release-pending" TEST_RERUN_MARKER="$temporary_directory/rerun-called"
 export PATH="$temporary_directory/bin:$PATH"
 initial_version="$(jq -r .version "$published/plugins/interaction/.claude-plugin/plugin.json")"
 expected_version="${initial_version%.*}.$((${initial_version##*.} + 1))"
@@ -134,6 +153,12 @@ touch "$remote/reject-tag"
 rg -q 'Publication pending' "$temporary_directory/pending.log"
 [[ "$(jq -r .version "$published/plugins/interaction/.claude-plugin/plugin.json")" == "$pending_version" ]]
 ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$pending_version"
+if (cd "$hub" && .githooks/publish-interaction.sh --cancel-pending >"$temporary_directory/cancel-after-push.log" 2>&1); then
+  printf '%s\n' 'Cancellation discarded a public commit that has no release.' >&2
+  exit 1
+fi
+rg -q 'Cannot cancel' "$temporary_directory/cancel-after-push.log"
+[[ -f "$hub/.git/interaction-publication-pending" ]]
 printf '\nDo not publish yet.\n' >>"$source_file"
 git -C "$hub" add plugins/interaction
 if (cd "$hub" && .githooks/pre-commit >"$temporary_directory/pending-guard.log" 2>&1); then
@@ -197,3 +222,29 @@ git -C "$hub" add plugins/interaction
 rg -q 'private names' "$temporary_directory/private-source.log"
 [[ "$(git --git-dir="$remote" rev-parse refs/heads/main)" == "$remote_head" ]]
 [[ -z "$(git -C "$published" status --porcelain --untracked-files=all)" ]]
+[[ -f "$hub/.git/interaction-publication-pending" ]]
+git -C "$hub" restore --source=HEAD^ "$source_file"
+git -C "$hub" add plugins/interaction
+if (cd "$hub" && git commit -qm 'Correct rejected source' >"$temporary_directory/correction-blocked.log" 2>&1); then
+  printf '%s\n' 'The pending release did not block an unreviewed replacement commit.' >&2
+  exit 1
+fi
+(cd "$hub" && .githooks/publish-interaction.sh --cancel-pending >"$temporary_directory/cancel.log" 2>&1)
+[[ ! -e "$hub/.git/interaction-publication-pending" ]]
+[[ "$(git --git-dir="$remote" rev-parse refs/heads/main)" == "$remote_head" ]]
+(cd "$hub" && git commit -qm 'Correct rejected source' 2>"$temporary_directory/corrected.log")
+[[ ! -e "$hub/.git/interaction-publication-pending" ]]
+[[ "$(git --git-dir="$remote" rev-parse refs/heads/main)" == "$remote_head" ]]
+
+failed_release_version="${merge_version%.*}.$((${merge_version##*.} + 1))"
+printf 'v%s\n' "$failed_release_version" >"$TEST_RELEASE_PENDING_FILE"
+printf '\nRelease workflow retry test.\n' >>"$source_file"
+git -C "$hub" add plugins/interaction
+(cd "$hub" && git commit -qm 'Publish with a failed release workflow' 2>"$temporary_directory/workflow-failure.log")
+[[ -f "$hub/.git/interaction-publication-pending" ]]
+git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$failed_release_version"
+remote_head="$(git --git-dir="$remote" rev-parse refs/heads/main)"
+(cd "$hub" && .githooks/publish-interaction.sh --retry >"$temporary_directory/workflow-retry.log" 2>&1)
+[[ -f "$TEST_RERUN_MARKER" ]]
+[[ ! -e "$hub/.git/interaction-publication-pending" ]]
+[[ "$(git --git-dir="$remote" rev-parse refs/heads/main)" == "$remote_head" ]]

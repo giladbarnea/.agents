@@ -7,7 +7,7 @@ if git -C "$repository_root" diff --cached --quiet HEAD -- plugins/interaction; 
 fi
 pending_file="$(git -C "$repository_root" rev-parse --path-format=absolute --git-path interaction-publication-pending)"
 [[ ! -f "$pending_file" ]] || {
-  printf 'Publication pending for source commit %s. Retry with .githooks/publish-interaction.sh --retry before committing plugin changes.\n' "$(<"$pending_file")" >&2
+  printf 'Publication pending for source commit %s. Retry with .githooks/publish-interaction.sh --retry. If validation rejected the source, use --cancel-pending before committing a correction.\n' "$(<"$pending_file")" >&2
   exit 1
 }
 
