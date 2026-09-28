@@ -121,7 +121,7 @@ No interactive terminal
 
 `pre-commit` first blocks staged plugin changes if the public repository has local edits, unpublished commits, or a pending release. It then renders instruction files, generates runtime skills, links shared skills, materializes local Pi plugin skills, and inspects broken links. It never writes to the public repository.
 
-`pre-commit` also stages the local `AGENTS.md` and generated runtime `SKILL.md` files. `post-commit` publishes changed plugin commits. `post-merge` materializes local files and publishes plugin changes introduced by a merge. The submodule update in `post-merge` is commented out.
+`pre-commit` also stages the local `AGENTS.md` and generated runtime `SKILL.md` files. `post-commit` publishes changed plugin commits. `post-merge` publishes plugin changes before it renders local instructions and skills, so a local render failure cannot skip publication. The submodule update in `post-merge` is commented out.
 
 Rendering does not require existing consumer links.
 When a consumer-relative import is absent, the loader falls back to the canonical hub source.

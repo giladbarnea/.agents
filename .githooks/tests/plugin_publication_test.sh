@@ -15,7 +15,9 @@ done
 cat >"$hub/.githooks/common.sh" <<'EOF'
 GITHOOKS_DIRECTORY="$PWD/.githooks"
 section() { :; }
-render_agents_md() { :; }
+render_agents_md() {
+  [[ "${TEST_RENDER_FAILURE:-}" != '1' ]] || { printf '%s\n' 'Render blocked for test.' >&2; return 1; }
+}
 render_skills() { :; }
 clean_orphaned_skill_links() { :; }
 EOF
@@ -214,6 +216,21 @@ if ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$merge_versio
   cat "$temporary_directory/merge.log" >&2
   exit 1
 fi
+
+failed_render_version="${merge_version%.*}.$((${merge_version##*.} + 1))"
+git -C "$hub" checkout -qb render-failure
+printf '\nMerged despite local render failure.\n' >>"$source_file"
+git -C "$hub" add plugins/interaction
+git -C "$hub" -c core.hooksPath=/dev/null commit -qm 'Change plugin before render failure'
+git -C "$hub" checkout -q main
+(cd "$hub" && TEST_RENDER_FAILURE=1 git merge --no-ff --no-edit render-failure >"$temporary_directory/render-failure.log" 2>&1)
+rg -q 'Render blocked for test' "$temporary_directory/render-failure.log"
+if ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$failed_render_version"; then
+  printf '%s\n' 'A local rendering failure stopped the merged plugin release.' >&2
+  exit 1
+fi
+[[ ! -e "$hub/.git/interaction-publication-pending" ]]
+merge_version="$failed_render_version"
 
 remote_head="$(git --git-dir="$remote" rev-parse refs/heads/main)"
 printf '\nGilad is private.\n' >>"$source_file"
