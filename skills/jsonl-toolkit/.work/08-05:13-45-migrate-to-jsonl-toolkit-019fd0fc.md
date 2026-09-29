@@ -11,7 +11,7 @@ The user specified these constraints:
 - Read and classify every original file before moving it.
 - Move compaction-agnostic tools to the parent.
 - Split easy mixed files into parent and smart-compaction parts.
-- Leave `scripts/transfer_to_pi_session.py` at the parent level until its reusable vectors are understood.
+- Leave `scripts/compact_existing_pi_session_inline.py` at the parent level until its reusable vectors are understood.
 - Do not preserve backward compatibility.
 - Retire the unsafe legacy `compact_jsonl.py` rather than keep it active.
 
@@ -35,7 +35,7 @@ The parent now contains:
 - `scripts/rgjsonl.sh`
 - `scripts/stats_toolkit.py`
 - `scripts/transcript_common.py`
-- `scripts/transfer_to_pi_session.py`
+- `scripts/compact_existing_pi_session_inline.py`
 - `tests/test_jsonl_toolkit.py`
 - Provider fixtures under `tests/fixtures/`
 
@@ -115,7 +115,7 @@ Keep this distinction explicit in documentation and CLI contracts.
 - New session path generation
 - Pi loader and `ch` discovery checks
 
-### `transfer_to_pi_session.py` still contains mixed parent and child logic
+### `compact_existing_pi_session_inline.py` still contains mixed parent and child logic
 
 There is no substantial vector that can safely become a one-line import today. Its richer raw-line and provenance requirements exceed current parent APIs.
 
@@ -201,7 +201,7 @@ They implement compaction policy, plans, incremental passes, or mutations.
 ## Necessary next steps
 
 1. Wait for the user to inspect or decide the unique export-to-native bridge vector.
-2. Do not refactor `transfer_to_pi_session.py` before that decision.
+2. Do not refactor `compact_existing_pi_session_inline.py` before that decision.
 3. When approved, first enrich `pi_session.py` with the raw-line session model and native occurrence pairing.
 4. Adapt `compact_native_pi_session.py` to the same canonical model.
 5. Then enrich `transcript_common.py` with the richer file-reference and tool-name primitives.

@@ -10,7 +10,7 @@ Paths below are relative to the `jsonl-toolkit` root.
 |---|---|---:|---|
 | `generate_compaction_plan.py` and `apply_compaction_plan.py` | Compacted `ch` transcript | Yes | Writes a new transcript |
 | `compact_native_pi_session.py` | Resumable native session | No | Creates a new session beside the source |
-| `transfer_to_pi_session.py` | Resumable native session | Yes | Backs up and changes an explicit target copy |
+| `compact_existing_pi_session_inline.py` | Resumable native session | Yes | Backs up and changes an explicit target copy |
 
 The transcript applier and native applier consume one semantic plan in different ways.
 
@@ -68,7 +68,7 @@ It verifies the result through the parent Pi-session helpers. It also runs Pi's 
 The native semantic-plan applier currently lives at the parent script level:
 
 ```bash
-uv run scripts/transfer_to_pi_session.py \
+uv run scripts/compact_existing_pi_session_inline.py \
   pruned.json \
   compaction-plan.json \
   session-copy.jsonl
@@ -110,7 +110,7 @@ uv run smart-compact/scripts/prune_transcript.py \
   --from-entry-id <native-id> \
   > pruned.json
 
-uv run scripts/transfer_to_pi_session.py \
+uv run scripts/compact_existing_pi_session_inline.py \
   pruned.json \
   compaction-plan.json \
   session-copy.jsonl \

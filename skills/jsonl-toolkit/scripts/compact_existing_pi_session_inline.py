@@ -11,7 +11,7 @@ plan, native mapping, transformed tree, and tool pairing all validate. A
 byte-identical sibling backup is created before the atomic replacement.
 
 Usage:
-    uv run transfer_to_pi_session.py pruned.json compaction-plan.json session-copy.jsonl
+    uv run compact_existing_pi_session_inline.py pruned.json compaction-plan.json session-copy.jsonl
 """
 
 import argparse

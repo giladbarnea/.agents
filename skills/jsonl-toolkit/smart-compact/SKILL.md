@@ -275,7 +275,7 @@ Do not pass `compacted.json` to the native applier.
 Pass the pruned source, plan, and native target:
 
 ```bash
-uv run --script ../scripts/transfer_to_pi_session.py \
+uv run --script ../scripts/compact_existing_pi_session_inline.py \
   pruned.json compaction-plan.json session-copy.jsonl
 ```
 

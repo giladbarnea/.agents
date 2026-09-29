@@ -19,7 +19,7 @@ PARENT_SCRIPTS = pathlib.Path(__file__).resolve().parents[2] / "scripts"
 sys.path.insert(0, str(PARENT_SCRIPTS))
 
 import transcript_common
-import transfer_to_pi_session
+import compact_existing_pi_session_inline
 
 PRUNED_OUTPUT_TOOL_NAMES = transcript_common.FILE_OUTPUT_TOOLS | {"todo"}
 EMPTY_ORPHAN_KEYS = frozenset(
@@ -61,15 +61,15 @@ def native_tail(
     data: list[dict[str, object]],
     session_path: pathlib.Path,
     from_entry_id: str | None,
-) -> tuple[list[dict[str, object]], transfer_to_pi_session.TailBoundary]:
+) -> tuple[list[dict[str, object]], compact_existing_pi_session_inline.TailBoundary]:
     """Select active Pi messages strictly after the resolved native boundary."""
-    header, active = transfer_to_pi_session.parse_session(session_path)
-    boundary = transfer_to_pi_session.resolve_tail_boundary(
+    header, active = compact_existing_pi_session_inline.parse_session(session_path)
+    boundary = compact_existing_pi_session_inline.resolve_tail_boundary(
         header,
         active,
         from_entry_id,
     )
-    occurrences = transfer_to_pi_session.native_tools(active)
+    occurrences = compact_existing_pi_session_inline.native_tools(active)
     positions = {
         line.identifier: index
         for index, line in enumerate(active)
@@ -98,7 +98,7 @@ def native_tail(
     ]
     if active_positions != sorted(active_positions):
         raise ValueError("Pi export messages do not follow native active-path order")
-    split_occurrences = transfer_to_pi_session.split_tool_occurrence_keys(
+    split_occurrences = compact_existing_pi_session_inline.split_tool_occurrence_keys(
         occurrences,
         positions,
         boundary.native_cutoff_index,

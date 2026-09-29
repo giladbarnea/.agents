@@ -253,7 +253,7 @@ These rules come from real API rejections, and `tests/test_codex_to_claude.py` c
 
 ## Restore a Codex rollout from a converted Pi or Claude Code session
 
-`scripts/pi_to_codex.py` and `scripts/claude_to_codex.py` unfold the `codex` records of a converted session into one rollout. A Pi session is read along its active path.
+`scripts/pi_to_codex.py` and `scripts/claude_to_codex.py` are restore-only tools, not general Pi-to-Codex or Claude-to-Codex converters. They unfold the `codex` records preserved by the forward converters into one rollout. A Pi session is read along its active path.
 
 ```bash
 uv run --script scripts/pi_to_codex.py pi-session.jsonl output-directory/
@@ -262,7 +262,7 @@ uv run --script scripts/claude_to_codex.py claude-session.jsonl output-directory
 
 The restore gives back every record of the Codex session. A single-file session comes back record for record, and byte for byte unless the original used a different JSON escape for a character. A fork child comes back standalone: it holds its parent's history inline, so its session_meta loses the fork links and takes ordinal 0. A session that spans several rollout files comes back as one file with its active history. Records that a later file superseded are left out.
 
-The restore stops with an error when the session holds a turn added in Pi or Claude Code after the conversion, because Codex cannot express that turn yet. It also stops for a Pi session that an older `codex_to_pi.py` wrote, and for a copy that `claude --fork-session` made. Convert the Codex session again in both cases.
+These scripts restore the imported Codex history, not work added later in Pi or Claude Code. New ordinary messages raise an error. The restore also stops for a Pi session that an older `codex_to_pi.py` wrote, and for a copy that `claude --fork-session` made. Convert the Codex session again in those two cases.
 
 Codex resumes a restored rollout and adds its own harness context on the next turn. Put the file under `$CODEX_HOME/sessions/` and run `codex resume <codex-session-id>`. Codex finds the session by the id at the end of the file name. A Codex home that already indexed the same thread id at another path can report `no rollout found`. These resume facts come from codex-cli 0.156.1.
 

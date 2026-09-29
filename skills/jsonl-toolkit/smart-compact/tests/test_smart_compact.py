@@ -21,7 +21,7 @@ import apply_compaction_plan
 import compile_annotations
 import generate_compaction_plan
 import prune_transcript
-import transfer_to_pi_session
+import compact_existing_pi_session_inline
 
 
 def message(index: int, role: str, content: list[object]) -> dict[str, object]:
@@ -770,7 +770,7 @@ skeletons:
         with tempfile.TemporaryDirectory() as temporary_directory:
             session_path = pathlib.Path(temporary_directory, "target.jsonl")
             session_path.write_text("\n".join(native_lines) + "\n")
-            rendered, _ = transfer_to_pi_session.apply_native_plan(
+            rendered, _ = compact_existing_pi_session_inline.apply_native_plan(
                 source_bytes,
                 plan,
                 session_path,
@@ -1131,7 +1131,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(TOOLKIT_ROOT / "scripts" / "transfer_to_pi_session.py"),
+                    str(TOOLKIT_ROOT / "scripts" / "compact_existing_pi_session_inline.py"),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
@@ -1265,7 +1265,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(TOOLKIT_ROOT / "scripts" / "transfer_to_pi_session.py"),
+                    str(TOOLKIT_ROOT / "scripts" / "compact_existing_pi_session_inline.py"),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
@@ -1386,7 +1386,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(TOOLKIT_ROOT / "scripts" / "transfer_to_pi_session.py"),
+                    str(TOOLKIT_ROOT / "scripts" / "compact_existing_pi_session_inline.py"),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
@@ -1451,7 +1451,7 @@ skeletons:
         with tempfile.TemporaryDirectory() as temporary_directory:
             session_path = pathlib.Path(temporary_directory, "target.jsonl")
             session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
-            first_rendered, _ = transfer_to_pi_session.apply_native_plan(
+            first_rendered, _ = compact_existing_pi_session_inline.apply_native_plan(
                 first_source_bytes,
                 first_plan,
                 session_path,
@@ -1466,7 +1466,7 @@ skeletons:
                 session_path,
                 None,
             )
-            second_rendered, _ = transfer_to_pi_session.apply_native_plan(
+            second_rendered, _ = compact_existing_pi_session_inline.apply_native_plan(
                 second_source_bytes,
                 second_plan,
                 session_path,
@@ -1539,7 +1539,7 @@ skeletons:
         with tempfile.TemporaryDirectory() as temporary_directory:
             session_path = pathlib.Path(temporary_directory, "target.jsonl")
             session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
-            rendered, _ = transfer_to_pi_session.apply_native_plan(
+            rendered, _ = compact_existing_pi_session_inline.apply_native_plan(
                 source_bytes,
                 plan,
                 session_path,
@@ -1633,7 +1633,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(pathlib.Path(transfer_to_pi_session.__file__)),
+                    str(pathlib.Path(compact_existing_pi_session_inline.__file__)),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
@@ -1725,7 +1725,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(TOOLKIT_ROOT / "scripts" / "transfer_to_pi_session.py"),
+                    str(TOOLKIT_ROOT / "scripts" / "compact_existing_pi_session_inline.py"),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
@@ -1854,7 +1854,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(TOOLKIT_ROOT / "scripts" / "transfer_to_pi_session.py"),
+                    str(TOOLKIT_ROOT / "scripts" / "compact_existing_pi_session_inline.py"),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
@@ -2010,7 +2010,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(pathlib.Path(transfer_to_pi_session.__file__)),
+                    str(pathlib.Path(compact_existing_pi_session_inline.__file__)),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
@@ -2123,7 +2123,7 @@ skeletons:
         with tempfile.TemporaryDirectory() as temporary_directory:
             session_path = pathlib.Path(temporary_directory, "target.jsonl")
             session_path.write_text("\n".join(raw_lines) + "\n")
-            rendered, _ = transfer_to_pi_session.apply_native_plan(
+            rendered, _ = compact_existing_pi_session_inline.apply_native_plan(
                 source_bytes,
                 plan,
                 session_path,
@@ -2176,7 +2176,7 @@ skeletons:
             result = subprocess.run(
                 [
                     sys.executable,
-                    str(TOOLKIT_ROOT / "scripts" / "transfer_to_pi_session.py"),
+                    str(TOOLKIT_ROOT / "scripts" / "compact_existing_pi_session_inline.py"),
                     str(source_path),
                     str(plan_path),
                     str(session_path),
