@@ -403,7 +403,7 @@ class PiContextTests(unittest.TestCase):
         self.assertIn(wait_output, tool_result_texts(entries), f"The Pi model must read what wait_agent returned. Got: {tool_result_texts(entries)!r}")
 
 
-    def test_the_compaction_summary_replays_subagent_messages_but_not_harness_injections(self) -> None:
+    def test_compaction_replays_subagent_messages_but_not_harness_injections(self) -> None:
         replacement_history = [
             {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "<permissions instructions>sandbox</permissions instructions>"}]},
             {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "# AGENTS.md instructions for /tmp/project"}]},
@@ -424,10 +424,12 @@ class PiContextTests(unittest.TestCase):
             )
         summaries = [str(entry["summary"]) for entry in entries if entry.get("type") == "compaction"]
         self.assertEqual(len(summaries), 1, f"Expected one compaction entry. Got: {summaries!r}")
-        self.assertIn("The HUD redraws every frame.", summaries[0], "Codex replayed the sub-agent answer, so the Pi model must see it after the compaction")
-        self.assertIn("make the game faster", summaries[0], "Codex replayed the user message, so the Pi model must see it after the compaction")
-        self.assertNotIn("AGENTS.md instructions", summaries[0], "Harness injections stay out of Pi's context, as everywhere else in the conversion")
-        self.assertNotIn("permissions instructions", summaries[0], "Developer messages stay out of Pi's context, as everywhere else in the conversion")
+        boundary = next(index for index, entry in enumerate(entries) if entry.get("type") == "compaction")
+        replayed_text = "\n".join(message_texts(entries[boundary + 1:]))
+        self.assertIn("The HUD redraws every frame.", replayed_text, "The original sub-agent answer must reach Pi after the checkpoint")
+        self.assertIn("make the game faster", replayed_text, "The original user message must reach Pi after the checkpoint")
+        self.assertNotIn("AGENTS.md instructions", replayed_text, "Harness injections stay out of Pi's context")
+        self.assertNotIn("permissions instructions", replayed_text, "Developer messages stay out of Pi's context")
 
 
     def test_bash_rendering_is_used_only_when_every_tool_call_runs_unconditionally(self) -> None:

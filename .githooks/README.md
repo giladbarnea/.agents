@@ -59,7 +59,9 @@ It renders locally and also serves as the parent of four downstream templates.
 ```
 
 Each downstream template extends the shared base through its absolute path.
-It sets provider-specific variables and overrides Jinja blocks such as `communication_style`.
+It sets provider-specific variables and overrides Jinja blocks such as `communication_style` and `shell_usage`.
+The shared `shell_usage` block uses `zshi -c '...'`. Pi overrides it in `~/.pi/agent/AGENTS.md.j2` to use the `zsh` tool.
+The existing hook renders propagate that override without changing the other consumers.
 
 `common.sh` stores the downstream template paths in `TARGETS`.
 The hub hooks call `render.py` for the local template and every downstream template.

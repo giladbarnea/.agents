@@ -18,7 +18,7 @@ You’re on a Mac M2 Pro. In addition to base Unix coreutils and Python 3, you c
 
 **3. Built-in `read_file` tool:** always read files in full. We’re optimizing for recall and context over precision.
 
-**4. Bash/shell:**
+**4. Bash/Zsh/shell:**
   Run shell commands with `zshi -c '...'`. This sources the user’s `.zshrc`, loading key environment variables and `PATH` entries that make many additional commands and tools available. For example, instead of running `git diff ...`, run `zshi -c 'gsd ...'`.
 
 **5. `git diff`:** use `gsd` instead of `git diff`.
@@ -45,7 +45,6 @@ You’re on a Mac M2 Pro. In addition to base Unix coreutils and Python 3, you c
 - In general, you are encouraged to write temporary Python and shell scripts to disk and run them. This is the best approach for more complex tasks. Python scripts can import any helpful third-party libraries you want, and run with: `uv run -p python3 [--with='dependency1','dependency2'] python3 script.py`. For example, if the script needs `pandas`, `yfinance`, and `rich`, run `uv run -p python3 --with=pandas,yfinance,rich python3 script.py`. Scripts have network access. Just remember to remove the scripts after you no longer need them.
 - Never modify global system state: no `npm install --global`, no `brew install`, no `pip install`, etc. Always prefer transient execution with `uvx -p python3` or `npx -y`.
 - If a library doesn’t support python3, adjust `-p python3.*` accordingly. In projects with pyproject.toml or .venv/ directory, just run `uv run ...` without the `-p ...` flag (version already defined at project level).
-- For some cleanliness static analysis, you can run `zshi -c 'ruffc dir/or/filepath'` (not a typo — `ruffc` is a custom bash function). Take the diagnostics with a big grain of salt, only fix what hints at real problems. Same with Node’s ESLint and Prettier.
 
 </python-nodejs>
 

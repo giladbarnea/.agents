@@ -27,13 +27,16 @@ import json
 import os
 import re
 import secrets
+import shlex
 import sys
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
 PROVIDER = "openai-codex"
 API = "openai-codex-responses"
+REASONING_FAMILY_PREFIXES = ("gpt-6-", "gpt-5.6-")
 ZERO_USAGE = {
     "input": 0,
     "output": 0,
@@ -50,6 +53,18 @@ FORK_KEYS = ("forked_from_id", "forked_from_ordinal_exclusive", "history_base")
 ENCRYPTED_PLACEHOLDER = "[Codex ciphertext: only OpenAI can read this part]"
 CIPHERTEXT_PREFIX = "gAAAAA"
 COMPACTION_PREFACE = "Codex compacted the context here. Its summary is encrypted and unreadable outside Codex. It replayed the following messages verbatim after the summary:\n\n"
+
+def reasoning_family(model: str) -> str:
+    """Group documented compatible GPT models; unknown models match only themselves.
+
+    >>> reasoning_family("openai-codex/gpt-6-sol") == reasoning_family("gpt-6-luna")
+    True
+    >>> reasoning_family("gpt-5.6-sol") == reasoning_family("gpt-6-sol")
+    False
+    """
+    identifier = model.removeprefix("openai-codex/")
+    return next((prefix[:-1] for prefix in REASONING_FAMILY_PREFIXES if identifier.startswith(prefix)), identifier)
+
 
 def uuidv7(at_ms: int) -> str:
     value = (at_ms << 80) | (0x7 << 76) | (secrets.randbits(12) << 64) | (0b10 << 62) | secrets.randbits(62)
@@ -342,7 +357,22 @@ class Item:
     ordinal: int
     kind: str
     payload: dict[str, object]
-    record: dict[str, object]
+    record: dict[str, object] | None
+
+
+def with_compaction_replay(items: Iterable[Item]) -> Iterator[Item]:
+    """Expand a checkpoint into the items Codex replays without archiving them a second time.
+
+    >>> checkpoint = Item("now", 3, "compacted", {"replacement_history": [{"type": "compaction"}]}, {})
+    >>> [(item.kind, item.record) for item in with_compaction_replay([checkpoint])]
+    [('compacted', {}), ('response_item', None)]
+    """
+    for item in items:
+        yield item
+        if item.kind != "compacted":
+            continue
+        for payload in item.payload["replacement_history"]:
+            yield Item(item.timestamp, item.ordinal, "response_item", payload, None)
 
 
 def item_from_record(record: dict[str, object], default_ordinal: int) -> Item:
@@ -500,6 +530,20 @@ class PiWriter:
                 model = str(entry["message"]["model"])
         return model, thinking_level
 
+    def replay_lines(self) -> list[str]:
+        """Label imported assistant messages for the destination model without changing their archived originals."""
+        model, _ = self.current_settings()
+        entries = [json.loads(line) for line in self.lines]
+        for entry in entries:
+            message = entry.get("message", {})
+            if message.get("role") != "assistant":
+                continue
+            has_reasoning = any(block.get("thinkingSignature") for block in message["content"])
+            if has_reasoning and (model is None or message["model"] is None or reasoning_family(message["model"]) != reasoning_family(model)):
+                raise ValueError(f"Cannot preserve reasoning across incompatible model families: {message['model']} -> {model}")
+            message["model"] = model
+        return [dumps(entry) for entry in entries]
+
 
 @dataclass
 class PendingAssistant:
@@ -509,7 +553,7 @@ class PendingAssistant:
 
 
 def reasoning_block(payload: dict[str, object]) -> dict[str, object]:
-    """Carry the whole Codex reasoning item in the signature, the way Pi's own Codex provider does."""
+    """Carry an opaque OpenAI reasoning or compaction item in Pi's provider replay signature."""
     summary_text = "\n\n".join(str(part["text"]) for part in payload.get("summary") or [])
     return {"type": "thinking", "thinking": summary_text, "thinkingSignature": dumps(payload)}
 
@@ -571,7 +615,7 @@ class Conversion:
             staged.clear()
             if consume_current:
                 current.clear()
-            return {"codex": [item.record for item in records]} if records else {}
+            return {"codex": [item.record for item in records if item.record is not None]}
 
         def emit(entry_type: str, timestamp: str, body: dict[str, object], entry_id: str | None = None) -> str:
             return writer.append(entry_type, timestamp, {**body, **carried(True)}, source_ordinal=item.ordinal, entry_id=entry_id)
@@ -644,7 +688,7 @@ class Conversion:
             emit("message", timestamp, {"message": message})
 
         cutoffs_ahead = sorted(self.fork_cutoffs)
-        for item in items[1:]:
+        for item in with_compaction_replay(items[1:]):
             timestamp, payload = item.timestamp, item.payload
             if cutoffs_ahead and item.ordinal >= cutoffs_ahead[0]:
                 flush_records()
@@ -652,7 +696,7 @@ class Conversion:
             current.append(item)
 
             if item.kind == "turn_context":
-                next_model = str(payload["model"])
+                next_model = str(payload["model"]).removeprefix("openai-codex/")
                 next_thinking_level = str(payload["effort"])
                 if next_model != model or next_thinking_level != thinking_level:
                     flush("stop")
@@ -668,7 +712,7 @@ class Conversion:
 
             if item.kind == "compacted":
                 flush("stop")
-                summary = compaction_summary(payload["replacement_history"])
+                summary = "Codex checkpoint. The retained conversation and replay state follow."
                 usage_record = payload.get("latest_token_usage_record") or {"usage": {"total_tokens": 0}}
                 entry_id = writer.new_id()
                 emit("compaction", timestamp, {"summary": summary, "firstKeptEntryId": entry_id, "tokensBefore": usage_record["usage"]["total_tokens"]}, entry_id=entry_id)
@@ -681,7 +725,7 @@ class Conversion:
 
             item_type = payload["type"]
 
-            if item_type == "reasoning":
+            if item_type in ("reasoning", "compaction", "context_compaction"):
                 add_pending(reasoning_block(payload), timestamp, item.ordinal)
             elif item_type == "message" and payload["role"] == "assistant":
                 add_pending(text_block(payload), timestamp, item.ordinal)
@@ -715,11 +759,13 @@ class Conversion:
             elif item_type == "tool_search_output":
                 add_tool_result(payload, [{"type": "text", "text": dumps(payload["tools"])}], False, timestamp, item.ordinal)
             elif item_type == "message" and payload["role"] == "user":
-                if text_of(payload["content"]).startswith(INJECTED_USER_PREFIXES):
+                blocks = [block for block in pi_content_blocks(payload["content"])
+                          if block["type"] != "text" or not block["text"].startswith(INJECTED_USER_PREFIXES)]
+                if not blocks:
                     staged.extend(current)
                     current.clear()
                     continue
-                add_user_message(payload, pi_content_blocks(payload["content"]), timestamp, item.ordinal)
+                add_user_message(payload, blocks, timestamp, item.ordinal)
             elif item_type == "message" and payload["role"] == "developer":
                 staged.extend(current)
                 current.clear()
@@ -741,14 +787,16 @@ class Conversion:
         if self.parent_session:
             header["parentSession"] = self.parent_session
 
+        replay_lines = writer.replay_lines()
         directory = session_directory(self.sessions_root, cwd)
         directory.mkdir(parents=True, exist_ok=True)
         target = directory / session_filename(started_at, self.session_id)
         with target.open("w") as out:
             out.write(dumps(header) + "\n")
-            out.write("\n".join(writer.lines) + "\n")
+            out.write("\n".join(replay_lines) + "\n")
         print(f"wrote {target}", file=sys.stderr)
         print(f"  entries: {len(writer.lines)}", file=sys.stderr)
+        print(f"  resume with: pi --session {shlex.quote(str(target))}", file=sys.stderr)
         return ConvertedSession(target, writer)
 
 
