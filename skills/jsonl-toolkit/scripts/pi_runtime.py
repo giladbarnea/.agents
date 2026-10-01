@@ -79,7 +79,7 @@ def restore_runtime(session_path: Path, agent_directory: Path) -> list[Path]:
             team_id = f"{parent.identifier}-{name}"
             directory = agent_directory / "pi-simple-team" / "teams-v2"
             directory.mkdir(parents=True, exist_ok=True)
-            target = directory / f"{quote(team_id, safe=\"!~*'()\")}.json"
+            target = directory / (quote(team_id, safe="!~*'()") + ".json")
             roster = [{**{key: configuration[key] for key in MEMBER_CONFIGURATION}, "teammateId": child.identifier, "sessionFile": str(child.path.resolve()), "sessionMaterialized": True, "showOnHerdrPane": False, "live": False, "active": False, "extensionPaths": list(dict.fromkeys([*configuration.get("extensionPaths", []), str(REPLAY_EXTENSION)]))} for child, configuration in members]
             manifest = {"version": 2, "id": team_id, "name": name, "originMainSessionId": parent.identifier, "projectDirectory": str(Path(parent.header["cwd"]).resolve(strict=True)), "teamPrompt": prompt, "showOnHerdrPanes": False, "members": roster, "state": "dormant", "createdAt": timestamp, "updatedAt": timestamp}
             if target.exists():
