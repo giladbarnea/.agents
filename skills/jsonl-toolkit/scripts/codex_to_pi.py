@@ -7,16 +7,15 @@
 
 The converter follows native fork ancestry in both directions, rebuilds paginated rollout
 segments, copies each fork-point history into its Pi child, and sets `parentSession`.
-It ports messages, reasoning, shell tools, compaction, and native Codex sub-agents.
+It ports messages, reasoning, complete tool history, compaction, and persisted Codex sub-agents.
 
 Every Codex record rides verbatim under a `codex` key, so `pi_to_codex.py` restores the same
 records: the session_meta on the header, and every other record, in order, in the list of the
 Pi entry written next. Records the model never reads, such as events and harness injections,
 ride along the same way. Reasoning also stays in `thinkingSignature` and assistant ids in
 `textSignature`, the slots Pi's own Codex provider reads back. Sub-agents, at any depth, become
-pi-subagents notifications plus separate Pi child sessions. Namespaced calls,
-including Codex-internal notes, history, and collaboration calls, keep their namespace in the
-tool name and stay in context with only their ciphertext strings masked. Codex side chats
+attributed notifications plus separate Pi child sessions. Calls keep their original name,
+namespace, arguments, and results, with only ciphertext coordination content masked. Codex side chats
 remain absent because Codex writes no rollout for them.
 
 Shapes that stopped before July 2026 are out of scope. The function-call form of exec,
@@ -25,7 +24,6 @@ Shapes that stopped before July 2026 are out of scope. The function-call form of
 
 import json
 import os
-import re
 import secrets
 import shlex
 import sys
@@ -89,6 +87,15 @@ def text_of(content: str | list[dict[str, object]]) -> str:
     if isinstance(content, str):
         return content
     return "".join(ENCRYPTED_PLACEHOLDER if block.get("type") == "encrypted_content" else str(block.get("text", "")) for block in content if block.get("type") in ("input_text", "output_text", "encrypted_content"))
+
+
+def agent_message_text(payload: dict[str, object]) -> str:
+    """Preserve message attribution without changing or XML-escaping its readable body.
+
+    >>> agent_message_text({"author": "/root/a", "recipient": "/root", "content": "a < b"})
+    '[Codex message from /root/a to /root]\\na < b'
+    """
+    return f"[Codex message from {payload['author']} to {payload['recipient']}]\n{text_of(payload['content'])}"
 
 
 def replay_text(item: dict[str, object]) -> str | None:
@@ -162,154 +169,6 @@ def hide_ciphertext(value: object) -> object:
     if isinstance(value, list):
         return [hide_ciphertext(item) for item in value]
     return value
-
-
-def escape_xml(value: str) -> str:
-    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-JS_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", "v": "\v", "0": "\0"}
-
-
-def read_js_string(script: str, start: int) -> str:
-    """Decode a double-quoted JavaScript string literal whose opening quote is at `start`.
-
-    >>> read_js_string('cmd:"echo \\\\"hi\\\\"\\\\n"', 4)
-    'echo "hi"\\n'
-    """
-    assert script[start] == '"'
-    characters: list[str] = []
-    index = start + 1
-    while script[index] != '"':
-        if script[index] != "\\":
-            characters.append(script[index])
-            index += 1
-            continue
-        escaped = script[index + 1]
-        if escaped == "u":
-            characters.append(chr(int(script[index + 2 : index + 6], 16)))
-            index += 6
-        elif escaped == "x":
-            characters.append(chr(int(script[index + 2 : index + 4], 16)))
-            index += 4
-        else:
-            characters.append(JS_ESCAPES.get(escaped, escaped))
-            index += 2
-    return "".join(characters)
-
-
-def js_call_arguments(script: str, open_paren: int) -> str:
-    """Return the balanced source text between the parentheses opening at `open_paren`.
-
-    >>> js_call_arguments('f({a:"x)",b:[1,(2)]}) + g()', 1)
-    '{a:"x)",b:[1,(2)]}'
-    """
-    depth = 0
-    index = open_paren
-    while True:
-        character = script[index]
-        if character in "\"'`":
-            index = script.index(character, index + 1)
-            while script[index - 1] == "\\":
-                index = script.index(character, index + 1)
-        elif character in "([{":
-            depth += 1
-        elif character in ")]}":
-            depth -= 1
-            if depth == 0:
-                return script[open_paren + 1 : index]
-        index += 1
-
-
-def parse_tool_calls(script: str) -> list[tuple[str, str]]:
-    """List every `tools.<name>(...)` call in a Codex exec script as (name, argument source).
-
-    >>> parse_tool_calls('text(await tools.exec_command({cmd:"ls"}));')
-    [('exec_command', '{cmd:"ls"}')]
-    """
-    return [(match.group(1), js_call_arguments(script, match.end() - 1)) for match in re.finditer(r"tools\.(\w+)\(", script)]
-
-
-def js_string_field(source: str, name: str) -> str | None:
-    """Read a string field from a JavaScript object literal, whether its key is bare or quoted.
-
-    >>> js_string_field('{"cmd":"ls","workdir":"/tmp"}', "workdir")
-    '/tmp'
-    >>> js_string_field('{note:"cmd: ls"}', "cmd") is None
-    True
-    """
-    match = re.search(rf'(?<![\w"])(?:{name}|"{name}")\s*:\s*"', source)
-    return read_js_string(source, match.end() - 1) if match else None
-
-
-def tool_call_to_bash(name: str, arguments: str) -> str | None:
-    """Render one Codex exec tool call as a bash line, or None when its shape is not recognized.
-
-    >>> tool_call_to_bash("exec_command", '{cmd:"ls",workdir:"/tmp"}')
-    'cd /tmp && ls'
-    >>> tool_call_to_bash("write_stdin", '{session_id:42,chars:"",yield_time_ms:1000}')
-    '# Codex: poll background session 42 for output'
-    """
-    if name == "exec_command":
-        command = js_string_field(arguments, "cmd")
-        workdir = js_string_field(arguments, "workdir")
-        if command is None:
-            return None
-        return f"cd {workdir} && {command}" if workdir else command
-    if name == "apply_patch":
-        if not arguments.startswith('"'):
-            return None
-        return f"apply_patch <<'PATCH'\n{read_js_string(arguments, 0)}\nPATCH"
-    if name == "write_stdin":
-        session = re.search(r'(?<![\w"])(?:session_id|"session_id")\s*:\s*(\d+)', arguments)
-        characters = js_string_field(arguments, "chars")
-        if session is None or characters is None:
-            return None
-        if characters:
-            return f"# Codex: write to background session {session.group(1)} stdin: {characters!r}"
-        return f"# Codex: poll background session {session.group(1)} for output"
-    return f"# Codex tool {name}({' '.join(arguments.split())})"
-
-
-JS_STRING_LITERAL = re.compile(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`')
-JS_CONTROL_FLOW = re.compile(r"\b(?:if|else|for|while|do|switch|case|try|catch|function)\b|=>|\?|&&|\|\|")
-
-
-def has_control_flow(script: str, calls: list[tuple[str, str]]) -> bool:
-    """Whether code around the tool calls can skip or repeat them, so one bash line per call would misstate what ran.
-
-    >>> has_control_flow('if (x) text(await tools.exec_command({cmd:"rm -rf b"}));', [("exec_command", '{cmd:"rm -rf b"}')])
-    True
-    >>> has_control_flow('const r = await tools.exec_command({cmd:"a && b"}); text(r.output);', [("exec_command", '{cmd:"a && b"}')])
-    False
-    """
-    skeleton = script
-    for name, arguments in calls:
-        skeleton = skeleton.replace(f"tools.{name}({arguments})", "T", 1)
-    return bool(JS_CONTROL_FLOW.search(JS_STRING_LITERAL.sub("S", skeleton)))
-
-
-def bash_command_for_exec(script: str) -> str:
-    """Turn a Codex exec script into a bash command, one line per tool call, when every call runs unconditionally.
-
-    Any other script stays verbatim under a comment header.
-
-    >>> bash_command_for_exec('text(await tools.exec_command({cmd:"ls -la",workdir:"/tmp"}));')
-    'cd /tmp && ls -la'
-    """
-    verbatim = "# Codex exec script (JavaScript), run by the Codex exec tool\n" + script
-    try:
-        calls = parse_tool_calls(script)
-        lines = [tool_call_to_bash(name, arguments) for name, arguments in calls]
-    except (ValueError, IndexError):
-        return verbatim
-    if not lines or None in lines or has_control_flow(script, calls):
-        return verbatim
-    return "\n".join(line for line in lines if line is not None)
-
-
-def bash_command_for_wait(arguments: dict[str, object]) -> str:
-    return f"# Codex: wait up to {int(arguments['yield_time_ms']) // 1000}s for background exec cell {arguments['cell_id']}"
 
 
 def bash_result(raw: str) -> tuple[str, bool]:
@@ -422,7 +281,7 @@ class Subagent:
         return f"Codex sub-agent {self.agent_path} ({self.nickname})"
 
     def notification(self, payload: dict[str, object], until: str) -> dict[str, object]:
-        """Render one delivery from the sub-agent the way pi-subagents notifies the root model."""
+        """Render a delivered message with its original attribution and task status."""
         text = text_of(payload["content"])
         status = "completed" if text.startswith("Message Type: FINAL_ANSWER") else "running"
         details = {
@@ -435,17 +294,8 @@ class Subagent:
             "durationMs": epoch_ms(until) - epoch_ms(self.started_at),
             "resultPreview": text[:500],
         }
-        content = "\n".join(
-            [
-                "<task-notification>",
-                f"<task-id>{self.session_id}</task-id>",
-                f"<status>{'Done' if status == 'completed' else 'Running'}</status>",
-                f'<summary>Agent "{escape_xml(self.description)}" {status}</summary>',
-                f"<result>{escape_xml(text)}</result>",
-                f"<usage><total_tokens>0</total_tokens><tool_uses>{details['toolUses']}</tool_uses><duration_ms>{details['durationMs']}</duration_ms></usage>",
-                "</task-notification>",
-            ]
-        )
+        content = agent_message_text(payload)
+        details.update({"author": payload["author"], "recipient": payload["recipient"]})
         return {"customType": SUBAGENT_NOTIFICATION_TYPE, "content": content, "display": True, "details": details}
 
     def record(self, payload: dict[str, object], until: str) -> dict[str, object]:
@@ -661,7 +511,8 @@ class Conversion:
             pi_call_id = f"{payload['call_id']}|{payload['id']}"
             call_names[str(payload["call_id"])] = name
             call_pi_ids[str(payload["call_id"])] = pi_call_id
-            add_pending({"type": "toolCall", "id": pi_call_id, "name": name, "arguments": arguments}, timestamp, source_ordinal)
+            add_pending({"type": "toolCall", "id": pi_call_id, "name": name, "arguments": arguments,
+                         **({"namespace": payload["namespace"]} if payload.get("namespace") else {})}, timestamp, source_ordinal)
 
         def add_tool_result(
             payload: dict[str, object],
@@ -732,28 +583,18 @@ class Conversion:
             elif item_type == "custom_tool_call":
                 add_tool_call(
                     payload,
-                    "bash",
-                    {"command": bash_command_for_exec(str(payload["input"]))},
+                    str(payload["name"]),
+                    {"input": payload["input"]},
                     timestamp,
                     item.ordinal,
                 )
             elif item_type == "function_call":
-                arguments = hide_ciphertext(json.loads(str(payload["arguments"])))
-                name = tool_name(payload)
-                if name == "wait":
-                    add_tool_call(
-                        payload,
-                        "bash",
-                        {"command": bash_command_for_wait(arguments)},
-                        timestamp,
-                        item.ordinal,
-                    )
-                else:
-                    add_tool_call(payload, name, arguments, timestamp, item.ordinal)
+                arguments = json.loads(str(payload["arguments"]))
+                arguments = hide_ciphertext(arguments) if payload.get("namespace") in ("collaboration", "notes", "history") else arguments
+                add_tool_call(payload, str(payload["name"]), arguments, timestamp, item.ordinal)
             elif item_type in ("custom_tool_call_output", "function_call_output"):
-                text, is_error = bash_result(text_of(payload["output"]))
-                images = [block for block in pi_content_blocks(payload["output"]) if block["type"] == "image"]
-                add_tool_result(payload, [{"type": "text", "text": text}] * bool(text) + images, is_error, timestamp, item.ordinal)
+                _, is_error = bash_result(text_of(payload["output"]))
+                add_tool_result(payload, pi_content_blocks(payload["output"]), is_error, timestamp, item.ordinal)
             elif item_type == "tool_search_call":
                 add_tool_call(payload, "tool_search", dict(payload["arguments"]), timestamp, item.ordinal)
             elif item_type == "tool_search_output":
@@ -776,7 +617,7 @@ class Conversion:
                 if text_of(payload["content"]).startswith("Message Type: FINAL_ANSWER"):
                     emit("custom", timestamp, {"customType": SUBAGENT_RECORD_TYPE, "data": subagent.record(payload, timestamp)})
             elif item_type == "agent_message":
-                blocks = [{"type": "text", "text": text_of(payload["content"])}]
+                blocks = [{"type": "text", "text": agent_message_text(payload)}]
                 add_user_message(payload, blocks, timestamp, item.ordinal)
             else:
                 raise ValueError(f"Unhandled response_item type at {timestamp}: {item_type}")
@@ -990,10 +831,13 @@ def find_subagents(items: list[Item], codex_sessions_root: Path) -> dict[str, Su
     """Map the path of every sub-agent that these items start to the sub-agent."""
     subagents: dict[str, Subagent] = {}
     for item in items:
-        activity = item.payload.get("item", {}) if item.kind == "event_msg" else {}
-        if activity.get("type") != "SubAgentActivity" or activity.get("kind") != "started":
+        activity = item.payload.get("item", item.payload) if item.kind == "event_msg" else {}
+        if activity.get("type") not in ("SubAgentActivity", "sub_agent_activity") or activity.get("kind") != "started":
             continue
-        rollout = next(codex_sessions_root.rglob(f"*{activity['agent_thread_id']}*.jsonl"))
+        rollout = next(codex_sessions_root.rglob(f"*{activity['agent_thread_id']}*.jsonl"), None)
+        if rollout is None:
+            print(f"Skipping missing child JSONL: {activity['agent_thread_id']}", file=sys.stderr)
+            continue
         subagents[str(activity["agent_path"])] = Subagent.from_rollout(rollout, str(activity["agent_path"]), item.timestamp)
     return subagents
 

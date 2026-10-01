@@ -358,9 +358,9 @@ def convert_root(temporary: pathlib.Path, records: list[dict[str, object]]) -> l
     return load_session(codex_to_pi.main(rollout, temporary / "pi" / "sessions", "Pi context")[ROOT_ID])
 
 
-def tool_calls(entries: list[dict[str, object]]) -> dict[str, dict[str, object]]:
+def tool_calls(entries: list[dict[str, object]]) -> dict[tuple[str | None, str], dict[str, object]]:
     return {
-        str(block["name"]): block
+        (block.get("namespace"), str(block["name"])): block
         for entry in entries
         if entry.get("type") == "message" and entry["message"]["role"] == "assistant"
         for block in entry["message"]["content"]
@@ -397,7 +397,7 @@ class PiContextTests(unittest.TestCase):
                     record(6, "response_item", {"type": "function_call_output", "call_id": "call_wait", "output": wait_output}),
                 ],
             )
-        spawn = tool_calls(entries).get("collaboration__spawn_agent", {})
+        spawn = tool_calls(entries).get(("collaboration", "spawn_agent"), {})
         expected_arguments = {**spawn_arguments, "message": codex_to_pi.ENCRYPTED_PLACEHOLDER}
         self.assertEqual(spawn.get("arguments"), expected_arguments, f"The Pi model must see the spawn call's readable fields, with only the ciphertext masked. Got tool calls: {tool_calls(entries)!r}")
         self.assertIn(wait_output, tool_result_texts(entries), f"The Pi model must read what wait_agent returned. Got: {tool_result_texts(entries)!r}")
@@ -432,7 +432,7 @@ class PiContextTests(unittest.TestCase):
         self.assertNotIn("permissions instructions", replayed_text, "Developer messages stay out of Pi's context")
 
 
-    def test_bash_rendering_is_used_only_when_every_tool_call_runs_unconditionally(self) -> None:
+    def test_exec_scripts_stay_complete_instead_of_becoming_bash_commands(self) -> None:
         conditional = 'if ((await tools.exec_command({cmd:"test -f a.txt"})).exit_code !== 0) {\n  text(await tools.exec_command({cmd:"rm -rf build"}));\n}'
         straight_line = 'const r = await tools.exec_command({cmd:"ls -la"}); text(r.output);'
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -449,15 +449,13 @@ class PiContextTests(unittest.TestCase):
                 ],
             )
         commands = [
-            str(block["arguments"]["command"])
+            str(block["arguments"]["input"])
             for entry in entries
             if entry.get("type") == "message" and entry["message"]["role"] == "assistant"
             for block in entry["message"]["content"]
-            if block["type"] == "toolCall" and block["name"] == "bash"
+            if block["type"] == "toolCall" and block["name"] == "exec"
         ]
-        self.assertEqual(len(commands), 2, f"Expected two bash calls. Got: {commands!r}")
-        self.assertIn(conditional, commands[0], f"A script whose condition decides what runs must reach the Pi model whole. A bare 'rm -rf build' line claims it always ran. Got: {commands[0]!r}")
-        self.assertEqual(commands[1], "ls -la", "A straight-line script must still render as its shell command")
+        self.assertEqual(commands, [conditional, straight_line], "Both conditional and simple exec scripts must retain their complete original operations")
 
 
     def test_namespaced_calls_keep_their_namespace_so_same_named_tools_stay_distinct(self) -> None:
@@ -475,13 +473,13 @@ class PiContextTests(unittest.TestCase):
                 ],
             )
         names = sorted(
-            str(block["name"])
+            (block.get("namespace"), str(block["name"]))
             for entry in entries
             if entry.get("type") == "message" and entry["message"]["role"] == "assistant"
             for block in entry["message"]["content"]
             if block["type"] == "toolCall"
         )
-        self.assertEqual(names, ["mcp__cua_repl__js", "mcp__node_repl__js"], f"Two servers' js tools must stay distinct for the Pi model, as they do in the Claude conversion. Got: {names!r}")
+        self.assertEqual(names, [("mcp__cua_repl", "js"), ("mcp__node_repl", "js")], f"Native namespaces must stay separate from tool names in Pi replay. Got: {names!r}")
 
 
     def test_notes_and_history_calls_reach_the_pi_model_with_only_ciphertext_masked(self) -> None:
@@ -500,8 +498,8 @@ class PiContextTests(unittest.TestCase):
             )
         calls = tool_calls(entries)
         placeholder = codex_to_pi.ENCRYPTED_PLACEHOLDER
-        self.assertEqual(calls.get("notes__append_to_file", {}).get("arguments"), {"path": "checkpoint", "text": placeholder}, f"The Pi model must see which note was written, with only its text masked. Got tool calls: {calls!r}")
-        self.assertEqual(calls.get("history__search_contents", {}).get("arguments"), {"role": "user", "limit": 2, "query": placeholder}, f"The Pi model must see the history search, with only its query masked. Got tool calls: {calls!r}")
+        self.assertEqual(calls.get(("notes", "append_to_file"), {}).get("arguments"), {"path": "checkpoint", "text": placeholder}, f"The Pi model must see which note was written, with only its text masked. Got tool calls: {calls!r}")
+        self.assertEqual(calls.get(("history", "search_contents"), {}).get("arguments"), {"role": "user", "limit": 2, "query": placeholder}, f"The Pi model must see the history search, with only its query masked. Got tool calls: {calls!r}")
 
 
     def test_ciphertext_inside_messages_and_outputs_shows_as_a_placeholder(self) -> None:

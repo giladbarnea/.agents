@@ -44,7 +44,13 @@ const model = {
   input: ['text', 'image'],
   reasoning: true,
 };
-const messages = convertToLlm(context.messages)
+const attributedMessages = context.messages.map(message => {
+  if (message.role !== 'custom' || message.customType !== 'pi-simple-team' || !message.details?.from) return message;
+  const { team, from, to = 'main' } = message.details;
+  const content = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : message.content;
+  return { ...message, content: [{ type: 'text', text: `[Pi team ${team}: from ${from} to ${to}]` }, ...content] };
+});
+const messages = convertToLlm(attributedMessages)
   .filter(message => message.role !== 'system')
   // Codex replays OpenAI reasoning across GPT model changes. Pi's model-switch filter would discard it.
   .map(message => message.role === 'assistant' && message.provider === 'openai-codex'

@@ -1,7 +1,7 @@
 ---
 name: jsonl-toolkit
 description: Tools and workflows for inspecting large JSONL files and AI session transcripts
-last_updated: 2026-09-23
+last_updated: 2026-10-01
 ---
 
 Use this skill to inspect, search, summarize, or transform large JSONL files without loading unwieldy lines into the terminal.
@@ -214,13 +214,13 @@ uv run --script scripts/codex_to_pi.py SESSION_ID ~/.pi/agent/sessions "Session 
 
 The selected session can sit anywhere in a persisted native fork tree. The converter climbs to the root, recursively converts every fork descendant, and links each Pi child to its converted parent through `parentSession`. Each child copies only the converted parent history before its Codex fork point, even when that history lives in a grandparent's rollout. The converter also joins paginated rollout segments that belong to one Codex session.
 
-It keeps user messages with their images, assistant text, encrypted reasoning, and Codex compaction checkpoints. Codex `exec` scripts and `wait` calls become Pi `bash` calls: each `exec_command` becomes its shell command, `apply_patch` becomes an `apply_patch` heredoc, and background polls become comment lines. A script the renderer cannot parse stays verbatim under a comment header. So does a script with control flow around its tool calls, such as a condition or a loop, because one line per call would claim that every call ran. A compaction replays its retained messages and original encrypted checkpoint in order, instead of replacing the checkpoint with prose. Harness instructions are excluded without discarding other content blocks in the same user message. Results unwrap to the command output, and a non-zero exit code marks the result as an error the way Pi's bash tool does. Every other function call, including `request_user_input_async`, becomes a Pi tool call under its own name, prefixed with its namespace when it has one, such as `mcp__cua_repl__js`.
+It keeps user messages with their images, assistant text, encrypted reasoning, and Codex compaction checkpoints. Historical tools keep their original names, namespaces, arguments, and complete results. An `exec` call keeps its JavaScript in an `input` argument instead of becoming a partial or fictitious Bash command. Pi serializes this as historical function-call data and supplies its own tools for future work. Tool output is not unwrapped, so literal file content and exit/status/session information survive. A compaction replays its retained messages and original encrypted checkpoint in order. Harness instructions are excluded without discarding other content blocks in the same user message.
 
 Every Codex record rides verbatim under a `codex` key, so `pi_to_codex.py` gives back the same records. The header holds the session_meta record. Every other record sits, in order, in the `codex` list of the Pi entry written next. That includes records the model never reads, such as events, token usage, and harness injections. Pi never sends these lists to a model. Reasoning and encrypted checkpoints also stay in `thinkingSignature`, and assistant ids stay in `textSignature`, the slots Pi's OpenAI provider reads back.
 
 The converted session resumes with its last source model. Imported assistant messages use that model as their replay label so Pi's exact-model filter keeps compatible reasoning. Original model identities remain in the archived Codex records. The converter rejects incompatible reasoning families before writing a session. Resume with the printed command. Later manual model changes follow Pi's own replay rules.
 
-A Codex sub-agent, at any depth, becomes a pi-subagents task: one `subagent-notification` custom message per delivery from the sub-agent, and a `subagents:record` entry at its final answer. The sub-agent's own rollout becomes a Pi session whose header carries `parentSession`. A message from any other sender, such as the parent, becomes a user message. Codex encrypts the task and steering text, so those appear as placeholders.
+A persisted Codex sub-agent, at any depth, becomes a separate Pi session with `parentSession`. Actually delivered messages retain their sender, recipient, position, and readable body. Child deliveries use `subagent-notification`, with a `subagents:record` at the final answer; other deliveries become attributed user messages. Encrypted task, steering, and progress bodies show explicit placeholders while their original records stay archived. A missing child JSONL is reported and skipped. Conversion preserves saved conversations, not running agents, and never delivers private child work that the source parent did not receive.
 
 Codex side chats are ephemeral and pathless. Codex writes no rollout for them, so the converter ignores any surviving references.
 
@@ -261,7 +261,11 @@ These rules come from real API rejections, and `tests/test_codex_to_claude.py` c
 uv run --script scripts/pi_to_codex.py pi-session.jsonl ~/.codex/sessions/
 ```
 
-For a Pi-origin session, the script creates a new Codex identity and prints its resume command. It uses the installed Pi reader and OpenAI message converter to export the active model context: text, images, reasoning replay data, and paired tool history. Existing compaction summaries replace summarized history, as they do in Pi. Codex supplies its own instructions and tools.
+For a Pi-origin session, the script creates a new Codex identity and prints its resume command. It uses the installed Pi reader and OpenAI message converter to export the active model context: text, images, reasoning replay data, and paired tool history. Existing compaction summaries replace summarized history, as they do in Pi. Pre-compaction history is not separately exported. Codex supplies its own instructions and tools.
+
+The script also converts persisted descendants recursively. `pi_session_tree.py` discovers `pi-user-agents` children through their dispatch record and `parentSession`, and `pi-simple-team` children through saved tool receipts and team manifests. It does not mistake ordinary Pi forks for subagents. Each existing child JSONL becomes one native Codex child rollout with its own context. Missing JSONLs are reported and skipped. Private child results stay private; readable team deliveries retain their sender and recipient. These saved child links do not rebuild a live Codex team.
+
+`tests/test_roundtrip_pi_codex_pi.py` compares actual installed-Pi serializer output across a Pi-origin round trip, including all four core tools, encrypted reasoning, recursive user agents, fresh/inherited team children, message attribution, and exact archive restoration.
 
 The script requires Node, the installed Pi package, Codex, and `$CODEX_HOME/models_cache.json` (default `~/.codex/models_cache.json`). It checks model IDs against that Codex catalog. Non-`openai-codex` and unknown models produce a warning and select `gpt-6-luna`. Codex receives bare model IDs. Pi stores the provider separately from the bare model ID.
 
@@ -280,7 +284,7 @@ uv run --script scripts/claude_to_codex.py claude-session.jsonl output-directory
 
 The restore gives back every record of the Codex session. A single-file session comes back record for record, and byte for byte unless the original used a different JSON escape for a character. A fork child comes back standalone: it holds its parent's history inline, so its session_meta loses the fork links and takes ordinal 0. A session that spans several rollout files comes back as one file with its active history. Records that a later file superseded are left out.
 
-These scripts restore the imported Codex history, not work added later in Pi or Claude Code. New ordinary messages raise an error. The restore also stops for a Pi session that an older `codex_to_pi.py` wrote, and for a copy that `claude --fork-session` made. Convert the Codex session again in those two cases.
+These scripts restore the imported Codex history, not work added later in Pi or Claude Code. New ordinary messages raise an error. Pi restoration also rejects added custom messages, compaction, branch summaries, and context edits rather than silently dropping their effect. Restoring a converted Pi parent also restores its existing converted descendants; historical tool receipts never redirect restoration to the original live Pi children. The restore also stops for a Pi session that an older `codex_to_pi.py` wrote, and for a copy that `claude --fork-session` made. Convert the Codex session again in those two cases.
 
 Codex resumes a restored rollout and adds its own harness context on the next turn. Put the file under `$CODEX_HOME/sessions/` and run `codex resume <codex-session-id>`. Codex finds the session by the id at the end of the file name. A Codex home that already indexed the same thread id at another path can report `no rollout found`. These resume facts come from codex-cli 0.156.1.
 

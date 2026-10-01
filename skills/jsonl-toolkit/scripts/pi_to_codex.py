@@ -19,6 +19,7 @@ from pathlib import Path
 
 from codex_to_pi import REASONING_FAMILY_PREFIXES, restored_rollout, write_restored_rollout
 from pi_session import JsonObject, extract_active_path, load_entries, uuidv7
+from pi_session_tree import discover_session_tree
 
 
 def restore_records(header: JsonObject, active: list[JsonObject]) -> list[JsonObject]:
@@ -30,7 +31,7 @@ def restore_records(header: JsonObject, active: list[JsonObject]) -> list[JsonOb
         raise ValueError("This Pi session was written by an older codex_to_pi.py. Convert the Codex session again.")
     records = [header["codex"]]
     for entry in active:
-        if entry["type"] == "message" and "codex" not in entry:
+        if entry["type"] in ("message", "custom_message", "compaction", "branch_summary", "context_edit") and "codex" not in entry:
             raise ValueError(f"Pi entry {entry['id']} was added after the conversion, and Codex cannot express it yet.")
         records.extend(entry.get("codex", []))
     return records
@@ -41,40 +42,66 @@ def restore_session(session_path: Path) -> list[JsonObject]:
     return restored_rollout(restore_records(header, active))
 
 
-def main(session_path: Path, output_directory: Path) -> Path:
-    header, active = extract_active_path(load_entries(session_path))
-    if "codex" in header:
-        return write_restored_rollout(restored_rollout(restore_records(header, active)), output_directory)
+def convert_session_tree(session_path: Path, output_directory: Path) -> dict[str, Path]:
+    """Convert existing child JSONLs once, preserving their own context without delivering new messages."""
+    nodes = discover_session_tree(session_path)
+    imported = ["codex" in node.header for node in nodes.values()]
+    if any(imported) and not all(imported):
+        raise ValueError("Cannot restore a Codex tree containing a newly added Pi child session")
+    if all(imported):
+        records = {identifier: restored_rollout(restore_records(node.header, node.entries)) for identifier, node in nodes.items()}
+        return {identifier: write_restored_rollout(items, output_directory) for identifier, items in records.items()}
 
     catalog_path = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "models_cache.json"
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
-    result = subprocess.run(
-        ["node", str(Path(__file__).with_name("pi-to-codex-context.mjs"))],
-        input=json.dumps({"entries": [header, *active], "modelIds": [model["slug"] for model in catalog["models"]],
-                          "reasoningFamilyPrefixes": REASONING_FAMILY_PREFIXES}),
-        text=True, stdout=subprocess.PIPE, check=True,
-    )
-    context = json.loads(result.stdout)
     version = subprocess.run(["codex", "--version"], text=True, stdout=subprocess.PIPE, check=True).stdout.strip().split()[-1]
-    identifier = uuidv7()
-    timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    payloads = [
-        ("session_meta", {
-            "id": identifier, "session_id": identifier, "timestamp": timestamp,
-            "cwd": header["cwd"], "originator": "pi_to_codex", "cli_version": version,
-            "source": "cli", "model_provider": "openai",
-        }),
-        ("turn_context", {
-            "cwd": header["cwd"], "model": context["model"], "effort": context["effort"],
-            "summary": "auto", "approval_policy": "on-request", "sandbox_policy": {"type": "read-only"},
-        }),
-        *(("response_item", item) for item in context["items"]),
-    ]
-    records = [{"timestamp": timestamp, "ordinal": ordinal, "type": kind, "payload": payload}
-               for ordinal, (kind, payload) in enumerate(payloads)]
-    output = write_restored_rollout(records, output_directory)
-    print(f"resume with: codex resume {identifier} --model {shlex.quote(context['model'])}", file=sys.stderr)
-    return output
+    identifiers = {identifier: uuidv7() for identifier in nodes}
+    agent_paths: dict[str, str] = {}
+    prepared: dict[str, list[JsonObject]] = {}
+    for source_id, node in nodes.items():
+        agent_paths[source_id] = f"{agent_paths[node.parent_id]}/agent_{identifiers[source_id].replace('-', '_')}" if node.parent_id else "/root"
+        result = subprocess.run(
+            ["node", str(Path(__file__).with_name("pi-to-codex-context.mjs"))],
+            input=json.dumps({"entries": [node.header, *node.entries], "modelIds": [model["slug"] for model in catalog["models"]],
+                              "reasoningFamilyPrefixes": REASONING_FAMILY_PREFIXES}),
+            text=True, stdout=subprocess.PIPE, check=True,
+        )
+        context = json.loads(result.stdout)
+        identifier = identifiers[source_id]
+        timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        source = {"subagent": {"thread_spawn": {
+            "parent_thread_id": identifiers[node.parent_id], "agent_path": agent_paths[source_id],
+            "agent_nickname": node.name, "agent_role": node.origin, "depth": agent_paths[source_id].count("/") - 1,
+        }}} if node.parent_id else "cli"
+        payloads = [
+            ("session_meta", {
+                "id": identifier, "session_id": identifier, "timestamp": timestamp,
+                "cwd": node.header["cwd"], "originator": "pi_to_codex", "cli_version": version,
+                "source": source, "model_provider": "openai",
+            }),
+            ("turn_context", {
+                "cwd": node.header["cwd"], "model": context["model"], "effort": context["effort"],
+                "summary": "auto", "approval_policy": "on-request", "sandbox_policy": {"type": "read-only"},
+            }),
+            *(("response_item", item) for item in context["items"]),
+        ]
+        for child_id, child in nodes.items():
+            if child.parent_id != source_id:
+                continue
+            payloads.append(("event_msg", {"type": "sub_agent_activity", "event_id": uuidv7(),
+                "agent_thread_id": identifiers[child_id], "agent_path": f"{agent_paths[source_id]}/agent_{identifiers[child_id].replace('-', '_')}", "kind": "started"}))
+        prepared[source_id] = [{"timestamp": timestamp, "ordinal": ordinal, "type": kind, "payload": payload}
+                               for ordinal, (kind, payload) in enumerate(payloads)]
+    outputs = {identifier: write_restored_rollout(records, output_directory) for identifier, records in prepared.items()}
+    for identifier, records in prepared.items():
+        model = records[1]["payload"]["model"]
+        print(f"resume with: codex resume {identifiers[identifier]} --model {shlex.quote(model)}", file=sys.stderr)
+    return outputs
+
+
+def main(session_path: Path, output_directory: Path) -> Path:
+    """Convert the selected session tree and return its root rollout path."""
+    return next(iter(convert_session_tree(session_path, output_directory).values()))
 
 
 if __name__ == "__main__":
