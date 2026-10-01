@@ -265,3 +265,13 @@ remote_head="$(git --git-dir="$remote" rev-parse refs/heads/main)"
 [[ -f "$TEST_RERUN_MARKER" ]]
 [[ ! -e "$hub/.git/interaction-publication-pending" ]]
 [[ "$(git --git-dir="$remote" rev-parse refs/heads/main)" == "$remote_head" ]]
+
+printf '\nAnother source change.\n' >>"$source_file"
+git -C "$hub" add plugins/interaction
+printf '\nUncommitted public edit.\n' >>"$published/README.md"
+if (cd "$hub" && GIT_INDEX_FILE="$hub/.git/index" .githooks/guard-published-interaction.sh >"$temporary_directory/inherited-index.log" 2>&1); then
+  printf '%s\n' 'An inherited source index bypassed the dirty-public guard.' >&2
+  exit 1
+fi
+rg -q 'public repository has uncommitted changes' "$temporary_directory/inherited-index.log"
+! rg -q 'fatal:' "$temporary_directory/inherited-index.log"

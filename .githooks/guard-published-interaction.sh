@@ -11,6 +11,9 @@ pending_file="$(git -C "$repository_root" rev-parse --path-format=absolute --git
   exit 1
 }
 
+while IFS= read -r variable; do
+  unset "$variable"
+done < <(git -C "$repository_root" rev-parse --local-env-vars)
 published_repository="$repository_root/plugins/.published-interaction"
 [[ -d "$published_repository/.git" ]] || {
   printf 'The public repository is missing: %s\n' "$published_repository" >&2
@@ -21,9 +24,6 @@ if [[ -n "$(git -C "$published_repository" status --porcelain --untracked-files=
   git -C "$published_repository" status --short >&2
   exit 1
 fi
-while IFS= read -r variable; do
-  unset "$variable"
-done < <(git -C "$repository_root" rev-parse --local-env-vars)
 [[ "$(git -C "$published_repository" symbolic-ref --short HEAD)" == main ]] || {
   printf 'Check out main in the public repository before committing plugin changes.\n' >&2
   exit 1

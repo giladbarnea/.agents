@@ -50,6 +50,8 @@ Anonymize exactly these files in the published repository at __PUBLISHED_REPOSIT
 
 They were copied from ~/.agents/plugins/interaction/, which speaks in Gilad's personal voice (Gilad, ADHD, first person).
 The published copies must be anonymized (a generic human leader, cognitive overload, direct assertions softened).
+Read the actual files before editing. The historical examples are not replacement templates, and the previous Git version is not the current source.
+Preserve every instruction that does not need anonymization verbatim, including newly added instructions. Do not restore files from Git or remove source changes.
 Preserve current skill-loading instructions even when the historical examples use older reference paths.
 Here are signed-off before-and-after past anonymizations of these files. Note what’s modified and what’s left untouched. Apply this principle on the whitelisted files. Wording, phrases and structure of the equivalent actual files you will see on the file system may differ from their counterparts in the examples below: ignore such differences. Focus narrowly only on surgically anonymizing Gilad-ADHD-firstperson.
 
