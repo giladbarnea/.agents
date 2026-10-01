@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { compact, convertToLlm, serializeConversation, SettingsManager } from "/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js";
+import { withCoordinationSchemas, type CoordinationPayload } from "./codex-coordination-tools.ts";
 
 type ReplayItem = {
   type: string;
@@ -16,6 +17,7 @@ type ReplayState = { model: string; items: ReplayItem[] };
 type ReplayEntry = { id: string; codexReplay?: ReplayState; content?: unknown; message?: { content?: unknown }; codex?: Array<{ type: string; payload: ReplayItem & { replacement_history?: ReplayItem[] } }> };
 type Payload = { input: ReplayItem[]; [key: string]: unknown };
 
+/** @example family("gpt-6-sol") === family("gpt-6-luna") // true */
 function family(model: string): string {
   const identifier = model.replace(/^openai-codex\//, "");
   return ["gpt-6-", "gpt-5.6-"].find(prefix => identifier.startsWith(prefix)) ?? identifier;
@@ -27,7 +29,9 @@ function activeReplays(context: ExtensionContext): Map<string, ReplayState> {
     const entry = projected.sourceEntry as ReplayEntry;
     if (!entry.codexReplay || projected.messages.length !== 1) continue;
     const content = entry.message?.content ?? entry.content;
-    if (!isDeepStrictEqual(projected.messages[0].content, content)) continue;
+    const message = projected.messages[0];
+    if (!("content" in message)) throw new Error(`Codex replay entry ${entry.id} has no context content`);
+    if (!isDeepStrictEqual(message.content, content)) continue;
     selected.set(entry.id, entry.codexReplay);
   }
   return selected;
@@ -41,11 +45,13 @@ function verifyModel(states: Iterable<ReplayState>, context: ExtensionContext): 
   }
 }
 
+/** @example toolKey({ type: "function_call_output", call_id: "c" }) // "output:c" */
 function toolKey(item: ReplayItem): string | undefined {
   if (!item.call_id) return undefined;
   return `${item.type.endsWith("_output") ? "output" : "call"}:${item.call_id}`;
 }
 
+/** @example markerText({ type: "message", content: [{ type: "input_text", text: "marker" }] }) // "marker" */
 function markerText(item: ReplayItem): string | undefined {
   if (typeof item.content === "string") return item.content;
   if (item.content?.length !== 1 || item.content[0].type !== "input_text") return undefined;
@@ -58,7 +64,8 @@ function summaryItems(messages: AgentMessage[], context: ExtensionContext): Repl
   const projection = context.sessionManager.buildSessionProjection();
   const selected = projection.entries.filter(entry => entry.messages.some(message => messages.some(candidate => isDeepStrictEqual(candidate, message))));
   const active = activeReplays(context);
-  const states = selected.flatMap(entry => active.get(entry.sourceEntry.id) ? [active.get(entry.sourceEntry.id)!] : []);
+  const states = selected.flatMap(entry => active.get(entry.sourceEntry.id) ? [active.get(entry.sourceEntry.id)!] : [])
+    .map(state => ({ ...state, items: state.items.filter(item => !Array.isArray(item.encrypted_function_args) || item.encrypted_function_args.length > 0) }));
   verifyModel(states, context);
   const callIds = new Set(states.flatMap(state => state.items.flatMap(item => item.call_id ? [item.call_id] : [])));
   const originals = new Map<string, ReplayItem>();
@@ -84,6 +91,8 @@ function summaryItems(messages: AgentMessage[], context: ExtensionContext): Repl
     for (const message of entry.messages) {
       if (message.role === "assistant") {
         for (const block of message.content) {
+          const checkpoint = state && block.type === "thinking" && block.thinkingSignature ? JSON.parse(block.thinkingSignature) as ReplayItem : undefined;
+          if (checkpoint && ["compaction", "context_compaction"].includes(checkpoint.type)) items.push(checkpoint);
           if (block.type === "toolCall" && callIds.has(block.id.split("|")[0])) appendTool(`call:${block.id.split("|")[0]}`);
         }
       }
@@ -96,14 +105,14 @@ function summaryItems(messages: AgentMessage[], context: ExtensionContext): Repl
   return items;
 }
 
-function rewriteSummary(payload: Payload, spans: SummarySpan[]): Payload {
+function rewriteSummary(payload: Payload, spans: SummarySpan[]): CoordinationPayload {
   const texts = payload.input.flatMap(item => typeof item.content === "string" ? [item.content] : item.content?.flatMap(block => block.text ? [block.text] : []) ?? []);
   const matching = spans.filter(span => texts.some(text => text.startsWith(span.prefix)));
   if (matching.length !== 1) throw new Error("Cannot identify the exact Codex coordination summarization span");
-  return { ...payload, input: [...matching[0].items, ...payload.input] };
+  return withCoordinationSchemas({ ...payload, input: [...matching[0].items, ...payload.input] }, matching[0].items);
 }
 
-/** Replay marked imported coordination through supported Pi request hooks, never through thinking signatures. */
+/** Replay imported opaque Codex context through supported Pi hooks without changing ordinary reasoning serialization. */
 export default function (pi: ExtensionAPI): void {
   let markers = new Map<string, ReplayItem>();
   let restoredTeams: Array<{ id: string; name: string }> = [];
@@ -159,6 +168,16 @@ export default function (pi: ExtensionAPI): void {
       .filter(team => team.originMainSessionId === context.sessionManager.getSessionId());
   });
 
+  pi.on("tool_call", event => {
+    if (event.toolName !== "team_resume") return;
+    const requested = (event.input as { team?: string }).team;
+    if (!restoredTeams.some(team => team.id === requested || team.name === requested)) return;
+    const schema = pi.getAllTools().find(tool => tool.name === "team_spawn")?.parameters as { properties?: { teammates?: { items?: { properties?: { extensionPaths?: unknown } } } } } | undefined;
+    if (!schema?.properties?.teammates?.items?.properties?.extensionPaths) {
+      return { block: true, reason: "Restored teams require a pi-simple-team build with extensionPaths support; older builds omit the replay extension." };
+    }
+  });
+
   pi.on("before_agent_start", event => {
     if (restoredTeams.length === 0) return;
     return { systemPrompt: `${event.systemPrompt}\nConverted teams are available through team_list/team_resume. Resume them idle before sending new instructions. Team IDs: ${restoredTeams.map(team => team.id).join(", ")}.` };
@@ -209,7 +228,7 @@ export default function (pi: ExtensionAPI): void {
         return key && tools.has(key) ? tools.get(key)! : item;
       });
       if (seen.size !== markers.size) throw new Error("Codex coordination replay marker was removed before the provider request");
-      return { ...payload, input };
+      return withCoordinationSchemas({ ...payload, input }, [...selected.values()].flatMap(state => state.items));
     } catch (error) {
       context.abort();
       throw error;

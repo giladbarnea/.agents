@@ -1,0 +1,94 @@
+{
+  "codexVersion": "0.159.3",
+  "capturedAt": "2026-10-01",
+  "source": "Native Codex Responses request, collaboration parameter schemas. Reserved namespace validation requires the full parameter schema.",
+  "tools": [
+    {
+      "type": "function",
+      "name": "followup_task",
+      "description": "Historical encrypted coordination schema. Replay only; unavailable for new execution.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message text to send to the target agent.",
+            "encrypted": true
+          },
+          "target": {
+            "type": "string",
+            "description": "Agent id or canonical task name to send a follow-up task to (from spawn_agent)."
+          }
+        },
+        "required": [
+          "target",
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "send_message",
+      "description": "Historical encrypted coordination schema. Replay only; unavailable for new execution.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message text to queue on the target agent.",
+            "encrypted": true
+          },
+          "target": {
+            "type": "string",
+            "description": "Relative or canonical task name to message (from spawn_agent)."
+          }
+        },
+        "required": [
+          "target",
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "type": "function",
+      "name": "spawn_agent",
+      "description": "Historical encrypted coordination schema. Replay only; unavailable for new execution.",
+      "strict": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "fork_turns": {
+            "type": "string",
+            "description": "Optional number of turns to fork. Defaults to `all`. Use `none`, `all`, or a positive integer string such as `3` to fork only the most recent turns."
+          },
+          "message": {
+            "type": "string",
+            "description": "Initial plain-text task for the new agent.",
+            "encrypted": true
+          },
+          "model": {
+            "type": "string",
+            "description": "Model override for the new agent. Omit unless an explicit override is needed."
+          },
+          "reasoning_effort": {
+            "type": "string",
+            "description": "Reasoning effort override for the new agent. Omit to inherit the parent effort."
+          },
+          "task_name": {
+            "type": "string",
+            "description": "Task name for the new agent. Use lowercase letters, digits, and underscores."
+          }
+        },
+        "required": [
+          "task_name",
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

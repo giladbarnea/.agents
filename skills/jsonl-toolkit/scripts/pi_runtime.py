@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import tempfile
 from datetime import datetime, timezone
 from urllib.parse import quote
 
@@ -54,7 +55,7 @@ def restore_runtime(session_path: Path, agent_directory: Path) -> list[Path]:
     timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     for parent in nodes.values():
         children = [node for node in nodes.values() if node.parent_id == parent.identifier]
-        children = [node for node in children if isinstance(node.header["codex"]["payload"].get("source"), dict)]
+        children = [node for node in children if "codex" in node.header and isinstance(node.header["codex"]["payload"].get("source"), dict)]
         automatic = [node for node in children if node.header["codex"]["payload"].get("piRuntime", {}).get("origin") != "pi-user-agents"]
         source_runtime = parent.header.get("codex", {}).get("payload", {}).get("piRuntime", {})
         groups: list[tuple[str, str, list[tuple[PiSessionNode, dict[str, object]]]]] = []
@@ -82,17 +83,19 @@ def restore_runtime(session_path: Path, agent_directory: Path) -> list[Path]:
             target = directory / (quote(team_id, safe="!~*'()") + ".json")
             roster = [{**{key: configuration[key] for key in MEMBER_CONFIGURATION}, "teammateId": child.identifier, "sessionFile": str(child.path.resolve()), "sessionMaterialized": True, "showOnHerdrPane": False, "live": False, "active": False, "extensionPaths": list(dict.fromkeys([*configuration.get("extensionPaths", []), str(REPLAY_EXTENSION)]))} for child, configuration in members]
             manifest = {"version": 2, "id": team_id, "name": name, "originMainSessionId": parent.identifier, "projectDirectory": str(Path(parent.header["cwd"]).resolve(strict=True)), "teamPrompt": prompt, "showOnHerdrPanes": False, "members": roster, "state": "dormant", "createdAt": timestamp, "updatedAt": timestamp}
-            if target.exists():
-                existing = json.loads(target.read_text())
-                expected = {(member["teammateId"], member["sessionFile"]) for member in roster}
-                actual = {(member["teammateId"], member["sessionFile"]) for member in existing["members"]}
-                if existing["originMainSessionId"] != parent.identifier or not expected.issubset(actual):
-                    raise ValueError(f"Refusing to overwrite a different team attachment: {target}")
-                created.append(target)
-                continue
-            with target.open("x", encoding="utf-8") as output:
-                output.write(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
-            target.chmod(0o600)
+            existing = json.loads(target.read_text()) if target.exists() else None
+            expected = {(member["teammateId"], member["sessionFile"]) for member in roster}
+            actual = {(member["teammateId"], member["sessionFile"]) for member in existing["members"]} if existing is not None else set()
+            if existing is not None and (existing["originMainSessionId"] != parent.identifier or not expected.issubset(actual)):
+                raise ValueError(f"Refusing to overwrite a different team attachment: {target}")
+            if existing is None:
+                with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=directory, prefix=".runtime-", suffix=".tmp", delete=False) as output:
+                    output.write(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+                    temporary = Path(output.name)
+                try:
+                    os.link(temporary, target)
+                finally:
+                    temporary.unlink()
             created.append(target)
     return created
 

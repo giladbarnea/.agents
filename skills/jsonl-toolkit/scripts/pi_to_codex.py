@@ -58,9 +58,10 @@ def convert_session_tree(session_path: Path, output_directory: Path) -> dict[str
     version = subprocess.run(["codex", "--version"], text=True, stdout=subprocess.PIPE, check=True).stdout.strip().split()[-1]
     identifiers = {identifier: uuidv7() for identifier in nodes}
     agent_paths: dict[str, str] = {}
-    prepared: dict[str, list[JsonObject]] = {}
     for source_id, node in nodes.items():
         agent_paths[source_id] = f"{agent_paths[node.parent_id]}/agent_{identifiers[source_id].replace('-', '_')}" if node.parent_id else "/root"
+    prepared: dict[str, list[JsonObject]] = {}
+    for source_id, node in nodes.items():
         result = subprocess.run(
             ["node", str(Path(__file__).with_name("pi-to-codex-context.mjs"))],
             input=json.dumps({"entries": [node.header, *node.entries], "modelIds": [model["slug"] for model in catalog["models"]],
@@ -87,11 +88,18 @@ def convert_session_tree(session_path: Path, output_directory: Path) -> dict[str
             }),
             *(("response_item", item) for item in context["items"]),
         ]
-        for child_id, child in nodes.items():
-            if child.parent_id != source_id:
-                continue
+        children = [child for child in nodes.values() if child.parent_id == source_id]
+        if children:
+            routes = [{"name": child.name, "sourceSessionId": child.identifier, "canonicalPath": agent_paths[child.identifier],
+                       "ownership": "user" if child.origin == "pi-user-agents" else "assistant"} for child in children]
+            routing_note = ("Restored saved agents are dormant, not newly spawned. list_agents may omit dormant agents. "
+                            "Use these canonical paths in tool targets AND in instructions sent to another agent; do not substitute relative names. "
+                            "Contact user-owned children only when the user explicitly requests it. These records contain identity/routing metadata only.\n"
+                            + json.dumps(routes, ensure_ascii=False))
+            payloads.append(("response_item", {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": routing_note}]}))
+        for child in children:
             payloads.append(("event_msg", {"type": "sub_agent_activity", "event_id": uuidv7(),
-                "agent_thread_id": identifiers[child_id], "agent_path": f"{agent_paths[source_id]}/agent_{identifiers[child_id].replace('-', '_')}", "kind": "started"}))
+                "agent_thread_id": identifiers[child.identifier], "agent_path": agent_paths[child.identifier], "kind": "started"}))
         prepared[source_id] = [{"timestamp": timestamp, "ordinal": ordinal, "type": kind, "payload": payload}
                                for ordinal, (kind, payload) in enumerate(payloads)]
     outputs = {identifier: write_restored_rollout(records, output_directory) for identifier, records in prepared.items()}

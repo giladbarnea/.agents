@@ -173,17 +173,19 @@ def hide_ciphertext(value: object) -> object:
     return value
 
 
-def needs_coordination_replay(payload: dict[str, object]) -> bool:
-    """Identify opaque coordination items that Pi's ordinary content cannot represent.
+def needs_native_replay(payload: dict[str, object]) -> bool:
+    """Identify opaque Codex items and encryption metadata that Pi cannot represent directly.
 
-    >>> needs_coordination_replay({"type": "agent_message", "content": [{"type": "encrypted_content"}]})
+    >>> needs_native_replay({"type": "agent_message", "content": [{"type": "encrypted_content"}]})
     True
-    >>> needs_coordination_replay({"type": "function_call", "name": "write", "arguments": '{"content":"gAAAAA-file-text"}'})
+    >>> needs_native_replay({"type": "function_call", "name": "write", "arguments": '{"content":"gAAAAA-file-text"}'})
     False
     """
+    if payload["type"] in ("compaction", "context_compaction"):
+        return True
     if payload["type"] == "function_call":
         arguments = json.loads(str(payload["arguments"]))
-        return bool(payload.get("encrypted_function_args")) or (
+        return "encrypted_function_args" in payload or (
             payload.get("namespace") in ("collaboration", "notes", "history") and hide_ciphertext(arguments) != arguments
         )
     content = payload.get("content", payload.get("output", []))
@@ -490,7 +492,7 @@ class Conversion:
             staged.clear()
             if consume_current:
                 current.clear()
-            replay = [item.payload for item in records if item.kind == "response_item" and needs_coordination_replay(item.payload)]
+            replay = [item.payload for item in records if item.kind == "response_item" and needs_native_replay(item.payload)]
             return {"codex": [item.record for item in records if item.record is not None],
                     **({"codexReplay": {"model": model, "items": replay}} if replay else {})}
 
@@ -621,7 +623,7 @@ class Conversion:
                 )
             elif item_type == "function_call":
                 arguments = json.loads(str(payload["arguments"]))
-                arguments = hide_ciphertext(arguments) if payload.get("namespace") in ("collaboration", "notes", "history") else arguments
+                arguments = hide_ciphertext(arguments) if payload.get("namespace") in ("collaboration", "notes", "history") and payload.get("encrypted_function_args") != [] else arguments
                 add_tool_call(payload, str(payload["name"]), arguments, timestamp, item.ordinal)
             elif item_type in ("custom_tool_call_output", "function_call_output"):
                 _, is_error = bash_result(text_of(payload["output"]))
@@ -647,7 +649,7 @@ class Conversion:
                 emit("custom_message", timestamp, subagent.notification(payload, timestamp))
                 if text_of(payload["content"]).startswith("Message Type: FINAL_ANSWER"):
                     emit("custom", timestamp, {"customType": SUBAGENT_RECORD_TYPE, "data": subagent.record(payload, timestamp)})
-            elif item_type == "agent_message" and needs_coordination_replay(payload):
+            elif item_type == "agent_message" and needs_native_replay(payload):
                 flush("stop")
                 emit("custom_message", timestamp, {"customType": "codex-agent-message", "content": agent_message_text(payload), "display": True})
             elif item_type == "agent_message":
@@ -1018,7 +1020,7 @@ def resolve_codex_input(source: str | Path) -> tuple[str, Path]:
 
 def main(source: str | Path, sessions_root: Path, name: str) -> dict[str, Path]:
     selected_session_id, codex_sessions_root = resolve_codex_input(source)
-    return convert_fork_tree(selected_session_id, codex_sessions_root, sessions_root, name)
+    return convert_fork_tree(selected_session_id, codex_sessions_root, sessions_root.resolve(), name)
 
 
 if __name__ == "__main__":
