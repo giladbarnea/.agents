@@ -70,6 +70,7 @@ class NativeConversionTests(unittest.TestCase):
         metadata = records[0]["payload"]
         self.assertNotEqual(metadata["id"], SOURCE_ID, "A native import must create a new Codex identity")
         self.assertEqual(metadata["id"], metadata["session_id"])
+        self.assertEqual(metadata.get("multi_agent_version"), "v2", "Native resume must expose the restored team's messaging tools")
         self.assertEqual(metadata["cwd"], str(self.root))
         contexts = [record["payload"] for record in records if record["type"] == "turn_context"]
         self.assertEqual(contexts[-1]["model"], MODEL, "Codex must not receive a Pi provider prefix")

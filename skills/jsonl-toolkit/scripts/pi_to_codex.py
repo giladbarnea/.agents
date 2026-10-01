@@ -20,6 +20,7 @@ from pathlib import Path
 from codex_to_pi import REASONING_FAMILY_PREFIXES, restored_rollout, write_restored_rollout
 from pi_session import JsonObject, extract_active_path, load_entries, uuidv7
 from pi_session_tree import discover_session_tree
+from pi_runtime import capture_runtime
 
 
 def restore_records(header: JsonObject, active: list[JsonObject]) -> list[JsonObject]:
@@ -71,13 +72,14 @@ def convert_session_tree(session_path: Path, output_directory: Path) -> dict[str
         timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         source = {"subagent": {"thread_spawn": {
             "parent_thread_id": identifiers[node.parent_id], "agent_path": agent_paths[source_id],
-            "agent_nickname": node.name, "agent_role": node.origin, "depth": agent_paths[source_id].count("/") - 1,
+            "agent_nickname": node.name, "agent_role": "default", "depth": agent_paths[source_id].count("/") - 1,
         }}} if node.parent_id else "cli"
         payloads = [
             ("session_meta", {
                 "id": identifier, "session_id": identifier, "timestamp": timestamp,
                 "cwd": node.header["cwd"], "originator": "pi_to_codex", "cli_version": version,
-                "source": source, "model_provider": "openai",
+                "source": source, "model_provider": "openai", "multi_agent_version": "v2",
+                "piRuntime": capture_runtime(node),
             }),
             ("turn_context", {
                 "cwd": node.header["cwd"], "model": context["model"], "effort": context["effort"],

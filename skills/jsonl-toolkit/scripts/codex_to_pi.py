@@ -32,6 +32,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from pi_runtime import restored_dispatch
+
 PROVIDER = "openai-codex"
 API = "openai-codex-responses"
 REASONING_FAMILY_PREFIXES = ("gpt-6-", "gpt-5.6-")
@@ -169,6 +171,23 @@ def hide_ciphertext(value: object) -> object:
     if isinstance(value, list):
         return [hide_ciphertext(item) for item in value]
     return value
+
+
+def needs_coordination_replay(payload: dict[str, object]) -> bool:
+    """Identify opaque coordination items that Pi's ordinary content cannot represent.
+
+    >>> needs_coordination_replay({"type": "agent_message", "content": [{"type": "encrypted_content"}]})
+    True
+    >>> needs_coordination_replay({"type": "function_call", "name": "write", "arguments": '{"content":"gAAAAA-file-text"}'})
+    False
+    """
+    if payload["type"] == "function_call":
+        arguments = json.loads(str(payload["arguments"]))
+        return bool(payload.get("encrypted_function_args")) or (
+            payload.get("namespace") in ("collaboration", "notes", "history") and hide_ciphertext(arguments) != arguments
+        )
+    content = payload.get("content", payload.get("output", []))
+    return isinstance(content, list) and any(block.get("type") == "encrypted_content" for block in content)
 
 
 def bash_result(raw: str) -> tuple[str, bool]:
@@ -385,6 +404,9 @@ class PiWriter:
         model, _ = self.current_settings()
         entries = [json.loads(line) for line in self.lines]
         for entry in entries:
+            replay = entry.get("codexReplay")
+            if replay and (model is None or replay["model"] is None or reasoning_family(replay["model"]) != reasoning_family(model)):
+                raise ValueError(f"Cannot preserve opaque coordination across incompatible model families: {replay['model']} -> {model}")
             message = entry.get("message", {})
             if message.get("role") != "assistant":
                 continue
@@ -452,6 +474,9 @@ class Conversion:
         started_at = str(meta["timestamp"])
         writer = PiWriter.from_prefix(self.prefix)
         writer.append("session_info", started_at, {"name": self.name})
+        dispatch = restored_dispatch(meta.get("piRuntime", {}))
+        if dispatch is not None:
+            writer.append("custom", started_at, {"customType": "pi-user-agents-dispatch", "data": dispatch, "codex": []})
         model, thinking_level = writer.current_settings()
         pending = PendingAssistant()
         call_names: dict[str, str] = {}
@@ -465,10 +490,16 @@ class Conversion:
             staged.clear()
             if consume_current:
                 current.clear()
-            return {"codex": [item.record for item in records if item.record is not None]}
+            replay = [item.payload for item in records if item.kind == "response_item" and needs_coordination_replay(item.payload)]
+            return {"codex": [item.record for item in records if item.record is not None],
+                    **({"codexReplay": {"model": model, "items": replay}} if replay else {})}
 
         def emit(entry_type: str, timestamp: str, body: dict[str, object], entry_id: str | None = None) -> str:
-            return writer.append(entry_type, timestamp, {**body, **carried(True)}, source_ordinal=item.ordinal, entry_id=entry_id)
+            archived = carried(True)
+            entry_id = entry_id or writer.new_id()
+            if entry_type == "custom_message" and "codexReplay" in archived:
+                body = {**body, "details": {**body.get("details", {}), "codexReplayEntryId": entry_id}}
+            return writer.append(entry_type, timestamp, {**body, **archived}, source_ordinal=item.ordinal, entry_id=entry_id)
 
         def flush(stop_reason: str) -> None:
             if not pending.blocks:
@@ -616,6 +647,9 @@ class Conversion:
                 emit("custom_message", timestamp, subagent.notification(payload, timestamp))
                 if text_of(payload["content"]).startswith("Message Type: FINAL_ANSWER"):
                     emit("custom", timestamp, {"customType": SUBAGENT_RECORD_TYPE, "data": subagent.record(payload, timestamp)})
+            elif item_type == "agent_message" and needs_coordination_replay(payload):
+                flush("stop")
+                emit("custom_message", timestamp, {"customType": "codex-agent-message", "content": agent_message_text(payload), "display": True})
             elif item_type == "agent_message":
                 blocks = [{"type": "text", "text": agent_message_text(payload)}]
                 add_user_message(payload, blocks, timestamp, item.ordinal)
@@ -637,7 +671,9 @@ class Conversion:
             out.write("\n".join(replay_lines) + "\n")
         print(f"wrote {target}", file=sys.stderr)
         print(f"  entries: {len(writer.lines)}", file=sys.stderr)
-        print(f"  resume with: pi --session {shlex.quote(str(target))}", file=sys.stderr)
+        replay_extension = Path(__file__).with_name("codex-replay.ts").resolve()
+        extension_argument = f" --extension {shlex.quote(str(replay_extension))}"
+        print(f"  resume with: pi{extension_argument} --session {shlex.quote(str(target))}", file=sys.stderr)
         return ConvertedSession(target, writer)
 
 

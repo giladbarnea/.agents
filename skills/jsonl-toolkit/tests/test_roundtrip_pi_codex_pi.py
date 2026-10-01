@@ -102,6 +102,8 @@ class PiOriginRoundTripTests(unittest.TestCase):
             metadata = json.loads(path.read_text().splitlines()[0])["payload"]
             if isinstance(metadata["source"], dict):
                 self.assertRegex(metadata["source"]["subagent"]["thread_spawn"]["agent_path"], r"^/root(?:/[a-z0-9_]+)+$", "Codex rejects hyphens and other non-native path characters")
+                self.assertEqual(metadata["source"]["subagent"]["thread_spawn"]["agent_role"], "default", "Extension names are not valid native Codex agent roles")
+                self.assertEqual(metadata["piRuntime"]["origin"], "pi-user-agents")
         returned = codex_to_pi.main(rollout, self.directory / "returned", "Recursive")
         self.assertEqual(len(returned), 3, "Native Codex child links must be usable by the reverse converter")
         root_identifier = json.loads(rollout.read_text().splitlines()[0])["payload"]["id"]
