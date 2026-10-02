@@ -1,6 +1,6 @@
 ---
 name: task-graph
-description: Add a high-ish-level task graph to an existing plan, showing proof requirements, technical dependencies, subsystem relations, and standalone estimates for meaningful nodes.
+description: Add a high-ish-level task graph to a plan.
 ---
 
 # Task Graph
