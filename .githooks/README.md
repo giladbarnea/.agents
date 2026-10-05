@@ -66,13 +66,13 @@ The existing hook renders propagate that override without changing the other con
 `common.sh` stores the downstream template paths in `TARGETS`.
 The hub hooks call `render.py` for the local template and every downstream template.
 
-## Shared communication rules come from the `interaction` plugin
+## Shared communication rules come from the `soft-skills` plugin
 
-The shared communication rules live in `~/.agents/plugins/interaction/skills/ai-to-leader/references/human.md`.
+The shared communication rules live in `~/.agents/plugins/soft-skills/skills/ai-to-leader/references/human.md`.
 The base template inserts them with:
 
 ```jinja2
-{{ skill_body("plugins/interaction/skills/ai-to-leader/references/human.md") | trim }}
+{{ skill_body("plugins/soft-skills/skills/ai-to-leader/references/human.md") | trim }}
 ```
 
 `render.py` creates one Jinja loader for each rendered template.
@@ -83,7 +83,7 @@ For a consumer render, a matching consumer file can override it.
 Otherwise, the hub search root finds the same canonical plugin source.
 
 The base template therefore names the plugin source without knowing any consumer's plugin layout.
-The `interaction` plugin owns the content, while the plugin materialization code owns each consumer-specific layout.
+The `soft-skills` plugin owns the content, while the plugin materialization code owns each consumer-specific layout.
 
 `skill_body` reads through the active Jinja loader.
 It removes leading YAML frontmatter when present and preserves frontmatter-free Markdown unchanged.
@@ -171,25 +171,25 @@ The whole directory is linked, so its references, scripts, and other files remai
 
 ## Claude Code and Codex consume the published plugin
 
-`plugins/interaction` holds the personal source.
-`plugins/.published-interaction` is a separate Git repository for the public distribution.
+`plugins/soft-skills` holds the personal source.
+`plugins/.published-soft-skills` is a separate Git repository for the public distribution.
 The hub no longer generates local Claude or Codex marketplaces, plugin installations, or cache entries.
 Claude Code and Codex consume the published GitHub marketplace instead.
 
-Both consumers retain the published `plugins/interaction` layout, including the root `roles.md` map and individual `skills` directories.
+Both consumers retain the published `plugins/soft-skills` layout, including the root `roles.md` map and individual `skills` directories.
 Claude Code uses `.claude-plugin` metadata.
 Codex uses `.agents/plugins/marketplace.json` and `.codex-plugin/plugin.json`, whose `skills` field points to `./skills/`.
 Gemini receives no plugin materialization from these hooks.
 
 ### A source commit or merge publishes the public plugin
 
-`post-commit` calls `publish-interaction.sh` when the commit changes `plugins/interaction`. `post-merge` also calls it when a merge changes that path. It reads the committed plugin tree, not unstaged files. It refuses a dirty public repository and builds in an isolated Git worktree.
+`post-commit` calls `publish-soft-skills.sh` when the commit changes `plugins/soft-skills`. `post-merge` also calls it when a merge changes that path. It reads the committed plugin tree, not unstaged files. It refuses a dirty public repository and builds in an isolated Git worktree.
 
-`sync-published-interaction.sh` mirrors five named skills and the root `roles.md`, then asks Pi to anonymize `human.md`, `help.md`, `coordination/leading-leaders.md`, and `roles.md`. It rejects AI edits outside those files and rejects `Gilad` or `ADHD` in the published skill content. These checks catch known leaks, but cannot prove that anonymization removed every private detail.
+`sync-published-soft-skills.sh` mirrors five named skills and the root `roles.md`, then asks Pi to anonymize `human.md`, `help.md`, `coordination/leading-leaders.md`, and `roles.md`. It rejects AI edits outside those files and rejects `Gilad` or `ADHD` in the published skill content. These checks catch known leaks, but cannot prove that anonymization removed every private detail.
 
 The publisher then bumps both plugin manifests by one patch version, builds the Pi archive, runs the packaging tests, commits, pushes, tags, and waits for the existing GitHub release workflow. `.plugin-source-checksum` identifies the current published source. The publisher skips only when that source matches the current public commit and its release succeeded. A return to earlier content makes a new release.
 
-A failed publication cannot undo the source commit or merge. The publisher records its source commit under `.git/interaction-publication-pending`; `pre-commit` blocks another plugin commit until that release succeeds. Run `.githooks/publish-interaction.sh --retry` after fixing the cause. If validation rejects the source, run `--cancel-pending` before committing a correction; cancellation works only while the current public commit has a successful release. A partial push resumes the same version, and retry reruns a completed GitHub workflow when the release is missing. The skill and root-file whitelists remain hardcoded in `sync-published-interaction.sh`.
+A failed publication cannot undo the source commit or merge. The publisher records its source commit under `.git/soft-skills-publication-pending`; `pre-commit` blocks another plugin commit until that release succeeds. Run `.githooks/publish-soft-skills.sh --retry` after fixing the cause. If validation rejects the source, run `--cancel-pending` before committing a correction; cancellation works only while the current public commit has a successful release. A partial push resumes the same version, and retry reruns a completed GitHub workflow when the release is missing. The skill and root-file whitelists remain hardcoded in `sync-published-soft-skills.sh`.
 
 ## Local Pi skills and published Pi skills use different builds
 
@@ -215,11 +215,11 @@ The materializer does not rewrite Markdown paths.
 
 ### Published Pi skills are generated copies
 
-`plugins/.published-interaction/build-plugins.sh` discovers each published skill containing `SKILL.md` and copies it into a temporary build tree.
+`plugins/.published-soft-skills/build-plugins.sh` discovers each published skill containing `SKILL.md` and copies it into a temporary build tree.
 For skills containing `../../references/`, it copies the shared references into the skill and rewrites that substring to `references/` in Markdown.
 It does not generally resolve or validate Markdown link targets.
 
-The build replaces tracked `pi/skills` with the generated tree and creates the ignored `interaction-pi-skills.zip` with normalized archive timestamps.
+The build replaces tracked `pi/skills` with the generated tree and creates the ignored `soft-skills-pi-skills.zip` with normalized archive timestamps.
 It also copies the repository `LICENSE` into the Claude/Codex plugin and the Pi archive.
 The published repository's own `.githooks/pre-commit` runs this build and stages `pi/skills` and the plugin license.
 
@@ -276,7 +276,7 @@ Keep overload knowledge out of the ownership manifest. The manifest supplies sou
 ```text
 Consumer template
         │
-        │ skill_body("plugins/interaction/skills/ai-to-leader/references/human.md")
+        │ skill_body("plugins/soft-skills/skills/ai-to-leader/references/human.md")
         ▼
 Jinja lookup, first match wins
         │

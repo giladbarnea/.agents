@@ -3,7 +3,7 @@
 source "$(dirname "$0")/common.sh"
 # git submodule update --init --recursive plugins/claude-plugins || exit 1
 section "plugins"
-"$GITHOOKS_DIRECTORY/publish-interaction.sh" --merge || exit 1
+"$GITHOOKS_DIRECTORY/publish-soft-skills.sh" --merge || exit 1
 section "instructions"
 render_agents_md || exit 1
 section "skills"

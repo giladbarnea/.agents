@@ -5,10 +5,10 @@ other_files_checksum() (
   cd "$1"
   find . \( -type f -o -type l \) ! -name .git -print0 | sort -z | while IFS= read -r -d '' file; do
     case "$file" in
-    ./plugins/interaction/skills/ai-to-leader/references/human.md | \
-      ./plugins/interaction/skills/ai-to-leader/references/help.md | \
-      ./plugins/interaction/skills/ai-to-delegated/coordination/leading-leaders.md | \
-      ./plugins/interaction/roles.md) continue ;;
+    ./plugins/soft-skills/skills/ai-to-leader/references/human.md | \
+      ./plugins/soft-skills/skills/ai-to-leader/references/help.md | \
+      ./plugins/soft-skills/skills/ai-to-delegated/coordination/leading-leaders.md | \
+      ./plugins/soft-skills/roles.md) continue ;;
     esac
     if [[ -L "$file" ]]; then
       printf '%s -> %s\n' "$file" "$(readlink "$file")"
@@ -22,7 +22,7 @@ other_files_checksum() (
 main() {
   local personal_plugin_directory="$1"
   local published_repository="$2"
-  local published_plugin_directory="$published_repository/plugins/interaction"
+  local published_plugin_directory="$published_repository/plugins/soft-skills"
 
   cd "$published_repository"
 
@@ -43,12 +43,12 @@ main() {
   local anonymization_prompt
   IFS= read -r -d '' anonymization_prompt <<'EOF' || true
 Anonymize exactly these files in the published repository at __PUBLISHED_REPOSITORY__, in place. Do not touch any other file.
-- __PUBLISHED_REPOSITORY__/plugins/interaction/skills/ai-to-leader/references/human.md
-- __PUBLISHED_REPOSITORY__/plugins/interaction/skills/ai-to-leader/references/help.md
-- __PUBLISHED_REPOSITORY__/plugins/interaction/skills/ai-to-delegated/coordination/leading-leaders.md
-- __PUBLISHED_REPOSITORY__/plugins/interaction/roles.md
+- __PUBLISHED_REPOSITORY__/plugins/soft-skills/skills/ai-to-leader/references/human.md
+- __PUBLISHED_REPOSITORY__/plugins/soft-skills/skills/ai-to-leader/references/help.md
+- __PUBLISHED_REPOSITORY__/plugins/soft-skills/skills/ai-to-delegated/coordination/leading-leaders.md
+- __PUBLISHED_REPOSITORY__/plugins/soft-skills/roles.md
 
-They were copied from ~/.agents/plugins/interaction/, which speaks in Gilad's personal voice (Gilad, ADHD, first person).
+They were copied from ~/.agents/plugins/soft-skills/, which speaks in Gilad's personal voice (Gilad, ADHD, first person).
 The published copies must be anonymized (a generic human leader, cognitive overload, direct assertions softened).
 Read the actual files before editing. The previous Git version is not the current source.
 Preserve every instruction that does not need anonymization verbatim, including newly added instructions. Do not restore files from Git or remove source changes.

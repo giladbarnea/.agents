@@ -2,7 +2,7 @@
 set -euo pipefail
 
 hooks_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if ! "$hooks_directory/publish-interaction.sh"; then
-  printf 'Publication pending. Retry with %s/publish-interaction.sh --retry.\n' "$hooks_directory" >&2
+if ! "$hooks_directory/publish-soft-skills.sh"; then
+  printf 'Publication pending. Retry with %s/publish-soft-skills.sh --retry.\n' "$hooks_directory" >&2
   exit 1
 fi
