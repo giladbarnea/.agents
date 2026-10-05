@@ -1,6 +1,6 @@
 ---
 description: Preserve explanatory history while removing the highest-cost duplication and support material.
-last_updated: 2026-10-04
+last_updated: 2026-10-05
 ---
 
 # Conservative Pareto compaction
@@ -13,21 +13,31 @@ A passage earns retention when it adds an assumption, reason, disagreement, corr
 
 Keep enough of an earlier proposal for a later correction to make sense. Do not remove a rejected implementation merely because it was rejected.
 
-## Judge passages inside each tool output
+## Compare passages across representations
 
-An important historical transcript is not an indivisible unit. One output can contain unique reasoning, repeated definitions, injected skills, and unrelated troubleshooting. Read it before deciding which passages to retain.
+Use the passage, not the record or tool type, as the unit of comparison. A Write input, Read result, Bash output, Edit or later reread can repeat the same meaning. Repetition can span overlapping line ranges across several events.
 
-Target large, low-value spans rather than many small cuts. Session-navigation instructions, access repairs, rendering code, and deployment narration can occupy substantial space without changing the design. Conversely, a repeated-looking output can contain one new example or qualification that explains a later change.
+An important document is not an indivisible unit. It can mix unique reasoning, repeated definitions, generic instructions and unrelated troubleshooting. Read it before deciding which passages earn retention. Do not retain the whole document merely because one passage matters.
 
-A file-tool result may be the only surviving copy of user-authored notes or dialogue. Do not replace it with a path merely because its tool name is `Read`.
+Same meaning does not require identical bytes. Check scope, qualifications, uncertainty, authority and time before calling two passages repeats. Normalize only known display differences for exact comparisons, such as Read line numbers. Similar headings or fuzzy matches identify candidates, not proof.
 
-## Preserve separate attempts without repeating their inputs
+Target large, low-value spans rather than many small cuts. A repeated-looking output can still add an example or qualification that explains a later change. A file-tool result may be the only surviving copy of user-authored notes or dialogue. Do not replace it with a path merely because its tool name is `Read`.
 
-Text equality does not prove that two events are duplicates. The user may deliberately present the same input to separate agents and receive different answers. Preserve those attempts and their distinct reasoning. Replace a repeated quoted input with an explicit reference to a surviving copy.
+## Keep each event and link its repeated content
 
-Complete versions can make their additional diff encodings redundant. Keep the versions and the reason for their differences. Check for unique deleted wording, comments, or examples before removing a diff. Verify exact duplication rather than assuming it from similar headings.
+Repeated content does not make two events identical. The same input can trigger separate attempts with different answers. Keep those attempts and their distinct reasoning.
+
+Replace repeated passages with short semantic placeholders, not silent deletion. Name what stayed the same. Identify the surviving full version through a stable message or tool identity and a section or line range.
+
+> Unchanged §2: same as the earlier Write of `docs/design.md` (call `abc`). The full text remains there.
+
+If only part changed, link the unchanged part and keep the differences. Complete versions can also make their diff encodings redundant. Check for unique deleted wording, comments or examples before replacing a diff.
+
+Every placeholder must resolve to a full version that survives the final selection. Do not build chains of placeholders with no retained content. Keep the event's historical state explicit when referring to a later version.
 
 ## Summarize what was believed at the time
+
+A large output can be unique and still hold little useful detail for the effort or its continuation. Summarize it without claiming it was a duplicate. Generic instruction catalogues, navigation maps, operational manuals and obsolete handoffs are candidates, not automatic removals.
 
 When exact wording matters less than historical meaning, replace a selected payload or passage with a short, marked summary. Preserve its source identity and the reason it mattered. Do not make an earlier agent sound as though it already knew the later conclusion.
 
@@ -44,7 +54,7 @@ Keep uncertainty, disagreement, and unresolved alternatives explicit. A path ref
 
 Base64 images and opaque reasoning signatures can dominate serialized-file token counts. Removing an image payload does not save the same number of API tokens as removing its base64 text representation.
 
-Report readable-text estimates, image-payload changes, and archive size separately. Label tokenizer estimates as estimates, not API-billed counts. Preserve opaque reasoning and signatures rather than treating their large serialized size as removable prose.
+Report readable-text estimates, image-payload changes, and archive size separately. Measure net savings after including placeholders and summaries. Label tokenizer estimates as estimates, not API-billed counts. Preserve opaque reasoning and signatures rather than treating their large serialized size as removable prose.
 
 ## Apply only the selected changes
 
@@ -52,11 +62,13 @@ Use the [parent toolkit](../../SKILL.md) for formats, exports, backups, and stab
 
 **The standard pipeline does not support this conservative selection.** Its pruner removes raw structured-file outputs; its plan generator removes unselected raw tools; its applier rejects surviving raw tools. Do not run destructive preprocessing before deciding what must remain. Use a checksum-bound selective transformation when retained raw payloads or passage-level cuts are required.
 
-The native applier supports Pi, not Claude. A selective native Claude transformation must preserve message UUIDs, parent links, exact tool-call/result identities, and reasoning signatures. Keep changes to selected payloads and their duplicate caches explicit. A readable export is not a resumable native session.
+The native applier supports Pi, not Claude. A selective native Claude transformation must preserve message UUIDs, parent links, exact tool-call/result identities, and reasoning signatures. Keep changes to selected payloads and their duplicate caches explicit. Inspect caches separately: model-visible results can contain harness text that cached payloads omit. Preserve unselected cache metadata. A readable export is not a resumable native session.
+
+Validate every linked passage against its retained version. Confirm that reference targets remain unchanged and available after all cuts. Verify semantic repeats by accounting for their differences, not by byte equality alone.
 
 For a new Claude session, generate a fresh UUID and use it in the filename and matching top-level session identity fields. Preserve ancestor session identities, message identities, and historical paths. Do not globally replace the old UUID inside prose or tool payloads. Distinguish structural validation, session recognition, and successful resume when reporting validation.
 
-Respect the user's model and cost preferences. Bounded historical review does not automatically justify the most expensive delegate.
+Respect the user's model and cost preferences. Bounded historical review does not automatically justify the most expensive delegate. Use quick lookups with moderate thinking for simple content-selection questions over broad scopes. Ask for candidate passages, retained references and unique differences, not another full transcript.
 
 ## Report the boundary, not only the reduction
 

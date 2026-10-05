@@ -1,7 +1,7 @@
 ---
 name: jsonl-toolkit
 description: Tools and workflows for inspecting large JSONL files and AI session transcripts
-last_updated: 2026-10-01
+last_updated: 2026-10-05
 ---
 
 Use this skill to inspect, search, summarize, or transform large JSONL files without loading unwieldy lines into the terminal.
@@ -9,6 +9,22 @@ Use this skill to inspect, search, summarize, or transform large JSONL files wit
 The toolkit also supports AI session collections, exported transcripts, native Pi sessions, conversion between Codex and Pi, and conversion from Codex to Claude Code.
 
 Load [`smart-compact/SKILL.md`](smart-compact/SKILL.md) only when the task is session compaction.
+
+## Use DeepSeek Flash for routine questions
+
+Use this general-purpose helper for quick where, whether, how or which questions over data and transcripts. Treat calls as effectively free, ordinary programmatic operations. No subagent or team setup is needed.
+
+Put the question and relevant source text in one UTF-8 file:
+
+```bash
+uv run --script scripts/deepseek_prompt.py prompt.txt
+```
+
+The file becomes the sole user message. The script adds no system prompt and prints only the returned answer string. Include source identities when the answer needs references. For large JSONL files, supply selected excerpts rather than the entire archive.
+
+It uses `deepseek/deepseek-v4.1-flash` through OpenRouter, with reasoning enabled, Together only and no provider fallbacks. It reads `~/.openrouter-api-key`. Together must be enabled in the account's provider settings.
+
+Read the answer directly and judge its usefulness. The calling agent owns the decision, especially when distinguishing earlier beliefs from current rules.
 
 ## Identify the file format
 
