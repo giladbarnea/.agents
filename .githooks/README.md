@@ -1,6 +1,6 @@
 ---
 description: Hub ownership model and current instruction and skill materialization behavior
-last_updated: 2026-09-28 22:56
+last_updated: 2026-10-05 10:45
 ---
 # Hub materialization
 
@@ -169,16 +169,17 @@ Every participating skill directory is linked into:
 
 The whole directory is linked, so its references, scripts, and other files remain available.
 
-## Claude Code and Codex consume the published plugin
+## Claude Code, Codex, and Pi consume the published plugin
 
 `plugins/soft-skills` holds the personal source.
 `plugins/.published-soft-skills` is a separate Git repository for the public distribution.
 The hub no longer generates local Claude or Codex marketplaces, plugin installations, or cache entries.
 Claude Code and Codex consume the published GitHub marketplace instead.
 
-Both consumers retain the published `plugins/soft-skills` layout, including the root `roles.md` map and individual `skills` directories.
+All three consumers retain the published `plugins/soft-skills` layout, including the root `roles.md` map and individual `skills` directories.
 Claude Code uses `.claude-plugin` metadata.
 Codex uses `.agents/plugins/marketplace.json` and `.codex-plugin/plugin.json`, whose `skills` field points to `./skills/`.
+Pi uses the root `package.json`, whose `pi.skills` field points to `./plugins/soft-skills/skills`. The release workflow publishes it to npm as `soft-skills`.
 Gemini receives no plugin materialization from these hooks.
 
 ### A source commit or merge publishes the public plugin
@@ -187,16 +188,13 @@ Gemini receives no plugin materialization from these hooks.
 
 `sync-published-soft-skills.sh` mirrors five named skills and the root `roles.md`, then asks Pi to anonymize `human.md`, `help.md`, `coordination/leading-leaders.md`, and `roles.md`. It rejects AI edits outside those files and rejects `Gilad` or `ADHD` in the published skill content. These checks catch known leaks, but cannot prove that anonymization removed every private detail.
 
-The publisher then bumps both plugin manifests by one patch version, builds the Pi archive, runs the packaging tests, commits, pushes, tags, and waits for the existing GitHub release workflow. `.plugin-source-checksum` identifies the current published source. The publisher skips only when that source matches the current public commit and its release succeeded. A return to earlier content makes a new release.
+The publisher then bumps both plugin manifests and `package.json` by one patch version, commits, pushes, tags, and waits for the GitHub release workflow. That workflow publishes to npm before it creates the GitHub release, so a release implies an npm version. `.plugin-source-checksum` identifies the current published source. The publisher skips only when that source matches the current public commit and its release succeeded. A return to earlier content makes a new release.
 
 A failed publication cannot undo the source commit or merge. The publisher records its source commit under `.git/soft-skills-publication-pending`; `pre-commit` blocks another plugin commit until that release succeeds. Run `.githooks/publish-soft-skills.sh --retry` after fixing the cause. If validation rejects the source, run `--cancel-pending` before committing a correction; cancellation works only while the current public commit has a successful release. A partial push resumes the same version, and retry reruns a completed GitHub workflow when the release is missing. The skill and root-file whitelists remain hardcoded in `sync-published-soft-skills.sh`.
 
-## Local Pi skills and published Pi skills use different builds
+## Local Pi skills are symlinks to personal content
 
-Both Pi layouts place shared references inside individual skill directories, but they reach that layout differently.
-`theory-of-mind` is a standalone skill in both Pi layouts and the published plugin. Dependent skills load it by name, not through reference copies.
-
-### Local Pi uses symlinks to personal content
+`theory-of-mind` is a standalone skill. Dependent skills load it by name, not through reference copies.
 
 `render_skills` discovers non-empty `plugins/*/skills/*/SKILL.md` files and calls `link_pi_plugin_skill` for each skill.
 The destination, `~/.pi/agent/skills/<skill>`, is a real directory, not a skill-directory symlink.
@@ -212,19 +210,6 @@ A reference name clash keeps the earlier entry and emits a warning.
 Existing concrete reference entries also remain in place.
 Every plugin skill receives the shared references, whether its Markdown uses them or not.
 The materializer does not rewrite Markdown paths.
-
-### Published Pi skills are generated copies
-
-`plugins/.published-soft-skills/build-plugins.sh` discovers each published skill containing `SKILL.md` and copies it into a temporary build tree.
-For skills containing `../../references/`, it copies the shared references into the skill and rewrites that substring to `references/` in Markdown.
-It does not generally resolve or validate Markdown link targets.
-
-The build replaces tracked `pi/skills` with the generated tree and creates the ignored `soft-skills-pi-skills.zip` with normalized archive timestamps.
-It also copies the repository `LICENSE` into the Claude/Codex plugin and the Pi archive.
-The published repository's own `.githooks/pre-commit` runs this build and stages `pi/skills` and the plugin license.
-
-Unlike the hub sync whitelist, the Pi build discovers new skill directories automatically.
-Pi users install the archive's skill directories into `~/.pi/agent/skills`.
 
 Instruction rendering remains separate from these distribution layouts.
 It reads canonical plugin content through the hub loader instead of reconstructing consumer-specific paths.

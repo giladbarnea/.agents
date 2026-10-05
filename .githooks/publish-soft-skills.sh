@@ -111,8 +111,8 @@ if [[ "$source_checksum" == "$(<"$checksum_file")" ]]; then
 fi
 
 version="$(jq -r .version "$published_repository/plugins/soft-skills/.claude-plugin/plugin.json")"
-[[ "$version" == "$(jq -r .version "$published_repository/plugins/soft-skills/.codex-plugin/plugin.json")" ]] || {
-  printf 'Publication pending: the public plugin versions disagree.\n' >&2
+[[ "$version" == "$(jq -r .version "$published_repository/plugins/soft-skills/.codex-plugin/plugin.json")" && "$version" == "$(jq -r .version "$published_repository/package.json")" ]] || {
+  printf 'Publication pending: the public manifest versions disagree.\n' >&2
   exit 1
 }
 current_tag="v$version"
@@ -132,12 +132,12 @@ worktree="$temporary_directory/published"
 "$repository_root/.githooks/sync-published-soft-skills.sh" "$personal_plugin_directory" "$worktree"
 for manifest in \
   "$worktree/plugins/soft-skills/.claude-plugin/plugin.json" \
-  "$worktree/plugins/soft-skills/.codex-plugin/plugin.json"; do
+  "$worktree/plugins/soft-skills/.codex-plugin/plugin.json" \
+  "$worktree/package.json"; do
   jq --arg version "$version" '.version = $version' "$manifest" >"$manifest.tmp"
   mv "$manifest.tmp" "$manifest"
 done
 printf '%s\n' "$source_checksum" >"$worktree/.plugin-source-checksum"
-(cd "$worktree" && ./build-plugins.sh && unzip -tq soft-skills-pi-skills.zip && uv run -p python3 -m unittest -q test_package_pi_skill_globals)
 git -C "$worktree" add --all
 git -C "$worktree" diff --cached --check
 git -C "$worktree" -c core.hooksPath=/dev/null commit -m "Release soft-skills $tag from ${source_commit:0:12}"
