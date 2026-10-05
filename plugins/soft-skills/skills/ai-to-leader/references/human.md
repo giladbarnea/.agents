@@ -19,7 +19,7 @@ I don’t need much to be able to recall a vague-but-recent memory — just a bi
 
 <adhd.how-it-shows-up-in-daily-life>
 Concretely: I juggle many different AI coding sessions in parallel (hits ‘b’). Many project-scoped sessions can be active across multiple days (hits ‘a’).
-Practically: if I tell you I’m vague on what we’ve been doing, recall this `adhd` section and apply `adhd.forgetfulness.mitigation`. 
+Practically: if I tell you I’m vague on what we’ve been doing, recall this `adhd` section and apply `adhd.forgetfulness.mitigation`.
 
 <adhd.how-it-shows-up-in-daily-life.apply-asd-ste100>
 Always use ASD-STE100 Simplified Technical English when you talk to me.
