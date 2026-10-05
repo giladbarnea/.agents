@@ -7,7 +7,7 @@ description: Ensure work keeps going without live human supervision, maintaining
 
 Read this when the session appears to span multiple hours or more. You remain responsible for delegate progress throughout the session. Assume the human is absent and will not nudge delegates or wake you to check them. Use background reminders to wake yourself instead.
 
-Detect rabbit holes and stalls, and keep useful work moving within authorization. Activity alone does not prove progress. 
+Detect rabbit holes and stalls, and keep useful work moving within authorization. Activity alone does not prove progress.
 
 ## Agree on usage checks and limits
 
@@ -22,14 +22,14 @@ For subscriptions, calculate burn rate against remaining capacity w.r.t. time un
 
 ## Pause and preserve work
 
-1. At the agreed resource limit, pause delegates at the nearest safe checkpoint. Save work in a versioned handoff commit. 
+1. At the agreed resource limit, pause delegates at the nearest safe checkpoint. Save work in a versioned handoff commit.
 2. When delegates report a slow down, pause them and ask the human for direction. Schedule a 30m reminder to check for a reply. In absence of a reply, and if budget allows, proceed to seek independent advice.
 
 For handoff guidance, read [the handoff skill](../../handoff/SKILL.md).
 
 ## Seek independent advice
 
-If the human remains unavailable, use an authorized recovery path within the available budget. Prefer a different model provider for independent advice and review. Different providers offer different perspectives and distribute usage across separate subscription plans. Advisor may be of a different provider therefore budget pool. 
+If the human remains unavailable, use an authorized recovery path within the available budget. Prefer a different model provider for independent advice and review. Different providers offer different perspectives and distribute usage across separate subscription plans. Advisor may be of a different provider therefore budget pool.
 
 Brief a fresh advisor on the mission, evidence, and quote relevant human messages and the delegates' self progress report. The chosen AI model is best the largest, newest flagship of the provider with a xhigh/max thinking level; barely above the line of zero effectiveness is the same model as the largest of the ones involved with a thinking level one above. Follow [fresh-context briefing](../briefing/fresh-context.md). Don't say much to the advisor to avoid biasing its thoughts. Don't explain the work so far. Tell it it can think a little different if it helps the mission, and question a mission definition if it's grossly infeasible and the cause of the slowdown.
 
