@@ -35,6 +35,7 @@ main() {
   rm -f "$published_plugin_directory/references/roles.md"
   rmdir "$published_plugin_directory/references" 2>/dev/null || true
   rsync -a "$personal_plugin_directory/roles.md" "$published_plugin_directory/"
+  rsync -a "$personal_plugin_directory/README.md" "$published_repository/README.md"
 
   # The personal plugin speaks in Gilad's personal voice (Gilad, ADHD, first
   # person). The published copies of the whitelisted files below must be

@@ -90,6 +90,7 @@ expected_version="${initial_version%.*}.$((${initial_version##*.} + 1))"
 source_file="$hub/plugins/soft-skills/skills/ai-to-delegated/briefing/forked-context.md"
 original_source_hash="$(git -C "$hub" hash-object "$source_file")"
 printf '\nTest addition.\n' >>"$source_file"
+printf '\nTest README addition.\n' >>"$hub/plugins/soft-skills/README.md"
 git -C "$hub" add plugins/soft-skills
 printf '\nUnstaged change.\n' >>"$source_file"
 cat >"$remote/hooks/update" <<'EOF'
@@ -124,6 +125,7 @@ if ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$expected_ver
 fi
 git -C "$hub" show HEAD:plugins/soft-skills/skills/ai-to-delegated/briefing/forked-context.md | cmp - "$published/plugins/soft-skills/skills/ai-to-delegated/briefing/forked-context.md"
 ! rg -q 'Unstaged change' "$published/plugins/soft-skills/skills/ai-to-delegated/briefing/forked-context.md"
+git -C "$hub" show HEAD:plugins/soft-skills/README.md | cmp - "$published/README.md"
 changed_paths="$(git -C "$published" show --format= --name-only HEAD)"
 ! rg -q '^\.venv/' <<<"$changed_paths"
 [[ -z "$(git -C "$published" status --porcelain --untracked-files=all)" ]]
