@@ -274,6 +274,6 @@ Always use ASD-STE100 Simplified Technical English when you talk to me.
 
 ---
 
-Sibling reference [`./help.md`](./help.md) covers the fatigue/overload special case.
+The `ai-to-leader` skill’s `references/help.md` covers the fatigue/overload special case.
 
 </communication-style>
