@@ -21,7 +21,7 @@ You’re on a Mac M2 Pro. In addition to base Unix coreutils and Python 3, you c
 **4. Bash/Zsh/shell:**
 {% block shell_usage %}  Run shell commands with `zshi -c '...'`. This sources the user’s `.zshrc`, loading key environment variables and `PATH` entries that make many additional commands and tools available. For example, instead of running `git diff ...`, run `zshi -c 'gsd ...'`.{% endblock %}
 
-**5. `git diff`:** use `gsd` instead of `git diff`.
+**5. `gsd`:** use `gsd` instead of `git diff`.
 
   Stands for git structured diff. `gsd` is a superior drop-in replacement for `git diff` that prints the diff in a structured, ai-agent-friendly format. It classifies and tags the changes explicitly and boosts your comprehension of the diff.
   Run it with `gsd [git diff arguments]'`.
@@ -110,16 +110,17 @@ Then run the script with `uv run script.py`. No need to specify the Python versi
 
 <principles>
 
-> Note: the following principles use the word “code” to refer to anything you write, including documentation.
+> Note: the following principles use the word “code” to refer to anything you write into files, including documentation and prose.
 
 1. Write code that fails early and clearly. Don’t write fallbacks to “maybe broken” inputs. No “Just in case my inputs are corrupted” code. Fallback-rich code explodes complexity and silently propagates bugs downstream. Good code assumes its inputs are valid and complete—it trusts upstream code to have done its job. This ties closely to separation of concerns. And if something important fails, or an upstream logic failed to fulfill its contract, fail early and clearly. Broken states should be discovered early, loudly and fixed quickly; Consumers should not tolerate it nor work around it.
 2. Write the minimum code that solves the problem in front of you now, not the minimum that could solve every future version of it. Don‘t add features, refactor, or introduce abstractions beyond what the task requires. A bug fix doesn‘t need surrounding cleanup and a one-shot operation usually doesn‘t need a helper. Avoid premature abstraction and half-finished implementations. The test: if the only reason something is abstracted is “in case we need to,” you have over-built it. Don‘t add error handling, fallbacks, or validation for scenarios that cannot happen. Trust internal code and framework guarantees. Only validate at system boundaries (user input, external APIs). Don't use feature flags or backwards-compatibility shims when you can just change the code. Docs equivalent: write directly and without fluff. Every word and phrase should earn its place. A piece of information should take up only the real estate and attention proportional to its importance in the larger context of the entire documentation layer. The fact that something is new and yours does not mean it should be especially verbose or highlighted.
 3. Leverage existing logic when possible. Do not re-implement anything. Docs equivalent: reference existing doc items instead of duplicating information.
 4. Look to remove code before adding code.
 5. Write highly cohesive, decoupled logic. Docs equivalent: recursively, every file w.r.t. other files, every section w.r.t. sections and every paragraph w.r.t. paragraphs should strive to be MECE in information and semantics. In prose, this is not always possible, but strive for it.
-6. Write flat, optimized logical branches. Avoid nested, duplicate-y code. Write DRY and elegant logic. Push cyclomatic complexity to a minimum. More declariveness, less implementation.
+6. Write flat, optimized logical branches. Avoid nested, duplicate-y code. Write DRY and elegant logic. Squash cyclomatic complexity to a minimum. More declariveness, less implementation.
 7. Add a doctest example to pure-ish functions (data in, data out).
 8. Do not abbreviate variable, function or class names. Use complete words. Write clean code.
+9. Worktrees in `<repo-root>/.worktrees/<worktree-name>/`. Create and add to `.gitignore` if doesn't exist. Clean up worktree after merged and done (disk storage).
 
 </principles>
 

@@ -2,7 +2,7 @@
 name: smart-compact
 parent: jsonl-toolkit
 description: Tree-shake an AI session transcript while preserving its semantic story
-last_updated: 2026-10-04
+last_updated: 2026-10-07
 ---
 
 Read [`../SKILL.md`](../SKILL.md) first. The parent owns file formats, large-file inspection, stable identities, generic transcript analysis, and native Pi structure.
@@ -10,6 +10,20 @@ Read [`../SKILL.md`](../SKILL.md) first. The parent owns file formats, large-fil
 Smart-compaction removes redundant information while keeping contentful messages intact.
 
 For conservative or Pareto compaction, read [Conservative Pareto compaction](references/conservative-pareto-compaction.md) before applying the rules below. Its selective-retention guidance takes precedence over broad file-payload replacement and tool removal, including deterministic preprocessing.
+
+## Split analysis from background editing
+
+The main agent owns semantic decisions. One teammate owns edits to the copied JSONL. Do not run concurrent writers.
+
+1. Load the `ai-to-delegated` and `pseudocode` skills. Confirm the teammate's model with the user.
+2. Create one idle, context-forked teammate with `thinking: low`.
+3. Analyze the next part yourself, using scripts and reading. Clearly categorize passages as retain, remove, summarize or duplicate. Identify surviving duplicate references and protect unique reasoning.
+4. Send the editing batch at the pseudocode skill's detail level: intent, selected stable identities, expected result and preservation boundaries. Leave implementation choices to the teammate.
+5. Let the teammate edit the copy in the background while you analyze the next part. Queue further batches to the same teammate; it applies them sequentially.
+6. Repeat until analysis and all editing batches are complete. The teammate reports each batch's changes, savings and validation against its source checksum.
+7. Validate the final session's structure, tool pairing, retained references and unselected payloads before installing it. Preserve retained thinking blocks and signatures unchanged. Follow the conservative reference's context-based rule for whole-block removal.
+
+The teammate executes your classifications; it does not independently broaden removal or summarization. For conservative work, use the selective workflow in the reference above, not destructive preprocessing.
 
 ## Drop the struggle and keep the resolution
 

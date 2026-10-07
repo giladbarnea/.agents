@@ -1,7 +1,7 @@
 ---
 name: jsonl-toolkit
 description: Tools and workflows for inspecting large JSONL files and AI session transcripts
-last_updated: 2026-10-05
+last_updated: 2026-10-07
 ---
 
 Use this skill to inspect, search, summarize, or transform large JSONL files without loading unwieldy lines into the terminal.
@@ -9,6 +9,8 @@ Use this skill to inspect, search, summarize, or transform large JSONL files wit
 The toolkit also supports AI session collections, exported transcripts, native Pi sessions, conversion between Codex and Pi, and conversion from Codex to Claude Code.
 
 Load [`smart-compact/SKILL.md`](smart-compact/SKILL.md) only when the task is session compaction.
+
+During compaction, detect referenced files that changed or moved. Ask the user before refreshing historical file calls or payloads. See [approval-gated file refresh](smart-compact/references/conservative-pareto-compaction.md#refresh-historical-file-snapshots-only-with-approval).
 
 ## Use DeepSeek Flash for routine questions
 
