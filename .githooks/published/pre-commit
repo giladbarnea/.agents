@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Pre-commit hook for plugins/.published-soft-skills (set via core.hooksPath).
+set -euo pipefail
+"$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/check-published-private-names.sh" "$(git rev-parse --show-toplevel)"

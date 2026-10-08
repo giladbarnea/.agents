@@ -9,7 +9,7 @@ published="$hub/plugins/.published-soft-skills"
 remote="$temporary_directory/public.git"
 mkdir -p "$hub/.githooks" "$hub/plugins" "$temporary_directory/bin"
 git -C "$hub_source" archive HEAD plugins/soft-skills | tar -x -C "$hub"
-for script in pre-commit post-commit post-merge guard-published-soft-skills.sh publish-soft-skills.sh sync-published-soft-skills.sh; do
+for script in pre-commit post-commit post-merge guard-published-soft-skills.sh publish-soft-skills.sh sync-published-soft-skills.sh check-published-private-names.sh; do
   [[ -e "$hub_source/.githooks/$script" ]] && cp "$hub_source/.githooks/$script" "$hub/.githooks/$script"
 done
 cat >"$hub/.githooks/common.sh" <<'EOF'
