@@ -22,7 +22,7 @@ other_files_checksum() (
 # Counts private markers in the four anonymized files: Gilad, ADHD, and a
 # standalone first-person "I". A clean published copy scores zero.
 private_marker_count() {
-  rg -io --no-filename -e '\bgilad\b' -e '\badhd\b' -e '(^|\s)i(\s|$)' "$@" | wc -l | tr -d ' '
+  rg -io --no-filename -e 'gilad' -e 'adhd' -e '\bi\b' "$@" | wc -l | tr -d ' '
 }
 
 main() {
