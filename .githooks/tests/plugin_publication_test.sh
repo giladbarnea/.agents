@@ -9,6 +9,7 @@ published="$hub/plugins/.published-soft-skills"
 remote="$temporary_directory/public.git"
 mkdir -p "$hub/.githooks" "$hub/plugins" "$temporary_directory/bin"
 git -C "$hub_source" archive HEAD plugins/soft-skills | tar -x -C "$hub"
+cp "$hub_source/plugins/soft-skills/token-economic-communication.md" "$hub/plugins/soft-skills/"
 for script in pre-commit post-commit post-merge guard-published-soft-skills.sh publish-soft-skills.sh sync-published-soft-skills.sh check-published-private-names.sh; do
   [[ -e "$hub_source/.githooks/$script" ]] && cp "$hub_source/.githooks/$script" "$hub/.githooks/$script"
 done
@@ -126,6 +127,7 @@ fi
 git -C "$hub" show HEAD:plugins/soft-skills/skills/ai-to-delegated/briefing/forked-context.md | cmp - "$published/plugins/soft-skills/skills/ai-to-delegated/briefing/forked-context.md"
 ! rg -q 'Unstaged change' "$published/plugins/soft-skills/skills/ai-to-delegated/briefing/forked-context.md"
 git -C "$hub" show HEAD:plugins/soft-skills/README.md | cmp - "$published/README.md"
+cmp "$hub/plugins/soft-skills/token-economic-communication.md" "$published/plugins/soft-skills/token-economic-communication.md"
 changed_paths="$(git -C "$published" show --format= --name-only HEAD)"
 ! rg -q '^\.venv/' <<<"$changed_paths"
 [[ -z "$(git -C "$published" status --porcelain --untracked-files=all)" ]]
