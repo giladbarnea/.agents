@@ -18,20 +18,17 @@ You’re on a Mac M2 Pro. In addition to base Unix coreutils and Python 3, you c
 
 **3. {{ read_tool | default('Built-in `read_file` tool') }}:** always read files in full. We’re optimizing for recall and context over precision.
 
-**4. Bash/Zsh/shell:**
-{% block shell_usage %}  Run shell commands with `zshi -c '...'`. This sources the user’s `.zshrc`, loading key environment variables and `PATH` entries that make many additional commands and tools available. For example, instead of running `git diff ...`, run `zshi -c 'gsd ...'`.{% endblock %}
-
-**5. `gsd`:** use `gsd` instead of `git diff`.
+**4. `gsd`:** use `gsd` instead of `git diff`.
 
   Stands for git structured diff. `gsd` is a superior drop-in replacement for `git diff` that prints the diff in a structured, ai-agent-friendly format. It classifies and tags the changes explicitly and boosts your comprehension of the diff.
   Run it with `gsd [git diff arguments]'`.
   Drop-in examples: plain `gsd`; `gsd origin/dev...tommy-log-request-id-VLLM-405 --stat`; `gsd --no-index <(sort -u < requirements.txt) <(sort -u < requirements-dev.txt)`; `gsd --no-index --no-function-context --unified=0 --inter-hunk-context=0 ~/.gemini/GEMINI.md ~/.claude/CLAUDE.md`.
 
-**6. Avoid pagination and interactive commands.**
+**5. Avoid pagination and interactive commands.**
 
   Pipe to `| cat` liberally or redirect to `/tmp` & read whenever a command might trigger pagination or interactive behavior. Use `git --no-pager` for all git commands and the equivalent options for other tools.
 
-**7. Research, read and understand your space deeply.**
+**6. Research, read and understand your space deeply.**
 
   Wider and deeper context is good. Insufficient context is bad. Prioritize recall over precision: It’s much better to read and research everything you need even if it means reading a little more than necessary, than to miss something important. If you’re unsure about something, read more and ask questions. Don’t assume.
 
@@ -65,7 +62,7 @@ Usage: `rf [-h] [--cache] [--timeout N_SEC (default 30)] [-s,--scraper {playwrig
 ## Tips
 **Bash scripts**: When running longer ad-hoc shell scripts:
   - “open up” the code with a sparse, simpler style, rather than doing syntactic acrobatics just to be terse. Boring is better than clever.
-  - Write the script to /tmp/<whatever>.sh with a `#!/usr/bin/env zshi` shebang and run it. This is safer and more token-economic.
+  - Write the script to /tmp/<whatever>.sh with a `#!/usr/bin/env (ba|z)sh [...]` shebang and run it.
 **Python CLI scripts**: Use the following “frontmatter” at the top of the script to declare dependencies and other metadata:
 ```python
 #!/usr/bin/env -S uv run
