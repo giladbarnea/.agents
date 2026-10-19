@@ -26,3 +26,5 @@ How I write it:
 The attitude is: **“I care about this, I did the work, and I would like to contribute. It is still your project.”**
 
 Real example: https://github.com/juicesharp/rpiv-mono/issues/150
+
+For creating and maintaining forks, read [the fork guide](references/fork.md).
