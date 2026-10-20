@@ -22,3 +22,7 @@ The added value of a task graph over prose and pseudocode is that it communicate
 Not all four per-node data points are justified for every node. Pick a sensible combination that matches the node's size, impact, meaning, and other relevant qualities.
 
 Think really thoroughly about each aspect of this definition. It is information-dense, with much to unpack.
+
+In terms of thinking technique, do it in two passes. The first pass is broader: you think and mark the waypoints for yourself in order to cover everything from where we are right now to the finish line. Then, you go back to the beginning and do an in-depth pass: you look at the waypoints and ideas you noted in the first pass and dive in to thicken with details and fill in any gaps. That way, with these two passes, we’ll get a picture that is both broad and complete and cohesive.
+
+

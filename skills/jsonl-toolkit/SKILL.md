@@ -1,7 +1,7 @@
 ---
 name: jsonl-toolkit
 description: Tools and workflows for inspecting large JSONL files and AI session transcripts
-last_updated: 2026-10-07
+last_updated: 2026-10-19
 ---
 
 Use this skill to inspect, search, summarize, or transform large JSONL files without loading unwieldy lines into the terminal.
@@ -101,6 +101,12 @@ Its functions support:
 The module runs nothing at import time. Start with `probe_schema`, `probe_type_counts`, or `probe_sample` when the provider schema is unknown.
 
 ## Work with an exported AI transcript
+
+**`ch` can silently omit content.** It can print or export only some session content types, omitting others without warning. These omissions can matter to your task and give false confidence.
+
+After you get `ch` output, spawn a forked `openai-codex/gpt-6.1-sol` subagent with `thinking=medium`. Have it check the raw JSONL and confirm that the output includes everything your task needs.
+
+The fork keeps this bounded, token-heavy verification out of your own context window.
 
 A `ch -f json` export is a JSON array, not JSONL.
 
