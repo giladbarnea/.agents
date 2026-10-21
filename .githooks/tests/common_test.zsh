@@ -69,3 +69,16 @@ rg -Fq "Refusing to link over non-symlink destination: $colliding_destination" "
   echo "The materializer did not report the concrete destination refusal." >&2
   exit 1
 }
+
+hunk() {
+  [[ $# -eq 4 && "$1" == diff && "$2" == --files &&
+    "$3" == "$temporary_directory/actual instructions.md" &&
+    "$4" == "$temporary_directory/rendered instructions.md" ]] || {
+    echo "The render diff must use hunk's file-comparison mode and preserve both paths." >&2
+    return 1
+  }
+}
+
+show_render_diff \
+  "$temporary_directory/actual instructions.md" \
+  "$temporary_directory/rendered instructions.md"

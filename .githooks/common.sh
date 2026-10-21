@@ -41,7 +41,7 @@ show_render_diff() {
   local rendered="$2"
   
   if command -v hunk >/dev/null 2>&1; then
-     hunk diff "$actual" "$rendered"
+     hunk diff --files "$actual" "$rendered"
      return
   fi
   if command -v comview >/dev/null 2>&1; then
