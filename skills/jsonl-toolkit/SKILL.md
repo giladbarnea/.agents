@@ -6,7 +6,7 @@ last_updated: 2026-10-19
 
 Use this skill to inspect, search, summarize, or transform large JSONL files without loading unwieldy lines into the terminal.
 
-The toolkit also supports AI session collections, exported transcripts, native Pi sessions, conversion between Codex and Pi, and conversion from Codex to Claude Code.
+The toolkit also supports AI session collections, exported transcripts, native Pi sessions, conversion between Codex and Pi, and conversion from Codex or Pi to Claude Code.
 
 Load [`smart-compact/SKILL.md`](smart-compact/SKILL.md) only when the task is session compaction.
 
@@ -288,6 +288,18 @@ What Claude sees:
 What Claude cannot see is reasoning without a summary, the encrypted compaction summary, and every other ciphertext. Reasoning without a summary stays a thinking block. The assistant entries carry the Codex model id, so Claude Code drops those blocks before each API call instead of failing on the foreign signature. Codex harness injections become inert lines, because Claude Code injects its own.
 
 These rules come from real API rejections, and `tests/test_codex_to_claude.py` checks them on the fixture sessions: no unknown key inside a content block, no Claude model id on a converted assistant entry, and every `tool_result` in the message right after its `tool_use`.
+
+## Convert a native Pi session into a native Claude Code session
+
+```bash
+uv run --script scripts/pi_to_claude.py PI_SESSION_ID_OR_PATH
+```
+
+The script converts one session, without its descendants. It writes the session to the Claude Code project directory of the Pi working directory, titled with the Pi session name and `(from Pi)`, and prints the resume command. Pi's own reader builds the context along the active path, so compaction summaries and custom messages arrive as Pi sends them. Pi's system prompt is left out, because Claude Code sends its own. Tool calls keep their Pi names.
+
+Anthropic thinking keeps its Pi signature byte for byte, and the entry keeps the Pi model id, so Claude Code sends the block unchanged. Whether the model then reads the block is the API's decision. Claude Code's system prompt and tools differ from Pi's, which can fail the API's [preserved-thinking prefix check](https://platform.claude.com/docs/en/build-with-claude/preserved-thinking). Another vendor's thinking follows the Codex → Claude Code rules above. Pi's replay rules carry over: aborted turns are skipped, unanswered tool calls get an error result, and tool call ids are normalized.
+
+`tests/test_pi_to_claude.py` checks these rules. It requires Node and the installed Pi package.
 
 ## Convert a native Pi conversation to Codex
 
