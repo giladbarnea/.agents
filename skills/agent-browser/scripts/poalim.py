@@ -114,8 +114,12 @@ class Tab:
         box = self.evaluate(box_js)
         if not box:
             raise RuntimeError(f"no element for: {js_element_expression}")
-        time.sleep(0.25)
-        box = self.evaluate(box_js)
+        # The portal scrolls smoothly: wait for the element to stop moving, or the
+        # press and release land at different spots on the page.
+        previous_box = None
+        while box != previous_box:
+            time.sleep(0.25)
+            previous_box, box = box, self.evaluate(box_js)
         x, y = box["x"] + box["w"] / 2, box["y"] + box["h"] / 2
         self.call("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y, "button": "none"})
         for event_type in ("mousePressed", "mouseReleased"):
@@ -332,6 +336,9 @@ def command_transfer(args) -> None:
     # The account switcher is disabled on the transfer page, so the source
     # account has to be set from the homepage before the form is opened.
     tab.call("Page.navigate", {"url": HOMEPAGE_URL})
+    # Until the homepage commits, the old transfer page and its disabled switcher still answer.
+    if not tab.wait_for("location.href.includes('/homepage')", timeout=30):
+        raise SystemExit("homepage did not load")
     wait_ready(tab)
     command_switch(argparse.Namespace(name=SOURCE_ACCOUNTS[args.source]))
 
