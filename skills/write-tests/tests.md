@@ -59,3 +59,35 @@ test("createUser makes user retrievable", async () => {
   expect(retrieved.name).toBe("Alice");
 });
 ```
+
+**Tautological tests**: Expected value restates the implementation, so the test passes by construction.
+
+```typescript
+// BAD: Expected value is recomputed the way the code computes it
+test("calculateTotal sums line items", () => {
+  const items = [{ price: 10 }, { price: 5 }];
+  const expected = items.reduce((sum, i) => sum + i.price, 0);
+  expect(calculateTotal(items)).toBe(expected);
+});
+
+// GOOD: Expected value is an independent, known literal
+test("calculateTotal sums line items", () => {
+  expect(calculateTotal([{ price: 10 }, { price: 5 }])).toBe(15);
+});
+```
+
+## Make test failures explain the behavior
+
+Use assertion messages that show what failed. For dictionary results, let missing keys fail the assertion instead of raising an accidental `KeyError`:
+
+```python
+assert response.get("status") == "confirmed", f"Expected confirmed status, got {response!r}"
+```
+
+At an external boundary, patch the real object rather than guessing a dotted import path:
+
+```python
+with patch.object(payment_client, "charge", return_value=receipt):
+    result = checkout(cart, payment_client)
+assert result.receipt == receipt, f"Expected {receipt!r}, got {result.receipt!r}"
+```

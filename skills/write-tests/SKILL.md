@@ -1,53 +1,76 @@
 ---
 name: write-tests
-description: Testing best practices and tenets — load before writing any tests.
+description: Testing standards and test-driven development. Load before writing any tests, including integration tests, regression tests, and test-first feature or bug work. Use for TDD and red-green-refactor.
+last_updated: 2026-10-21
+origin:
+  url: https://github.com/mattpocock/skills/tree/main/skills/engineering/tdd
+  commit: 5beb35b040e3de97e54fa9e386d7e42d15c295c2
+  last_checked: 2026-10-21
+  sync: manual
+  adaptation: Includes local testing rules, standalone interface-design notes, and refactoring after green.
 ---
 
-<testing-tenets>
-### Testing Tenets
+# Write Tests
 
-<tests-must-be-meaningful priority="1">
-When writing tests, make sure they're not "empty"—don't over-mock, and don't mock away the core of what you're testing.
-False security is worse than having no tests at all.
-Don't test implementation, test behavior.
-The behavior under test should be based on—and faithfully reflect—the original spec or plan, not the implementation, to avoid circularity.
-Fewer tests that are more focused, precise, and substantial are better than a larger number of meatless tests.
-Insubstantial tests usually fall under the category of fooling one's self petitio principii–style—essentially, even if indirectly, by mocking aspects of the outcome you're supposed to be testing.
-</tests-must-be-meaningful>
+Use these standards whenever writing tests. Use the TDD loop below for test-first work.
+Read the project instructions, its `GLOSSARY.md` when present, and relevant architectural decisions before choosing test names and interfaces.
 
-<tests-must-be-falsification-driven priority="1">
-A test is a falsification criterion: a disprovable claim about a bad state. Design that criterion on purpose. The failure should be thought-of and intentional, and grounded in realistic use and behavior, not a synthetic shape invented to make a red.
-When a test is red, make sure it is red for the right reason: it must demonstrate the specific defect it was written for. A red caused by a fixture bug, a missing import, or a helper's own exception proves nothing. Read the failure before fixing anything.
-The red is never a formality for ticking the box to go on to the next item. An empty red gives the same false security as an empty green.
-</tests-must-be-falsification-driven>
+## Prove behavior through public interfaces
 
-<tests-must-be-informative priority="2">
-Make use of `assert`'s second positional argument to help the developer understand the error.
-<negative-example description="uninformative assert expression">
-`assert foo`
-</negative-example>
-<positive-example description="informative assert expression">
-`assert foo, f"Expected 'foo' to be truthy. Got: {foo=!r}"`
-</positive-example>
-</tests-must-be-informative>
+Tests must verify behavior that users or callers need, not implementation details.
+Prefer integration-style tests through real public interfaces. Tests should survive internal refactors without changes.
+Do not test private methods, mock internal collaborators, assert internal call order, or verify through side channels such as direct database queries.
 
-<tests-must-not-cause-exceptions-themselves priority="2">
-Tests must be robust. Test that cause errors "on accident" overshadow the behavior under test.
-<negative-example description="hard-coding a symbol path is brittle" example-id="1">
-`with patch("module.function"): ...`
-</negative-example>
-<positive-example description="using the actual symbol is robust" example-id="1">
-```
-import module.function
-with patch(module.function): ...
-```
-</positive-example>
-<negative-example description="Raises a `KeyError` if the key isn't present, which is not the behavior under test. Fails for the wrong reason." example-id="2">
-`assert my_dict["nested"]["key"] == "value", ...`
-</negative-example>
-<positive-example example-id="2">
-`assert my_dict.get("nested", {}).get("key") == "value", ...`
-</positive-example>
-</tests-must-not-cause-exceptions-themselves>
+Base test behavior and expected results on the spec, plan, or an independent worked example.
+Do not derive expectations from the implementation or recompute the same algorithm inside the test.
+A test that passes by construction cannot detect a defect.
 
-</testing-tenets>
+Mock only at system boundaries, such as external APIs, time, or randomness.
+Prefer a test database over a database mock. Do not mock away the behavior under test.
+Read [test examples](tests.md) and [mocking guidance](mocking.md) for concrete patterns.
+
+## Agree on what the tests must prove
+
+Use the public boundaries and behaviors already agreed in the request, spec, or plan.
+Before testing at another boundary, confirm it with the user. State what each proposed boundary catches and what it misses.
+Focus on critical paths and complex logic instead of trying to test every possible case.
+Fewer meaningful tests are better than many tests that cannot expose defects.
+
+When the interface needs design work, consult [interface design](interface-design.md) and [deep modules](deep-modules.md).
+
+## Make failure deliberate and informative
+
+Define a falsification criterion before writing each test: which bad state must this test detect?
+Make sure a failing test exposes that state, not a broken fixture, missing import, or exception in the test itself.
+Read the failure before changing implementation code. A red caused by the wrong problem proves nothing.
+
+Use assertion messages that show the expected and actual values.
+Tests must not fail accidentally while inspecting a result. Keep expected application errors separate from test defects.
+When mocking an external boundary, patch its real symbol rather than relying on a brittle hard-coded symbol path.
+See [assertion and fixture examples](tests.md#make-test-failures-explain-the-behavior).
+
+## Develop test-first in vertical slices
+
+Do not write all tests first and then all implementation.
+Bulk tests assume behavior before you understand the code and commit you to an unverified test structure.
+
+For TDD, work through one behavior at a time:
+
+1. **Red:** Write one test at an agreed public boundary. Run it and verify that it fails for the intended reason.
+2. **Green:** Write only enough implementation to pass that test. Run the test again.
+3. **Refactor:** Only after the tests pass, improve the code within the current scope. Keep behavior unchanged and rerun the tests.
+4. Repeat with the next behavior, using what the previous cycle taught you.
+
+The first cycle is a tracer bullet that proves one complete path through the system.
+Do not add speculative features or implement behavior for a future test.
+Never refactor while tests fail. Use the [refactor candidates](refactoring.md) after green.
+
+This local skill keeps refactoring after green. Current upstream TDD assigns refactoring to a separate review skill.
+
+## Check each cycle
+
+- The test describes behavior through a public interface and survives internal refactors.
+- Its expected result has an independent source of truth.
+- Its failure exposes the intended bad state and explains what differed.
+- The implementation is minimal and contains no speculative behavior.
+- The relevant tests pass after implementation and after refactoring.
