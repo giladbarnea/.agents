@@ -1,5 +1,5 @@
 ---
-updated: 2026-09-24
+updated: 2026-10-21
 ---
 # Global Instructions
 
@@ -16,6 +16,7 @@ You’re on a Mac M2 Pro. In addition to base Unix coreutils and Python 3, you c
 
 **2. `fd`:** use `fd` instead of `find`.
 
+
 **3. Built-in `read_file` tool:** always read files in full. We’re optimizing for recall and context over precision.
 
 **4. `gsd`:** use `gsd` instead of `git diff`.
@@ -26,11 +27,12 @@ You’re on a Mac M2 Pro. In addition to base Unix coreutils and Python 3, you c
 
 **5. Avoid pagination and interactive commands.**
 
-  Pipe to `| cat` liberally or redirect to `/tmp` & read whenever a command might trigger pagination or interactive behavior. Use `git --no-pager` for all git commands and the equivalent options for other tools.
+  Pipe to `| cat` liberally or redirect to `/tmp` then read the file whenever a command might trigger pagination or interactive behavior. Use `git --no-pager` for all git commands and the equivalent options for other tools.
 
 **6. Research, read and understand your space deeply.**
 
   Wider and deeper context is good. Insufficient context is bad. Prioritize recall over precision: It’s much better to read and research everything you need even if it means reading a little more than necessary, than to miss something important. If you’re unsure about something, read more and ask questions. Don’t assume.
+
 
 
 </tool-usage>
@@ -39,15 +41,17 @@ You’re on a Mac M2 Pro. In addition to base Unix coreutils and Python 3, you c
 
 ### Python and Node.js
 - Avoid running bare `python` or `python3` commands. If the current working directory is a project with a `pyproject.toml` file, always use `uv run -p python3` to run Python scripts. If you’re not in a project with a `pyproject.toml` file, use `uv run -p python3` to run Python scripts.
-- In general, you are encouraged to write temporary Python and shell scripts to disk and run them. This is the best approach for more complex tasks. Python scripts can import any helpful third-party libraries you want, and run with: `uv run -p python3 [--with='dependency1','dependency2'] python3 script.py`. For example, if the script needs `pandas`, `yfinance`, and `rich`, run `uv run -p python3 --with=pandas,yfinance,rich python3 script.py`. Scripts have network access. Just remember to remove the scripts after you no longer need them.
-- Never modify global system state: no `npm install --global`, no `brew install`, no `pip install`, etc. Always prefer transient execution with `uvx -p python3` or `npx -y`.
+- You are encouraged to write temporary Python and shell scripts to disk and run them. Import any helpful third-party libraries you want, and run with: `uv run -p python3 [--with='dependency1','dependency2'] python3 script.py`.
+- Never modify global system state unless requested to do so explicitly by the user: no `npm install --global`, no `brew install`, no `pip install`, etc. Always prefer transient execution with `uvx -p python3` or `npx -y`.
 - If a library doesn’t support python3, adjust `-p python3.*` accordingly. In projects with pyproject.toml or .venv/ directory, just run `uv run ...` without the `-p ...` flag (version already defined at project level).
 
 </python-nodejs>
 
+
 <web-fetching>
 
 ### Fetching Web Pages & Files
+
 Use the `rf` tool (stands for robust fetch) to fetch and convert web content or documents to Markdown.
 Usage: `rf [-h] [--cache] [--timeout N_SEC (default 30)] [-s,--scraper {playwright,firecrawl,markitdown}] URL`
 
@@ -60,7 +64,7 @@ Usage: `rf [-h] [--cache] [--timeout N_SEC (default 30)] [-s,--scraper {playwrig
 <tips>
 
 ## Tips
-**Bash scripts**: When running longer ad-hoc shell scripts:
+**Shell scripts**: When writing ad-hoc shell scripts:
   - “open up” the code with a sparse, simpler style, rather than doing syntactic acrobatics just to be terse. Boring is better than clever.
   - Write the script to /tmp/<whatever>.sh with a `#!/usr/bin/env (ba|z)sh [...]` shebang and run it.
 **Python CLI scripts**: Use the following “frontmatter” at the top of the script to declare dependencies and other metadata:
@@ -80,8 +84,7 @@ Then run the script with `uv run script.py`. No need to specify the Python versi
 <using-sub-agents>
 
 
-- Always load the `ai-to-delegated` skill before launching a subagent or writing Markdown docs.
-- When a forked subagent returns, do not replay its actions upon its return for verification: do not re-read the files it read or created, do not run the same commands it did. Instead, trust what it told you and move on. The purpose of forking background subagents is to protect your context window. Going through what the subagent did beats that purpose.
+
 
 </using-sub-agents>
 
@@ -117,11 +120,9 @@ Then run the script with `uv run script.py`. No need to specify the Python versi
 6. Write flat, optimized logical branches. Avoid nested, duplicate-y code. Write DRY and elegant logic. Squash cyclomatic complexity to a minimum. More declariveness, less implementation.
 7. Add a doctest example to pure-ish functions (data in, data out).
 8. Do not abbreviate variable, function or class names. Use complete words. Write clean code.
-9. Worktrees in `<repo-root>/.worktrees/<worktree-name>/`. Create and add to `.gitignore` if doesn't exist. Clean up worktree after merged and done (disk storage).
+9. Worktrees in `<repo-root>/.worktrees/<worktree-name>/`. Create and add to `.gitignore` if not there. Clean up worktree after merged and done (disk storage). In general, do not leave dirty git state behind. Commit when done. Push when it’s inconsequential and the project is private. Ask whether to push otherwise.
 
 </principles>
-
-If your task includes writing tests, load the `tdd` and `write-tests` skills.
 
 </development-rules>
 
