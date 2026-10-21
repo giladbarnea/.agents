@@ -179,7 +179,8 @@ class ContentTests(unittest.TestCase):
                 record(4, "response_item", unsummarized),
                 message(5, "msg-1", "assistant", "The linker cannot find libfoo."),
             ]})[ROOT_ID]
-        self.assertIn("**Checking the build** The linker cannot find libfoo.", texts(lines, "assistant"), "Claude Code drops foreign thinking blocks, so a readable summary must be text to reach Claude")
+        self.assertIn("<thinking>\n**Checking the build** The linker cannot find libfoo.\n</thinking>", texts(lines, "assistant"),
+                      "Claude Code drops foreign thinking blocks, so a readable summary must be text to reach Claude, marked as thinking")
         thinking = [block for entry in message_entries(lines) for block in blocks(entry) if block["type"] == "thinking"]
         self.assertEqual(len(thinking), 1, f"Reasoning with nothing readable stays a thinking block, which Claude Code drops. Got: {thinking!r}")
 

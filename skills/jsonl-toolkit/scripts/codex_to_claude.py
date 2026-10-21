@@ -14,9 +14,9 @@ input, with ciphertext strings shown as a placeholder. Every other record become
 A fork child copies its parent's lines before the fork point, the way `claude --fork-session`
 copies a session. Sub-agents, at any depth, become sessions of their own, titled after their parent.
 
-Claude cannot read Codex reasoning ciphertext. A reasoning summary becomes visible assistant text,
-the way Pi shows another vendor's thinking. A reasoning item without a summary stays a thinking
-block, and the Codex model id on the entry makes Claude Code drop it before each API call.
+Claude cannot read Codex reasoning ciphertext. A reasoning summary becomes visible assistant text
+inside <thinking> tags, the way Pi shows another vendor's thinking. A reasoning item without a summary
+stays a thinking block, and the Codex model id on the entry makes Claude Code drop it before each API call.
 """
 
 import json
@@ -145,7 +145,7 @@ def convert_session(items: Sequence[Item], session_id: str, prefix: Sequence[Rec
         item_type = payload["type"]
         if item_type == "reasoning":
             summary = "\n\n".join(str(part["text"]) for part in payload.get("summary") or [])
-            block = {"type": "text", "text": summary} if summary.strip() else {"type": "thinking", "thinking": "", "signature": payload["encrypted_content"]}
+            block = visible_thinking(summary) if summary.strip() else {"type": "thinking", "thinking": "", "signature": payload["encrypted_content"]}
             assistant(record, block, None)
         elif item_type == "message" and payload["role"] == "assistant":
             assistant(record, {"type": "text", "text": text_of(payload["content"])}, "end_turn")
@@ -166,6 +166,15 @@ def convert_session(items: Sequence[Item], session_id: str, prefix: Sequence[Rec
         else:
             raise ValueError(f"Unhandled response item {item_type!r} at {record['timestamp']}")
     return lines
+
+
+def visible_thinking(text: str) -> Record:
+    """Show thinking that Claude cannot receive as thinking as assistant text, marked as thinking.
+
+    >>> visible_thinking("Checking the build")
+    {'type': 'text', 'text': '<thinking>\\nChecking the build\\n</thinking>'}
+    """
+    return {"type": "text", "text": f"<thinking>\n{text}\n</thinking>"}
 
 
 def main(source: str | Path, projects_root: Path) -> dict[str, Path]:

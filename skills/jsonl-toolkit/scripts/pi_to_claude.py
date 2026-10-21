@@ -9,11 +9,10 @@ Pi's own reader builds the model context along the active path, so compaction su
 summaries and custom messages arrive the way Pi sends them. Each content block becomes one Claude
 entry, which is how Claude Code itself stores assistant turns.
 
-Anthropic thinking keeps its Pi signature byte for byte, and the entry keeps the Pi model id,
-so Claude Code sends the block and the API decides whether the model reads it. Thinking from
-another vendor becomes visible assistant text, the way codex_to_claude.py shows Codex summaries.
-A text-less signed block from another vendor stays a thinking block under its own model id,
-which makes Claude Code drop it before each API call.
+Thinking with text becomes visible assistant text inside <thinking> tags, from any vendor.
+A signed Anthropic block never reaches the model after conversion: Claude Code's system prompt and
+tools differ from Pi's, so the API's preserved-thinking prefix check drops it. A text-less signed
+block stays a thinking block under its Pi model id, and redacted thinking stays redacted.
 
 Pi's replay rules for Anthropic carry over: errored and aborted turns are skipped, a tool call
 without a result gets an error result, and tool call ids are normalized to what Anthropic accepts.
@@ -27,11 +26,10 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from codex_to_claude import CLAUDE_VERSION, claude_project_directory
+from codex_to_claude import CLAUDE_VERSION, claude_project_directory, visible_thinking
 from codex_to_pi import dumps
 from pi_session import JsonObject, load_entries, resolve_session
 
-ANTHROPIC_API = "anthropic-messages"
 MISSING_RESULT = "No result provided"
 STOP_REASONS = {"stop": "end_turn", "toolUse": "tool_use", "length": "max_tokens"}
 
@@ -70,7 +68,6 @@ def claude_content(blocks: str | list[JsonObject]) -> list[JsonObject]:
 
 def assistant_blocks(message: JsonObject) -> list[JsonObject]:
     """Render one Pi assistant message as Claude content blocks."""
-    is_anthropic = message["api"] == ANTHROPIC_API
     blocks: list[JsonObject] = []
     for block in message["content"]:
         if block["type"] == "text" and block["text"].strip():
@@ -79,10 +76,10 @@ def assistant_blocks(message: JsonObject) -> list[JsonObject]:
             blocks.append({"type": "tool_use", "id": normalized_tool_call_id(block["id"]), "name": block["name"], "input": block.get("arguments") or {}})
         elif block["type"] == "thinking" and block.get("redacted"):
             blocks.append({"type": "redacted_thinking", "data": block["thinkingSignature"]})
-        elif block["type"] == "thinking" and block.get("thinkingSignature") and (is_anthropic or not block["thinking"].strip()):
-            blocks.append({"type": "thinking", "thinking": block["thinking"], "signature": block["thinkingSignature"]})
         elif block["type"] == "thinking" and block["thinking"].strip():
-            blocks.append({"type": "text", "text": block["thinking"]})
+            blocks.append(visible_thinking(block["thinking"]))
+        elif block["type"] == "thinking" and block.get("thinkingSignature"):
+            blocks.append({"type": "thinking", "thinking": "", "signature": block["thinkingSignature"]})
     return blocks
 
 

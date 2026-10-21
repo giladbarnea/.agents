@@ -279,7 +279,7 @@ Every Codex record rides verbatim on exactly one Claude line, under a top-level 
 What Claude sees:
 
 - User messages, images, and assistant text.
-- Reasoning summaries, as visible assistant text. Pi shows another vendor's thinking the same way.
+- Reasoning summaries, as visible assistant text inside `<thinking>` tags. Pi shows another vendor's thinking the same way.
 - Every tool call under its Codex name, such as `exec` with the exact JavaScript, or `collaboration__wait_agent`. Ciphertext strings in arguments become a placeholder.
 - Every tool output exactly as Codex's model saw it.
 - Sub-agent messages as user messages. Their encrypted parts become a placeholder.
@@ -297,7 +297,7 @@ uv run --script scripts/pi_to_claude.py PI_SESSION_ID_OR_PATH
 
 The script converts one session, without its descendants. It writes the session to the Claude Code project directory of the Pi working directory, titled with the Pi session name and `(from Pi)`, and prints the resume command. Pi's own reader builds the context along the active path, so compaction summaries and custom messages arrive as Pi sends them. Pi's system prompt is left out, because Claude Code sends its own. Tool calls keep their Pi names.
 
-Anthropic thinking keeps its Pi signature byte for byte, and the entry keeps the Pi model id, so Claude Code sends the block unchanged. Whether the model then reads the block is the API's decision. Claude Code's system prompt and tools differ from Pi's, which can fail the API's [preserved-thinking prefix check](https://platform.claude.com/docs/en/build-with-claude/preserved-thinking). Another vendor's thinking follows the Codex → Claude Code rules above. Pi's replay rules carry over: aborted turns are skipped, unanswered tool calls get an error result, and tool call ids are normalized.
+Thinking text from any vendor becomes visible assistant text inside `<thinking>` tags. A signed Anthropic thinking block cannot reach the model after conversion. Claude Code's system prompt and tools differ from Pi's, so the API's [preserved-thinking prefix check](https://platform.claude.com/docs/en/build-with-claude/preserved-thinking) drops it. A 2026-10-21 test showed `thinking_dropped` with `prefix_binding_mismatch` on every converted block. A block without text keeps its signature and Pi model id, so the API or Claude Code drops it without an error. Pi's replay rules carry over: aborted turns are skipped, unanswered tool calls get an error result, and tool call ids are normalized.
 
 `tests/test_pi_to_claude.py` checks these rules. It requires Node and the installed Pi package.
 

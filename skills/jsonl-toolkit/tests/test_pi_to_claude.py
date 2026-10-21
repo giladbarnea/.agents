@@ -3,11 +3,11 @@
 # requires-python = "==3.12.*"
 # dependencies = []
 # ///
-"""Native Pi sessions become Claude Code sessions whose signed Anthropic thinking reaches the API unchanged.
+"""Native Pi sessions become Claude Code sessions that the Claude API accepts and whose thinking text reaches the model.
 
 Requires Node and the installed Pi package, because Pi's own reader builds the context.
-A real `claude -p --resume` of a converted Opus 5.5 session sent all 25 thinking blocks
-byte for byte and got a 200; these tests keep the converter's side of that contract.
+On 2026-10-21 the API dropped every signed thinking block of a converted Opus 5.5 session
+(`thinking_dropped`, `prefix_binding_mismatch`), so thinking text must travel as visible text.
 """
 
 import json
@@ -59,29 +59,32 @@ class ConversionTests(unittest.TestCase):
         self.assertEqual(target.parent, self.root / "claude" / "-tmp-project", "Claude Code lists sessions for /tmp/project only from this directory")
         return load_records(target)
 
-    def test_anthropic_thinking_keeps_its_signature_text_and_model(self) -> None:
-        lines = self.convert([
-            {"type": "model_change", "provider": "anthropic", "modelId": "claude-opus-5-5"},
-            user("Pick a number"),
-            assistant([{"type": "thinking", "thinking": "I pick 31415926.", "thinkingSignature": SIGNATURE}, {"type": "text", "text": "Done."}]),
-        ])
-        thinking = [(entry["message"]["model"], block) for entry in message_entries(lines) for block in blocks(entry) if block["type"] == "thinking"]
-        self.assertEqual(thinking, [("claude-opus-5-5", {"type": "thinking", "thinking": "I pick 31415926.", "signature": SIGNATURE})],
-                         "The API rebuilds reasoning from the signature, so it must arrive byte for byte under the Claude model that signed it")
-
-    def test_another_vendors_thinking_becomes_text_or_a_block_claude_code_drops(self) -> None:
+    def test_thinking_text_from_any_vendor_becomes_visible_thinking(self) -> None:
         openai = {"provider": "openai-codex", "api": "openai-codex-responses", "model": "gpt-6-astra"}
         lines = self.convert([
             user("Plan it"),
+            assistant([{"type": "thinking", "thinking": "I pick 31415926.", "thinkingSignature": SIGNATURE}, {"type": "text", "text": "Done."}]),
             assistant([{"type": "thinking", "thinking": "Summary of the plan.", "thinkingSignature": '{"type":"reasoning"}'}], **openai),
+        ])
+        rendered = [(entry["message"]["model"], block) for entry in message_entries(lines) if entry["type"] == "assistant" for block in blocks(entry)]
+        self.assertEqual(rendered, [
+            ("claude-opus-5-5", {"type": "text", "text": "<thinking>\nI pick 31415926.\n</thinking>"}),
+            ("claude-opus-5-5", {"type": "text", "text": "Done."}),
+            ("gpt-6-astra", {"type": "text", "text": "<thinking>\nSummary of the plan.\n</thinking>"}),
+        ], "The API drops converted signed blocks, so thinking text must reach the model as text, marked as thinking")
+
+    def test_text_less_thinking_stays_a_signed_block_under_its_model(self) -> None:
+        openai = {"provider": "openai-codex", "api": "openai-codex-responses", "model": "gpt-6-astra"}
+        lines = self.convert([
+            user("Plan it"),
+            assistant([{"type": "thinking", "thinking": "", "thinkingSignature": SIGNATURE}, {"type": "text", "text": "Done."}]),
             assistant([{"type": "thinking", "thinking": "", "thinkingSignature": '{"type":"reasoning","encrypted_content":"gAAAA"}'}, {"type": "text", "text": "Planned."}], **openai),
         ])
-        rendered = [(entry["message"]["model"], block["type"], block.get("text", block.get("signature"))) for entry in message_entries(lines) if entry["type"] == "assistant" for block in blocks(entry)]
-        self.assertEqual(rendered, [
-            ("gpt-6-astra", "text", "Summary of the plan."),
-            ("gpt-6-astra", "thinking", '{"type":"reasoning","encrypted_content":"gAAAA"}'),
-            ("gpt-6-astra", "text", "Planned."),
-        ], "A readable summary must stay visible, and an unreadable block must keep a non-Claude model id so Claude Code drops it")
+        thinking = [(entry["message"]["model"], block) for entry in message_entries(lines) for block in blocks(entry) if block["type"] == "thinking"]
+        self.assertEqual(thinking, [
+            ("claude-opus-5-5", {"type": "thinking", "thinking": "", "signature": SIGNATURE}),
+            ("gpt-6-astra", {"type": "thinking", "thinking": "", "signature": '{"type":"reasoning","encrypted_content":"gAAAA"}'}),
+        ], "A block with nothing readable keeps its signature and model id, so the API or Claude Code drops it instead of failing")
 
     def test_history_obeys_the_rules_the_claude_api_enforces(self) -> None:
         lines = self.convert([
