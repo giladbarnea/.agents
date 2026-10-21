@@ -1,6 +1,6 @@
 ---
 name: ai-to-delegated
-description: Best practices for getting a step-function leap in productivity when working with other AI’s. Load `ai-to-delegated` before spawning a sub-agent, creating a team, talking to a teammate agent, or writing a doc likely read by other agents. Trigger words include “dispatch an agent”, “spawn a team”, and “fork the session to ...”. 
+description: Best practices for getting a step-function leap in productivity when working with other AI’s. Load `ai-to-delegated` before spawning a sub-agent, creating a team, talking to a teammate agent, or writing a doc likely read by other agents. Trigger words include “dispatch an agent”, “spawn a team”, and “fork the session to ...”.
 ---
 
 # AI → Delegated
