@@ -1,5 +1,5 @@
 ---
-name: write-tests
+name: tdd
 description: Testing standards and test-driven development. Load before writing any tests, including integration tests, regression tests, and test-first feature or bug work. Use for TDD and red-green-refactor.
 last_updated: 2026-10-21
 origin:
@@ -10,7 +10,7 @@ origin:
   adaptation: Includes local testing rules, standalone interface-design notes, and refactoring after green.
 ---
 
-# Write Tests
+# TDD
 
 Use these standards whenever writing tests. Use the TDD loop below for test-first work.
 Read the project instructions, its `GLOSSARY.md` when present, and relevant architectural decisions before choosing test names and interfaces.

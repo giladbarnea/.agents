@@ -1,6 +1,6 @@
 ---
 description: Hub ownership model and current instruction and skill materialization behavior
-last_updated: 2026-10-05 10:45
+last_updated: 2026-10-21T15-37
 ---
 # Hub materialization
 
@@ -248,12 +248,12 @@ For every relative skill import, let Jinja select the first matching file.
 Load the selected file through the same active Jinja loader. Remove leading frontmatter when present. Preserve the content unchanged when frontmatter is absent.
 </pseudocode>
 
-The ordered lookup and non-destructive skill materialization are active:
+The ordered lookup and skill materialization are active:
 
 <pseudocode>
-For skill discovery, create a hub link only when the consumer destination is empty. Keep an existing correct hub link. Preserve every other existing destination as consumer-owned.
+For skill discovery, create a hub link when the consumer destination is absent. Keep an existing correct hub link. Replace other symlinks. Preserve concrete destinations, warn, and continue.
 
-Keep overload knowledge out of the ownership manifest. The manifest supplies source-to-destination mappings. Ordered lookup and non-destructive materialization produce overload behavior generically.
+Keep overload knowledge out of the ownership manifest. The manifest supplies source-to-destination mappings. Ordered lookup and preserved concrete destinations produce overload behavior generically.
 </pseudocode>
 
 ```text
@@ -282,5 +282,7 @@ Hub skill materializer
         │
         ├── Correct shared link exists ──────> no change
         │
-        └── Other destination exists ────────> preserve consumer ownership
+        ├── Other symlink exists ────────────> replace with shared link
+        │
+        └── Concrete destination exists ─────> preserve and warn
 ```
