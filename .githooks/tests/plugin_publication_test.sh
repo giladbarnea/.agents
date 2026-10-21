@@ -33,6 +33,10 @@ git clone -q "$hub_source/plugins/.published-soft-skills" "$published"
 git -C "$published" config user.name Test
 git -C "$published" config user.email test@example.com
 git -C "$published" config core.hooksPath /dev/null
+initial_version="$(jq -r .version "$published/plugins/soft-skills/.claude-plugin/plugin.json")"
+initial_source_commit="$(git -C "$hub" rev-parse HEAD)"
+git -C "$published" commit --amend -qm "Release soft-skills v$initial_version from ${initial_source_commit:0:12}"
+git -C "$published" tag -fa "v$initial_version" -m "Soft Skills v$initial_version" >/dev/null
 git -C "$published" remote remove origin
 git init -q --bare "$remote"
 git -C "$published" remote add origin "$remote"
@@ -46,13 +50,10 @@ set -euo pipefail
 prompt="${!#}"
 published_directory="${prompt#*at }"
 published_directory="${published_directory%%, in place*}"
-for file in \
-  plugins/soft-skills/skills/ai-to-leader/references/human.md \
-  plugins/soft-skills/skills/ai-to-leader/references/help.md \
-  plugins/soft-skills/skills/ai-to-delegated/coordination/leading-leaders.md \
-  plugins/soft-skills/roles.md; do
-  cp "$TEST_PUBLISHED_SOURCE/$file" "$published_directory/$file"
-done
+while IFS= read -r line; do
+  [[ "$line" == "- $published_directory/plugins/soft-skills/"* ]] || continue
+  perl -pi -e 's/\bgilad\b/a human leader/gi; s/\badhd\b/cognitive-overload/gi' "${line#- }"
+done <<<"$prompt"
 if [[ "${TEST_PI_TOUCH_OTHER:-}" == '1' ]]; then
   printf '%s\n' 'Unexpected AI edit' >>"$published_directory/README.md"
 fi
@@ -86,7 +87,6 @@ EOF
 chmod +x "$temporary_directory/bin/pi" "$temporary_directory/bin/gh" "$temporary_directory/bin/sleep"
 export TEST_RELEASE_PENDING_FILE="$temporary_directory/release-pending" TEST_RERUN_MARKER="$temporary_directory/rerun-called"
 export PATH="$temporary_directory/bin:$PATH"
-initial_version="$(jq -r .version "$published/plugins/soft-skills/.claude-plugin/plugin.json")"
 expected_version="${initial_version%.*}.$((${initial_version##*.} + 1))"
 source_file="$hub/plugins/soft-skills/skills/ai-to-delegated/briefing/forked-context.md"
 original_source_hash="$(git -C "$hub" hash-object "$source_file")"
@@ -193,7 +193,7 @@ git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$pending_version"
 
 private_version="${pending_version%.*}.$((${pending_version##*.} + 1))"
 remote_head="$(git --git-dir="$remote" rev-parse refs/heads/main)"
-printf '\nOne more change.\n' >>"$source_file"
+printf '\nAn anonymization test instruction.\n' >>"$hub/plugins/soft-skills/skills/ai-to-leader/references/help.md"
 git -C "$hub" add plugins/soft-skills
 (cd "$hub" && TEST_PI_TOUCH_OTHER=1 git commit -qm 'Reject extra AI edit' 2>"$temporary_directory/ai-failure.log")
 rg -q 'Anonymization changed a file outside' "$temporary_directory/ai-failure.log"
@@ -203,7 +203,7 @@ if (cd "$hub" && TEST_PI_SYMLINK=1 .githooks/publish-soft-skills.sh --retry >"$t
   printf '%s\n' 'An unexpected AI symlink was published.' >&2
   exit 1
 fi
-rg -q 'outside its four-file list' "$temporary_directory/symlink.log"
+rg -q 'outside its requested file list' "$temporary_directory/symlink.log"
 [[ "$(git --git-dir="$remote" rev-parse refs/heads/main)" == "$remote_head" ]]
 (cd "$hub" && .githooks/publish-soft-skills.sh --retry >"$temporary_directory/ai-retry.log" 2>&1)
 git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$private_version"

@@ -129,7 +129,7 @@ tag="v$version"
 }
 git -C "$published_repository" worktree add --quiet --detach "$temporary_directory/published" HEAD
 worktree="$temporary_directory/published"
-"$repository_root/.githooks/sync-published-soft-skills.sh" "$personal_plugin_directory" "$worktree"
+"$repository_root/.githooks/sync-published-soft-skills.sh" "$personal_plugin_directory" "$worktree" "$source_commit"
 for manifest in \
   "$worktree/plugins/soft-skills/.claude-plugin/plugin.json" \
   "$worktree/plugins/soft-skills/.codex-plugin/plugin.json" \

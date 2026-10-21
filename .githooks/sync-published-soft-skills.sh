@@ -3,13 +3,12 @@ set -euo pipefail
 
 other_files_checksum() (
   cd "$1"
-  find . \( -type f -o -type l \) ! -name .git -print0 | sort -z | while IFS= read -r -d '' file; do
-    case "$file" in
-    ./plugins/soft-skills/skills/ai-to-leader/references/human.md | \
-      ./plugins/soft-skills/skills/ai-to-leader/references/help.md | \
-      ./plugins/soft-skills/skills/ai-to-delegated/coordination/leading-leaders.md | \
-      ./plugins/soft-skills/roles.md) continue ;;
-    esac
+  shift
+  local file exclusions=()
+  for file in "$@"; do
+    exclusions+=(! -path "./$file")
+  done
+  find . \( -type f -o -type l \) ! -name .git "${exclusions[@]}" -print0 | sort -z | while IFS= read -r -d '' file; do
     if [[ -L "$file" ]]; then
       printf '%s -> %s\n' "$file" "$(readlink "$file")"
       continue
@@ -19,25 +18,23 @@ other_files_checksum() (
   done | shasum -a 256 | awk '{print $1}'
 )
 
-# Counts private markers in the four anonymized files: Gilad, ADHD, and a
-# standalone first-person "I". A clean published copy scores zero.
-private_marker_count() {
-  rg -io --no-filename -e 'gilad' -e 'adhd' -e '\bi\b' "$@" | wc -l | tr -d ' '
-}
-
 main() {
   local personal_plugin_directory="$1"
   local published_repository="$2"
+  local source_commit="$3"
+  local repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   local published_plugin_directory="$published_repository/plugins/soft-skills"
-  local anonymized_files=(
-    "$published_plugin_directory/skills/ai-to-leader/references/human.md"
-    "$published_plugin_directory/skills/ai-to-leader/references/help.md"
-    "$published_plugin_directory/skills/ai-to-delegated/coordination/leading-leaders.md"
-    "$published_plugin_directory/roles.md"
+  local anonymizable_files=(
+    plugins/soft-skills/skills/ai-to-leader/references/human.md
+    plugins/soft-skills/skills/ai-to-leader/references/help.md
+    plugins/soft-skills/skills/ai-to-delegated/coordination/leading-leaders.md
+    plugins/soft-skills/roles.md
   )
+  local published_release published_source_commit
+  published_release="$(git -C "$published_repository" log -1 --format=%s)"
+  published_source_commit="$(git -C "$repository_root" rev-parse --verify "${published_release##* from }^{commit}")"
 
   cd "$published_repository"
-  local markers_before="$(private_marker_count "${anonymized_files[@]}")"
 
   # Mirror the personal plugin verbatim, excluding hidden files (private
   # notes stay private). Skill and root file names are a hardcoded whitelist.
@@ -50,27 +47,29 @@ main() {
   rsync -a "$personal_plugin_directory/roles.md" "$personal_plugin_directory/token-economic-communication.md" "$published_plugin_directory/"
   rsync -a "$personal_plugin_directory/README.md" "$published_repository/README.md"
 
-  # The copy just overwrote the anonymized files with personal-voice sources.
-  # Only a rise in private markers means there is something new to anonymize;
-  # rerunning the LLM on already-clean files paraphrases them for no gain.
-  local markers_after="$(private_marker_count "${anonymized_files[@]}")"
-  if ((markers_after <= markers_before)); then
-    printf 'Anonymization skipped: private markers did not rise (%s before, %s after).\n' "$markers_before" "$markers_after" >&2
-    "$(dirname "${BASH_SOURCE[0]}")/check-published-private-names.sh" "$published_repository"
+  local file files_to_anonymize=()
+  for file in "${anonymizable_files[@]}"; do
+    if git -C "$repository_root" diff --quiet "$published_source_commit" "$source_commit" -- "$file"; then
+      git restore --source=HEAD --worktree -- "$file"
+      continue
+    fi
+    if rg -qi '\bgilad\b|\badhd\b' "$file"; then
+      files_to_anonymize+=("$file")
+    fi
+  done
+  if ((${#files_to_anonymize[@]} == 0)); then
+    printf 'Anonymization skipped: no changed source file contains Gilad or ADHD.\n' >&2
+    "$repository_root/.githooks/check-published-private-names.sh" "$published_repository"
     return
   fi
 
-  # The personal plugin speaks in Gilad's personal voice (Gilad, ADHD, first
-  # person). The published copies of the whitelisted files below must be
-  # anonymized (a generic human leader, cognitive overload, direct assertions
-  # softened). An LLM rewrites exactly those files in place.
-  local anonymization_prompt
+  local anonymization_prompt anonymization_file_list=''
+  for file in "${files_to_anonymize[@]}"; do
+    anonymization_file_list+="- $published_repository/$file"$'\n'
+  done
   IFS= read -r -d '' anonymization_prompt <<'EOF' || true
 Anonymize exactly these files in the published repository at __PUBLISHED_REPOSITORY__, in place. Do not touch any other file.
-- __PUBLISHED_REPOSITORY__/plugins/soft-skills/skills/ai-to-leader/references/human.md
-- __PUBLISHED_REPOSITORY__/plugins/soft-skills/skills/ai-to-leader/references/help.md
-- __PUBLISHED_REPOSITORY__/plugins/soft-skills/skills/ai-to-delegated/coordination/leading-leaders.md
-- __PUBLISHED_REPOSITORY__/plugins/soft-skills/roles.md
+__ANONYMIZATION_FILES__
 
 They were copied from ~/.agents/plugins/soft-skills/, which speaks in Gilad's personal voice (Gilad, ADHD, first person).
 The published copies must be anonymized (a generic human leader, cognitive overload, direct assertions softened).
@@ -82,21 +81,22 @@ The last pushed git revision of the files you are anonymizing may be exactly, or
 
 EOF
   anonymization_prompt="${anonymization_prompt//__PUBLISHED_REPOSITORY__/$published_repository}"
+  anonymization_prompt="${anonymization_prompt//__ANONYMIZATION_FILES__/$anonymization_file_list}"
 
-  local unchanged_checksum="$(other_files_checksum "$published_repository")"
+  local unchanged_checksum
+  unchanged_checksum="$(other_files_checksum "$published_repository" "${files_to_anonymize[@]}")"
   pi --model openai-codex/gpt-6-sol --thinking low --no-session --no-skills --no-prompt-templates --no-extensions --no-themes --no-context-files -p "$anonymization_prompt"
-  [[ "$unchanged_checksum" == "$(other_files_checksum "$published_repository")" ]] || {
-    printf 'Anonymization changed a file outside its four-file list.\n' >&2
+  [[ "$unchanged_checksum" == "$(other_files_checksum "$published_repository" "${files_to_anonymize[@]}")" ]] || {
+    printf 'Anonymization changed a file outside its requested file list.\n' >&2
     return 1
   }
-  local file
-  for file in "${anonymized_files[@]}"; do
+  for file in "${files_to_anonymize[@]}"; do
     [[ -f "$file" && ! -L "$file" ]] || {
       printf 'Anonymization removed or replaced %s.\n' "$file" >&2
       return 1
     }
   done
-  "$(dirname "${BASH_SOURCE[0]}")/check-published-private-names.sh" "$published_repository"
+  "$repository_root/.githooks/check-published-private-names.sh" "$published_repository"
 }
 
 main "$@"
