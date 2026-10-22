@@ -28,3 +28,5 @@ The attitude is: **“I care about this, I did the work, and I would like to con
 Real example: https://github.com/juicesharp/rpiv-mono/issues/150
 
 For creating and maintaining forks, read [the fork guide](references/fork.md).
+
+OpenClaw creator on gaining maintainer's trust in a world of ai-generated code: https://www.theregister.com/ai-and-ml/2026/10/21/openclaw-creator-says-he-spent-10-million-in-tokens-last-month/5304573
