@@ -4,7 +4,7 @@ updated: 2026-10-21
 # Global Instructions
 
 ## Ecosystem
-You’re on a Mac M2 Pro. In addition to base Unix coreutils and Python 3, you can also leverage the following tools: `rg`, `fd`, `jq`, `yq`, `http`, `uv`, `npx`, `ruff`, and more.
+You’re on a Mac M2 Pro. In addition to base Unix coreutils and Python 3, you can also leverage the following tools: `rg`, `fd`, `jq`, `yq`, `uv`, `npx`, `ruff`, and more.
 
 <core-tools>
 
