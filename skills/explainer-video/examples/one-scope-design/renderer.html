@@ -1,0 +1,775 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=IBM+Plex+Mono:wght@400;600&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; background: #ECE5D3; }
+  svg { display: block; }
+  .sans { font-family: 'Andika', sans-serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+</style>
+</head>
+<body>
+<svg id="stage" width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg"></svg>
+<script>
+const C = {
+  cream: '#ECE5D3', paper: '#F7F2E6', ink: '#1E2340', navy: '#26368C', night: '#1B1F3B',
+  red: '#C8352B', pink: '#E6A99F', mustard: '#E5B53A', green: '#2E9A5E', sky: '#AFC6D8',
+  blue: '#A6BFE0', grey: '#8E8E96', lightGreen: '#7CC49A',
+};
+
+// ---------- timing ----------
+const clamp = x => Math.max(0, Math.min(1, x));
+const ease = x => 1 - Math.pow(1 - clamp(x), 3);
+const back = x => { const c1 = 1.70158, c3 = c1 + 1, k = clamp(x); return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); };
+const prog = (t, start, duration = 0.5) => ease((t - start) / duration);
+const bounce = (t, start, duration = 0.45) => (t < start ? 0 : back((t - start) / duration));
+const lerp = (a, b, k) => a + (b - a) * k;
+
+// ---------- primitives ----------
+const escape = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function T(x, y, s, { size = 40, fill = C.ink, font = 'sans', anchor = 'middle', weight = 400, opacity = 1, extra = '' } = {}) {
+  return `<text x="${x}" y="${y}" class="${font}" font-size="${size}" fill="${fill}" text-anchor="${anchor}" font-weight="${weight}" opacity="${opacity}" ${extra}>${escape(s)}</text>`;
+}
+
+const rise = (k, svg, distance = 26) => k <= 0 ? '' : `<g opacity="${clamp(k)}" transform="translate(0 ${(1 - k) * distance})">${svg}</g>`;
+const pop = (k, x, y, svg) => k <= 0 ? '' : `<g transform="translate(${x} ${y}) scale(${Math.max(0, k)}) translate(${-x} ${-y})" opacity="${clamp(k * 3)}">${svg}</g>`;
+const fade = (k, svg) => k <= 0 ? '' : `<g opacity="${clamp(k)}">${svg}</g>`;
+
+function panel(fill) {
+  return `<rect x="24" y="24" width="1032" height="840" rx="10" fill="${fill}"/>`;
+}
+
+function line(d, k, { stroke = C.ink, width = 6, dash = '', cap = 'round', marker = '', opacity = 1 } = {}) {
+  if (k <= 0) return '';
+  const dashing = dash
+    ? `stroke-dasharray="${dash}"`
+    : `pathLength="1" stroke-dasharray="1 1" stroke-dashoffset="${1 - clamp(k)}"`;
+  const markerEnd = marker && k >= 0.98 ? `marker-end="url(#${marker})"` : '';
+  const dashOpacity = dash ? clamp(k) * opacity : opacity;
+  return `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="${cap}" stroke-linejoin="round" ${dashing} ${markerEnd} opacity="${dashOpacity}"/>`;
+}
+
+function wrench(x, y, size, fill) {
+  const s = size / 60;
+  return `<g transform="translate(${x} ${y}) rotate(-45) scale(${s})" fill="${fill}">
+    <rect x="-7" y="-6" width="14" height="44" rx="6"/>
+    <circle cx="0" cy="-16" r="17"/>
+    <rect x="-6" y="-38" width="12" height="20" rx="2" fill="var(--hole)"/>
+  </g>`;
+}
+
+function magnifier(x, y, size, stroke) {
+  const r = size * 0.3;
+  return `<g stroke="${stroke}" fill="none" stroke-linecap="round">
+    <circle cx="${x - size * 0.08}" cy="${y - size * 0.08}" r="${r}" stroke-width="${size * 0.1}"/>
+    <line x1="${x + r * 0.62}" y1="${y + r * 0.62}" x2="${x + size * 0.38}" y2="${y + size * 0.38}" stroke-width="${size * 0.13}"/>
+  </g>`;
+}
+
+// kind: 'fix' or 'rev'. main agents get a second ring.
+function agent(x, y, r, kind, { main = false, dim = false, ghost = false, fresh = false } = {}) {
+  const fill = dim ? C.grey : (kind === 'fix' ? C.red : C.navy);
+  if (ghost) {
+    return `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${C.grey}" stroke-width="4" stroke-dasharray="10 9"/>`;
+  }
+  const ring = main ? `<circle cx="${x}" cy="${y}" r="${r + 12}" fill="none" stroke="${fill}" stroke-width="5"/>` : '';
+  const sparkle = fresh ? [0, 1, 2, 3].map(i => {
+    const angle = -Math.PI / 4 + i * 0.5;
+    const x1 = x + Math.cos(angle) * (r + 14), y1 = y + Math.sin(angle) * (r + 14);
+    const x2 = x + Math.cos(angle) * (r + 34), y2 = y + Math.sin(angle) * (r + 34);
+    return `<line x1="${x1}" y1="${y1 - 2 * r}" x2="${x2}" y2="${y2 - 2 * r}" stroke="${C.mustard}" stroke-width="6" stroke-linecap="round" transform="translate(0 ${2 * r})"/>`;
+  }).join('') : '';
+  const icon = kind === 'fix' ? wrench(x, y, r * 1.1, C.paper) : magnifier(x, y, r * 1.2, C.paper);
+  return `<g style="--hole:${fill}">${ring}<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${C.ink}" stroke-width="4"/>${icon}${sparkle}</g>`;
+}
+
+function card(x, y, w, h, name, { fill = C.paper, dim = false, accent = C.red } = {}) {
+  const rows = [0.42, 0.56, 0.7, 0.84].map((f, i) => {
+    const width = w * [0.7, 0.55, 0.65, 0.4][i];
+    const color = i === 2 ? accent : C.ink;
+    return `<line x1="${x + 14}" y1="${y + h * f}" x2="${x + 14 + width}" y2="${y + h * f}" stroke="${color}" stroke-width="4" stroke-linecap="round"/>`;
+  }).join('');
+  return `<g opacity="${dim ? 0.3 : 1}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${fill}" stroke="${C.ink}" stroke-width="3"/>
+    ${T(x + w / 2, y + h * 0.24, name, { size: Math.min(22, w / name.length * 1.45), font: 'mono', fill: C.navy, weight: 600 })}${rows}</g>`;
+}
+
+function box3d(x, y, w, h, { depth = 30, face = C.blue, label = '' } = {}) {
+  // (x, y) is the bottom-left corner of the front face.
+  const top = y - h;
+  const stripes = [];
+  for (let sy = top + 12; sy < y - 4; sy += 9) stripes.push(`<line x1="${x}" y1="${sy}" x2="${x + w}" y2="${sy}" stroke="${C.navy}" stroke-width="1.6" opacity="0.55"/>`);
+  return `<g>
+    <path d="M${x} ${top} L${x + depth} ${top - depth} L${x + w + depth} ${top - depth} L${x + w} ${top} Z" fill="${C.paper}" stroke="${C.ink}" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M${x + w} ${top} L${x + w + depth} ${top - depth} L${x + w + depth} ${y - depth} L${x + w} ${y} Z" fill="url(#htBlue)" stroke="${C.ink}" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="${x}" y="${top}" width="${w}" height="${h}" fill="${face}"/>${stripes.join('')}
+    <rect x="${x}" y="${top}" width="${w}" height="${h}" fill="none" stroke="${C.ink}" stroke-width="3"/>
+    ${label ? T(x + w / 2, y + 36, label, { size: 22, font: 'mono', fill: C.ink }) : ''}
+  </g>`;
+}
+
+function doc(x, y, w, h, { fill = C.paper, title = '', diff = false, titleColor = C.navy } = {}) {
+  const rows = [];
+  const count = Math.floor((h - 40) / 16);
+  for (let i = 0; i < count; i++) {
+    const ly = y + 34 + i * 16;
+    const width = (w - 28) * [0.8, 0.6, 0.9, 0.5, 0.7][i % 5];
+    const color = diff ? (i % 3 === 1 ? C.red : (i % 3 === 2 ? C.green : C.ink)) : C.ink;
+    rows.push(`<line x1="${x + 14}" y1="${ly}" x2="${x + 14 + width}" y2="${ly}" stroke="${color}" stroke-width="3.5" stroke-linecap="round" opacity="0.85"/>`);
+  }
+  return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="5" fill="${fill}" stroke="${C.ink}" stroke-width="3"/>
+    ${title ? T(x + w / 2, y + 24, title, { size: 17, font: 'mono', fill: titleColor, weight: 600 }) : ''}${title ? '' : rows.join('')}${title ? rows.slice(1).join('') : ''}</g>`;
+}
+
+function envelope(x, y, w = 70) {
+  const h = w * 0.66;
+  return `<g><rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="4" fill="${C.paper}" stroke="${C.ink}" stroke-width="3"/>
+    <path d="M${x - w / 2} ${y - h / 2} L${x} ${y + h * 0.08} L${x + w / 2} ${y - h / 2}" fill="none" stroke="${C.ink}" stroke-width="3" stroke-linejoin="round"/></g>`;
+}
+
+function stamp(x, y, word, color, k, { rotate = -8, w = 220, h = 78, size = 36 } = {}) {
+  if (k <= 0) return '';
+  const scale = lerp(1.7, 1, ease(k));
+  return `<g transform="translate(${x} ${y}) rotate(${rotate}) scale(${scale})" opacity="${clamp(k * 2)}">
+    <rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="8" fill="${C.paper}" stroke="${color}" stroke-width="6"/>
+    ${T(0, size * 0.36, word, { size, font: 'mono', fill: color, weight: 600 })}</g>`;
+}
+
+function tag(x, y, label, { fill = C.mustard, size = 40, color = C.ink } = {}) {
+  const w = label.length * size * 0.62 + 70, h = size * 1.5;
+  return `<g><path d="M${x} ${y} L${x + 28} ${y - h / 2} L${x + w} ${y - h / 2} L${x + w} ${y + h / 2} L${x + 28} ${y + h / 2} Z" fill="${fill}" stroke="${C.ink}" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="${x + 26}" cy="${y}" r="6" fill="none" stroke="${C.ink}" stroke-width="3"/>
+    ${T(x + 46, y + size * 0.35, label, { size, font: 'mono', anchor: 'start', fill: color })}</g>`;
+}
+
+function check(x, y, s, color = C.green, k = 1) {
+  return line(`M${x - s * 0.5} ${y} L${x - s * 0.15} ${y + s * 0.35} L${x + s * 0.55} ${y - s * 0.4}`, k, { stroke: color, width: s * 0.18 });
+}
+
+function cross(x, y, s, color = C.red, k = 1) {
+  return line(`M${x - s / 2} ${y - s / 2} L${x + s / 2} ${y + s / 2}`, k * 2, { stroke: color, width: s * 0.16 })
+    + line(`M${x + s / 2} ${y - s / 2} L${x - s / 2} ${y + s / 2}`, k * 2 - 1, { stroke: color, width: s * 0.16 });
+}
+
+function bubble(x, y, w, h, lines, { fill = C.paper, size = 26, color = C.ink, tail = 'left' } = {}) {
+  const tailPath = tail === 'left'
+    ? `M${x + 24} ${y + h} L${x + 14} ${y + h + 22} L${x + 50} ${y + h}`
+    : `M${x + w - 24} ${y + h} L${x + w - 14} ${y + h + 22} L${x + w - 50} ${y + h}`;
+  const text = lines.map((s, i) => T(x + 20, y + 40 + i * size * 1.3, s, { size, anchor: 'start', fill: color })).join('');
+  return `<g><path d="${tailPath}" fill="${fill}" stroke="${C.ink}" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="18" fill="${fill}" stroke="${C.ink}" stroke-width="3"/>
+    <path d="${tailPath.replace(/L[^L]*$/, '')}" fill="none"/>${text}</g>`;
+}
+
+function phone(x, y, w, h) {
+  return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="40" fill="${C.ink}"/>
+    <rect x="${x + 14}" y="${y + 14}" width="${w - 28}" height="${h - 28}" rx="28" fill="${C.paper}"/>
+    <rect x="${x + w / 2 - 50}" y="${y + 24}" width="100" height="18" rx="9" fill="${C.ink}"/>
+    ${T(x + w / 2, y + 82, 'Telegram', { size: 24, fill: C.navy, weight: 700 })}
+    <line x1="${x + 14}" y1="${y + 100}" x2="${x + w - 14}" y2="${y + 100}" stroke="${C.ink}" stroke-width="2" opacity="0.3"/></g>`;
+}
+
+function terminal(x, y, w, lines, t, { size = 30, start = 0.2, perLine = 0.42 } = {}) {
+  return lines.map((ln, i) => {
+    const at = start + (ln.at !== undefined ? ln.at : i * perLine);
+    if (t < at) return '';
+    const shown = Math.floor(clamp((t - at) / 0.3) * ln.text.length);
+    return T(x, y + i * size * 1.45, ln.text.slice(0, shown), { size, font: 'mono', anchor: 'start', fill: ln.color || C.cream, weight: ln.bold ? 600 : 400 });
+  }).join('');
+}
+
+function stars(seed, count) {
+  let state = seed;
+  const random = () => (state = (state * 16807) % 2147483647) / 2147483647;
+  return Array.from({ length: count }, () => `<circle cx="${40 + random() * 1000}" cy="${40 + random() * 800}" r="${1 + random() * 2.4}" fill="${C.cream}" opacity="${0.4 + random() * 0.6}"/>`).join('');
+}
+
+// four extensions used in tree scenes
+const FOUR = ['simple-team', 'ctx-have', 'output-kit', 'footer'];
+const EIGHT = ['simple-team', 'ctx-have', 'output-kit', 'footer', 'pretty-bash', 'time-sense', 'user-agents', 'heads-up'];
+const COLUMNS = [180, 420, 660, 900];
+
+function tree(rootX, rootY, childY, xs, kind, t, { start = 0, rootR = 60, childR = 34, invert = false, stroke = C.ink, dimRoot = false } = {}) {
+  const branches = xs.map((cx, i) => {
+    const mid = (rootY + childY) / 2;
+    const d = `M${rootX} ${rootY} C${rootX} ${mid}, ${cx} ${mid}, ${cx} ${childY}`;
+    return line(d, prog(t, start + 0.3 + i * 0.08, 0.7), { stroke, width: 12 });
+  }).join('');
+  const root = pop(bounce(t, start), rootX, rootY, agent(rootX, rootY, rootR, kind, { main: true, dim: dimRoot }));
+  const children = xs.map((cx, i) => pop(bounce(t, start + 0.8 + i * 0.1), cx, childY, agent(cx, childY, childR, kind))).join('');
+  return branches + root + children;
+}
+
+// ---------- scenes ----------
+const S = {};
+
+S.s01 = t => {
+  const flagged = [0, 1, 2];
+  const cards = EIGHT.map((name, i) => {
+    const x = 92 + (i % 4) * 232, y = 420 + Math.floor(i / 4) * 210;
+    const broken = flagged.includes(i);
+    const mark = broken ? (t < 3.9
+      ? cross(x + 90, y + 95, 90, C.red, prog(t, 1.5 + i * 0.3, 0.3))
+      : check(x + 90, y + 100, 100, C.green, prog(t, 3.9 + i * 0.15, 0.3))) : '';
+    return rise(prog(t, 0.4 + i * 0.06), card(x, y, 180, 180, name)) + mark;
+  }).join('');
+  return panel(C.cream)
+    + rise(prog(t, 0), T(64, 130, 'Two trees,', { size: 84, anchor: 'start' }))
+    + rise(prog(t, 0.15), T(60, 250, 'one scope', { size: 128, anchor: 'start', fill: C.red }))
+    + rise(prog(t, 0.3), T(66, 312, 'the next remotes-automation design', { size: 32, anchor: 'start', fill: C.navy }))
+    + pop(bounce(t, 1.0), 800, 140, tag(700, 140, 'Pi 1.4.0'))
+    + cards;
+};
+
+S.s02 = t => {
+  const cx = 380, cy = 440, r = 250;
+  const ticks = Array.from({ length: 24 }, (_, h) => {
+    const a = h / 24 * 2 * Math.PI - Math.PI / 2;
+    const inner = h % 6 === 0 ? r - 34 : r - 18;
+    return `<line x1="${cx + Math.cos(a) * inner}" y1="${cy + Math.sin(a) * inner}" x2="${cx + Math.cos(a) * (r - 6)}" y2="${cy + Math.sin(a) * (r - 6)}" stroke="${C.ink}" stroke-width="${h % 6 === 0 ? 6 : 3}"/>`;
+  }).join('');
+  const marks = [8.6, 14.5, 20.85].map((h, i) => {
+    const a = h / 24 * 2 * Math.PI - Math.PI / 2;
+    const x = cx + Math.cos(a) * (r - 70), y = cy + Math.sin(a) * (r - 70);
+    return pop(bounce(t, 0.5 + i * 0.35), x, y, `<circle cx="${x}" cy="${y}" r="26" fill="${C.mustard}" stroke="${C.ink}" stroke-width="4"/>`);
+  }).join('');
+  const angle = t * 70;
+  return panel(C.sky)
+    + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${C.paper}" stroke="${C.ink}" stroke-width="7"/>` + ticks + marks
+    + `<line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - r + 60}" stroke="${C.ink}" stroke-width="9" stroke-linecap="round" transform="rotate(${angle} ${cx} ${cy})"/>`
+    + `<circle cx="${cx}" cy="${cy}" r="12" fill="${C.ink}"/>`
+    + T(cx, cy + 90, '24h', { size: 34, font: 'mono', fill: C.navy })
+    + rise(prog(t, 1.4), T(820, 330, '3×', { size: 150, fill: C.navy, weight: 700 }) + T(820, 400, 'a day', { size: 48, fill: C.navy }))
+    + pop(bounce(t, 2.0), 820, 560, tag(690, 560, 'new Pi?', { size: 34 }));
+};
+
+S.s03 = t => {
+  const travel = prog(t, 2.6, 1.2);
+  const px = lerp(400, 640, travel), py = 330 - Math.sin(travel * Math.PI) * 120;
+  return panel(C.cream)
+    + pop(bounce(t, 0.2), 290, 400, agent(290, 400, 140, 'fix'))
+    + rise(prog(t, 0.5), T(290, 620, 'Opus', { size: 64, fill: C.red, weight: 700 }) + T(290, 670, 'fixes', { size: 36 }) + T(290, 715, 'Anthropic', { size: 26, font: 'mono', fill: C.grey }))
+    + pop(bounce(t, 1.5), 790, 400, agent(790, 400, 140, 'rev'))
+    + rise(prog(t, 1.8), T(790, 620, 'Astra', { size: 64, fill: C.navy, weight: 700 }) + T(790, 670, 'reviews', { size: 36 }) + T(790, 715, 'OpenAI', { size: 26, font: 'mono', fill: C.grey }))
+    + (t > 2.6 ? `<g transform="translate(${px - 40} ${py - 50})">${doc(0, 0, 80, 100, { diff: true })}</g>` : '');
+};
+
+function scopeScene(t, kind, label, narrowIndex) {
+  const cone = narrowIndex === undefined
+    ? `M540 230 L70 850 L1010 850 Z`
+    : `M540 230 L${COLUMNS[narrowIndex] - 10} 560 L${COLUMNS[narrowIndex] + 150} 560 Z`;
+  const k = prog(t, 0.5, 0.8);
+  const cards = EIGHT.map((name, i) => {
+    const x = 60 + (i % 4) * 250, y = 470 + Math.floor(i / 4) * 200;
+    const dim = narrowIndex !== undefined && i !== narrowIndex && t > 1.0;
+    return card(x + 20, y, 170, 160, name, { dim });
+  }).join('');
+  return panel(C.mustard)
+    + `<path d="${cone}" fill="${C.paper}" opacity="${0.55 * k}"/>`
+    + cards
+    + pop(bounce(t, 0), 540, 170, agent(540, 170, 84, kind))
+    + T(1010, 100, label, { size: 34, font: 'mono', anchor: 'end', fill: C.ink, weight: 600 });
+}
+S.s04 = t => scopeScene(t, 'fix', 'old: fix', undefined);
+S.s05 = t => scopeScene(t, 'rev', 'old: review + repair', 1);
+
+S.s06 = t => panel(C.night) + terminal(80, 130, 900, [
+  { text: '$ review ctx-have' },
+  { text: 'REVISE 1/3  the question misstates', color: C.red, bold: true },
+  { text: '            the tradeoff', color: C.red },
+  { text: '$ repair ctx-have' },
+  { text: '  question is shared with output-kit:', color: C.mustard },
+  { text: '  keep it exactly unchanged', color: C.mustard },
+  { text: 'REVISE 2/3  the question misstates...', color: C.red, bold: true, at: 2.9 },
+  { text: 'REVISE 3/3  the question misstates...', color: C.red, bold: true, at: 3.5 },
+], t, { size: 32, perLine: 0.42 })
+  + pop(bounce(t, 4.4), 540, 760, `<rect x="380" y="710" width="320" height="100" rx="8" fill="${C.red}"/>` + T(540, 783, 'STUCK', { size: 66, font: 'mono', fill: C.cream, weight: 600 }));
+
+S.s07 = t => panel(C.red)
+  + pop(bounce(t, 0.1, 0.6), 540, 440, T(548, 488, 'One scope', { size: 180, fill: C.ink, weight: 700 }) + T(540, 480, 'One scope', { size: 180, fill: C.cream, weight: 700 }))
+  + rise(prog(t, 0.9), T(540, 600, 'the fixer and the reviewer see the same work', { size: 38, fill: C.cream }));
+
+S.s08 = t => panel(C.cream)
+  + tree(290, 210, 540, [110, 230, 350, 470], 'fix', t, { start: 0.1 })
+  + tree(790, 210, 540, [610, 730, 850, 970], 'rev', t, { start: 0.5 })
+  + rise(prog(t, 1.9), T(290, 700, 'fixes', { size: 64, fill: C.red, weight: 700 }))
+  + rise(prog(t, 2.3), T(790, 700, 'reviews', { size: 64, fill: C.navy, weight: 700 }));
+
+S.s09 = t => {
+  const listed = EIGHT.map((name, i) => rise(prog(t, 0.9 + i * 0.12),
+    `<rect x="590" y="${222 + i * 46}" width="26" height="26" rx="4" fill="none" stroke="${C.ink}" stroke-width="3"/>`
+    + T(632, 244 + i * 46, name, { size: 26, font: 'mono', anchor: 'start' }))).join('');
+  return panel(C.pink)
+    + pop(bounce(t, 0.1), 290, 330, agent(290, 330, 130, 'fix', { main: true }))
+    + rise(prog(t, 0.4), T(290, 540, 'main fixer', { size: 52, fill: C.ink, weight: 700 }))
+    + rise(prog(t, 0.6), `<rect x="560" y="120" width="440" height="510" rx="8" fill="${C.paper}" stroke="${C.ink}" stroke-width="4"/>` + T(780, 180, 'the whole job', { size: 34, fill: C.navy, weight: 700 }))
+    + listed
+    + rise(prog(t, 2.3), T(290, 760, '</>', { size: 110, font: 'mono', fill: C.ink, weight: 600 }))
+    + line('M180 700 L400 780', prog(t, 2.8, 0.35), { stroke: C.red, width: 14 })
+    + rise(prog(t, 3.0), T(700, 760, 'never touches code', { size: 40, fill: C.red, weight: 700 }));
+};
+
+S.s10 = t => {
+  const clones = FOUR.map((name, i) => rise(prog(t, 2.3 + i * 0.15),
+    box3d(COLUMNS[i] - 75, 740, 150, 140, { label: name }))).join('');
+  return panel(C.cream)
+    + tree(540, 140, 400, COLUMNS, 'fix', t, { start: 0, rootR: 70, childR: 48 })
+    + pop(bounce(t, 1.2), 720, 230, tag(640, 230, 'fork', { size: 30 }))
+    + clones
+    + rise(prog(t, 3.6), T(540, 850, 'one delegate · one patch · one clone', { size: 30, font: 'mono', fill: C.navy }));
+};
+
+S.s11 = t => {
+  const chips = FOUR.map((name, i) => rise(prog(t, 2.8 + i * 0.1),
+    line(`M${COLUMNS[i]} 330 L${COLUMNS[i]} 560`, 1, { stroke: C.ink, width: 4, dash: '8 10' })
+    + `<rect x="${COLUMNS[i] - 82}" y="420" width="164" height="50" rx="8" fill="${C.paper}" stroke="${C.ink}" stroke-width="3"/>`
+    + T(COLUMNS[i], 454, name, { size: 22, font: 'mono' }))).join('');
+  return panel(C.sky)
+    + chips
+    + tree(540, 110, 300, COLUMNS, 'fix', t, { start: 0, rootR: 54, childR: 36 })
+    + tree(540, 780, 590, COLUMNS, 'rev', t, { start: 0.9, rootR: 54, childR: 36 })
+    + rise(prog(t, 0.4), T(90, 90, 'fix tree', { size: 30, font: 'mono', anchor: 'start', fill: C.red, weight: 600 }))
+    + rise(prog(t, 1.2), T(90, 830, 'review tree', { size: 30, font: 'mono', anchor: 'start', fill: C.navy, weight: 600 }));
+};
+
+S.s12 = t => {
+  const ends = [[150, 230, 'fix'], [150, 650, 'fix'], [930, 230, 'rev'], [930, 650, 'rev']];
+  const pipes = ends.map(([x, y], i) => {
+    const bx = x < 540 ? 390 : 690;
+    return line(`M${x} ${y} L${bx} ${y} L${bx} 440`, prog(t, 0.4 + i * 0.1, 0.6), { stroke: C.ink, width: 10 });
+  }).join('');
+  const tokens = ends.map(([x, y, kind], i) => pop(bounce(t, 0.1 + i * 0.1), x, y, agent(x, y, 60, kind))).join('');
+  const travelling = [0, 1].map(i => {
+    const phase = (t - 1.4 - i * 1.1) / 2.2;
+    if (phase < 0) return '';
+    const p = phase % 1;
+    const [sx, sy] = ends[i], [ex, ey] = ends[i + 2];
+    let x, y;
+    if (p < 0.4) { const k = p / 0.4; x = lerp(sx + 60, 390, k); y = sy; }
+    else if (p < 0.6) { const k = (p - 0.4) / 0.2; x = lerp(390, 690, k); y = lerp(sy, 440, Math.sin(k * Math.PI)) ; y = sy + (440 - sy) * Math.sin(k * Math.PI) * 0.9; }
+    else { const k = (p - 0.6) / 0.4; x = lerp(690, ex - 60, k); y = ey; }
+    return envelope(x, y, 64);
+  }).join('');
+  return panel(C.mustard) + pipes + tokens
+    + pop(bounce(t, 0.6), 540, 440, `<rect x="370" y="350" width="340" height="180" rx="12" fill="${C.night}" stroke="${C.ink}" stroke-width="4"/>`
+      + T(540, 428, 'the system', { size: 40, font: 'mono', fill: C.cream, weight: 600 })
+      + T(540, 480, 'pi --fork', { size: 28, font: 'mono', fill: C.mustard }))
+    + travelling
+    + rise(prog(t, 3.0), `<rect x="380" y="610" width="320" height="64" rx="32" fill="${C.paper}" stroke="${C.ink}" stroke-width="3"/>` + T(540, 652, 'never judges', { size: 32, fill: C.ink, weight: 700 }));
+};
+
+S.s13 = t => {
+  const walls = [0, 1, 2].map(i => {
+    const x = (COLUMNS[i] + COLUMNS[i + 1]) / 2;
+    return line(`M${COLUMNS[i] + 56} 640 L${COLUMNS[i + 1] - 56} 640`, prog(t, 0.6 + i * 0.25, 0.4), { stroke: C.ink, width: 4, dash: '10 10' })
+      + cross(x, 640, 46, C.red, prog(t, 0.9 + i * 0.25, 0.3));
+  }).join('');
+  const delegates = FOUR.map((name, i) => pop(bounce(t, 0.1 + i * 0.08), COLUMNS[i], 640, agent(COLUMNS[i], 640, 52, 'fix'))
+    + T(COLUMNS[i], 730, name, { size: 22, font: 'mono' })).join('');
+  return panel(C.cream) + walls + delegates
+    + pop(bounce(t, 2.4), 400, 200, agent(400, 200, 66, 'fix', { main: true }))
+    + pop(bounce(t, 2.6), 680, 200, agent(680, 200, 66, 'rev', { main: true }))
+    + line('M110 470 Q540 300 970 470', prog(t, 3.0, 0.8), { stroke: C.mustard, width: 16 })
+    + rise(prog(t, 3.5), T(540, 430, 'across extensions', { size: 34, fill: C.ink, weight: 700 }));
+};
+
+S.s14 = t => panel(C.night) + stars(11, 70)
+  + line('M540 120 A320 320 0 1 1 245 315', prog(t, 0, 1.1), { stroke: C.mustard, width: 18, marker: 'arrowMustard' })
+  + pop(bounce(t, 0.2), 540, 440, T(540, 475, 'One round', { size: 96, fill: C.cream, weight: 700 }));
+
+S.s15 = t => {
+  const rows = [['Claude 5h', 0.6, 0.94], ['Claude week', 0.8, 1.12], ['Codex week', 0.8, 0.9]];
+  const scale = v => 400 + v / 1.2 * 540;
+  const bars = rows.map(([name, threshold, value], i) => {
+    const y = 240 + i * 150;
+    const k = prog(t, 0.4 + i * 0.25, 1.0);
+    return T(370, y + 18, name, { size: 32, font: 'mono', anchor: 'end' })
+      + `<rect x="400" y="${y - 28}" width="540" height="56" fill="${C.paper}" stroke="${C.ink}" stroke-width="3"/>`
+      + `<rect x="400" y="${y - 28}" width="${(scale(value) - 400) * k}" height="56" fill="url(#htNavy)" stroke="${C.ink}" stroke-width="3"/>`
+      + `<line x1="${scale(threshold)}" y1="${y - 46}" x2="${scale(threshold)}" y2="${y + 46}" stroke="${C.red}" stroke-width="6"/>`
+      + T(scale(threshold), y - 54, `≥ ${threshold}`, { size: 24, font: 'mono', fill: C.red })
+      + check(990, y, 50, C.green, prog(t, 1.8 + i * 0.2, 0.3));
+  }).join('');
+  return panel(C.mustard)
+    + T(80, 100, 'quota gate', { size: 40, font: 'mono', anchor: 'start', weight: 600 })
+    + bars
+    + rise(prog(t, 3.0), T(540, 780, 'below a line → the round waits', { size: 38, fill: C.ink }));
+};
+
+S.s16 = t => {
+  const commits = [150, 290, 430, 570, 710].map((x, i) => `<circle cx="${x}" cy="200" r="20" fill="${C.paper}" stroke="${C.ink}" stroke-width="4"/>`).join('');
+  const boxes = FOUR.map((name, i) => {
+    const arrive = prog(t, 1.3 + i * 0.12, 0.6);
+    const x = COLUMNS[i];
+    return line(`M870 225 C870 400, ${x} 400, ${x} 540`, arrive, { stroke: C.paper, width: 6, marker: 'arrowPaper' })
+      + box3d(x - 75, 780, 150, 170, { face: arrive >= 1 ? C.lightGreen : C.blue })
+      + T(x, 830, name, { size: 22, font: 'mono', fill: C.cream })
+      + rise(prog(t, 2.0 + i * 0.12), `<rect x="${x - 52}" y="565" width="104" height="44" rx="6" fill="${C.paper}" stroke="${C.ink}" stroke-width="3"/>` + T(x, 596, 'main', { size: 24, font: 'mono', weight: 600 }));
+  }).join('');
+  return panel(C.green)
+    + `<line x1="110" y1="200" x2="${lerp(710, 870, prog(t, 0.3, 0.5))}" y2="200" stroke="${C.ink}" stroke-width="8"/>` + commits
+    + pop(bounce(t, 0.6), 870, 200, `<circle cx="870" cy="200" r="30" fill="${C.mustard}" stroke="${C.ink}" stroke-width="4"/>`)
+    + rise(prog(t, 0.8), T(870, 140, 'GitHub main', { size: 30, font: 'mono', fill: C.cream, weight: 600 }))
+    + boxes;
+};
+
+S.s17 = t => {
+  const rows = [190, 360, 530, 700];
+  const lanes = rows.map((y, i) => {
+    const k = prog(t, 1.0 + i * 0.12, 1.8);
+    return line(`M270 ${y} L810 ${y}`, 1, { stroke: C.ink, width: 3, dash: '6 12', opacity: 0.6 })
+      + pop(bounce(t, 0.1 + i * 0.08), 200, y, agent(200, y, 54, 'fix'))
+      + pop(bounce(t, 0.5 + i * 0.08), 880, y, agent(880, y, 54, 'rev'))
+      + (t > 1.0 ? `<g transform="translate(${lerp(260, 740, k)} ${y - 55})">${doc(0, 0, 80, 100, { diff: true })}</g>` : '')
+      + T(540, y - 70, FOUR[i], { size: 22, font: 'mono', fill: C.navy });
+  }).join('');
+  return panel(C.cream) + lanes;
+};
+
+S.s18 = t => {
+  const verdicts = [['approve', C.green], ['revise', C.red], ['approve', C.green], ['approve', C.green]];
+  return panel(C.sky) + FOUR.map((name, i) => pop(bounce(t, 0.1 + i * 0.08), COLUMNS[i], 280, agent(COLUMNS[i], 280, 62, 'rev'))
+    + T(COLUMNS[i], 390, name, { size: 22, font: 'mono' })
+    + stamp(COLUMNS[i], 540, verdicts[i][0], verdicts[i][1], prog(t, 0.8 + i * 0.45, 0.35), { w: 200, size: 34, rotate: i % 2 ? 7 : -7 })).join('');
+};
+
+S.s19 = t => {
+  const verdicts = [['approve', C.green], ['revise', C.red], ['approve', C.green], ['approve', C.green]];
+  const cards = FOUR.map((name, i) => {
+    const x = COLUMNS[i];
+    const gathered = line(`M${x} 470 C${x} 380, 540 380, 540 290`, prog(t, 0.7 + i * 0.1, 0.6), { stroke: C.ink, width: 6 });
+    return gathered
+      + rise(prog(t, 0.2 + i * 0.1), `<rect x="${x - 100}" y="470" width="200" height="200" rx="8" fill="${C.paper}" stroke="${C.ink}" stroke-width="3"/>` + T(x, 515, name, { size: 22, font: 'mono', fill: C.navy, weight: 600 }))
+      + stamp(x, 600, verdicts[i][0], verdicts[i][1], prog(t, 0.3 + i * 0.1, 0.3), { w: 170, h: 64, size: 28, rotate: 0 });
+  }).join('');
+  return panel(C.cream) + cards
+    + pop(bounce(t, 0.1), 540, 200, agent(540, 200, 84, 'rev', { main: true }))
+    + line('M660 700 Q780 790 900 700', prog(t, 2.6, 0.6), { stroke: C.red, width: 7, marker: 'arrowRed' })
+    + rise(prog(t, 3.0), T(780, 820, 'breaks footer', { size: 34, fill: C.red, weight: 700 }))
+    + stamp(660, 600, 'revise', C.red, prog(t, 3.8, 0.35), { w: 170, h: 64, size: 28, rotate: -10 });
+};
+
+S.s20 = t => {
+  const bars = [0, 1, 2, 3, 4, 5].map(i => `<rect x="${380 + i * 62}" y="230" width="18" height="470" fill="${C.navy}" stroke="${C.ink}" stroke-width="3"/>`).join('');
+  return panel(C.pink)
+    + rise(prog(t, 0), `<rect x="300" y="190" width="70" height="580" fill="${C.mustard}" stroke="${C.ink}" stroke-width="4"/>`
+      + `<rect x="710" y="190" width="70" height="580" fill="${C.mustard}" stroke="${C.ink}" stroke-width="4"/>`
+      + `<rect x="300" y="180" width="480" height="50" fill="${C.mustard}" stroke="${C.ink}" stroke-width="4"/>` + bars)
+    + pop(bounce(t, 0.6), 540, 610, agent(540, 610, 110, 'fix', { main: true }))
+    + rise(prog(t, 1.2), T(540, 130, 'the last gate', { size: 56, weight: 700 }))
+    + rise(prog(t, 1.8), T(170, 470, 'Telegram', { size: 30, font: 'mono', fill: C.navy }) + T(910, 470, 'push', { size: 30, font: 'mono', fill: C.navy }));
+};
+
+S.s21 = t => {
+  const rows = [
+    [200, C.green, 'arrowGreen', 'release', 'M310 400 Q450 200 600 200'],
+    [440, C.mustard, 'arrowMustard', 'hold back', 'M330 440 L600 440'],
+    [680, C.red, 'arrowRed', 'send back', 'M310 480 Q450 680 600 680'],
+  ];
+  return panel(C.cream)
+    + pop(bounce(t, 0.1), 200, 440, agent(200, 440, 110, 'fix', { main: true }))
+    + rows.map(([y, color, marker, label, path], i) => {
+      const k = prog(t, 0.7 + i * 1.0, 0.6);
+      return line(path, k, { stroke: color, width: 10, marker })
+        + rise(prog(t, 1.1 + i * 1.0), card(650, y - 70, 140, 140, FOUR[i]) + T(830, y + 14, label, { size: 44, anchor: 'start', fill: color === C.mustard ? C.ink : color, weight: 700 }));
+    }).join('');
+};
+
+S.s22 = t => panel(C.cream)
+  + rise(prog(t, 0), `<rect x="200" y="140" width="680" height="400" rx="8" fill="${C.paper}" stroke="${C.ink}" stroke-width="4"/>`
+    + T(240, 200, 'finding · ctx-have', { size: 28, font: 'mono', anchor: 'start', fill: C.navy, weight: 600 })
+    + T(240, 290, 'Also support Pi 1.2.', { size: 46, anchor: 'start' }))
+  + line('M230 278 L680 278', prog(t, 1.0, 0.4), { stroke: C.red, width: 9 })
+  + rise(prog(t, 1.5), T(240, 380, 'Not needed:', { size: 42, anchor: 'start', fill: C.red, weight: 700 }) + T(240, 440, 'it requires Pi 1.3.', { size: 42, anchor: 'start', fill: C.red }))
+  + pop(bounce(t, 2.0), 740, 500, tag(660, 500, 'reason', { size: 30 }))
+  + line('M600 560 Q700 700 820 700', prog(t, 2.8, 0.6), { stroke: C.ink, width: 7, marker: 'arrowInk' })
+  + pop(bounce(t, 3.1), 900, 700, agent(900, 700, 60, 'rev'))
+  + rise(prog(t, 3.4), T(560, 760, 'next round', { size: 34, font: 'mono', fill: C.navy }));
+
+S.s23 = t => {
+  const tapped = t > 5.0;
+  const ripple = tapped ? clamp((t - 5.0) / 0.8) : 0;
+  return panel(C.night)
+    + rise(prog(t, 0.2), `<rect x="70" y="80" width="940" height="130" rx="22" fill="${C.paper}" stroke="${C.ink}" stroke-width="3"/>`
+      + T(110, 132, 'ntfy', { size: 30, anchor: 'start', weight: 700, fill: C.red })
+      + T(110, 182, 'Pushing to giladbarnea/pi-simple-team main', { size: 27, font: 'mono', anchor: 'start' }), -40)
+    + line('M280 260 L280 470', prog(t, 1.4, 0.6), { stroke: C.lightGreen, width: 12, marker: 'arrowGreen' })
+    + rise(prog(t, 1.9), `<rect x="140" y="520" width="280" height="170" rx="10" fill="${C.paper}" stroke="${C.ink}" stroke-width="3"/>` + T(280, 590, 'GitHub', { size: 38, weight: 700 }) + T(280, 640, 'main +1', { size: 30, font: 'mono', fill: C.green }))
+    + rise(prog(t, 3.0), T(760, 330, 'product change?', { size: 40, fill: C.cream, weight: 700 }))
+    + pop(bounce(t, 3.5), 760, 520, `<rect x="620" y="460" width="280" height="120" rx="60" fill="${tapped ? C.green : C.mustard}" stroke="${C.ink}" stroke-width="4"/>` + T(760, 538, 'Push', { size: 52, weight: 700 }))
+    + (tapped ? `<circle cx="800" cy="545" r="${30 + ripple * 120}" fill="none" stroke="${C.cream}" stroke-width="5" opacity="${1 - ripple}"/>` : '')
+    + rise(prog(t, 3.9), T(760, 660, 'your tap', { size: 34, fill: C.cream }));
+};
+
+S.s24 = t => {
+  const dots = [0, 1, 2].map(i => {
+    const lift = Math.max(0, Math.sin((t * 4 - i * 0.8))) * 14;
+    return `<circle cx="${490 + i * 50}" cy="${150 - lift}" r="14" fill="${C.cream}"/>`;
+  }).join('');
+  const pause = (x, y, s) => `<rect x="${x - s * 0.4}" y="${y - s / 2}" width="${s * 0.28}" height="${s}" rx="4" fill="${C.mustard}"/><rect x="${x + s * 0.12}" y="${y - s / 2}" width="${s * 0.28}" height="${s}" rx="4" fill="${C.mustard}"/>`;
+  return panel(C.night) + stars(5, 40)
+    + pop(bounce(t, 0), 540, 330, agent(540, 330, 110, 'fix', { main: true })) + (t > 0.4 ? dots : '')
+    + FOUR.map((name, i) => fade(prog(t, 0.6 + i * 0.1), agent(COLUMNS[i], 650, 52, 'fix', { dim: true }) + `<circle cx="${COLUMNS[i] + 46}" cy="604" r="30" fill="${C.night}" stroke="${C.mustard}" stroke-width="3"/>` + pause(COLUMNS[i] + 46, 604, 30))).join('');
+};
+
+S.s25 = t => {
+  const funnel = `<path d="M260 190 L820 190 L600 520 L600 690 L480 690 L480 520 Z" fill="${C.paper}" stroke="${C.ink}" stroke-width="6" stroke-linejoin="round"/>`;
+  const colors = [C.red, C.navy, C.green, C.red, C.navy, C.green, C.red, C.navy];
+  const falling = colors.map((color, i) => {
+    const start = 0.5 + i * 0.35;
+    const k = clamp((t - start) / 1.4);
+    if (k <= 0) return '';
+    const passes = i % 3 === 0;
+    const x0 = 300 + i * 65;
+    let x, y;
+    if (!passes) { x = lerp(x0, 540 + (x0 - 540) * 0.35, k); y = lerp(80, 360, k); return k < 1 ? `<circle cx="${x}" cy="${y}" r="20" fill="${color}" stroke="${C.ink}" stroke-width="3" opacity="${1 - k * 0.9}"/>` : ''; }
+    x = lerp(x0, 540, Math.min(1, k * 1.5)); y = lerp(80, 800, k);
+    return `<circle cx="${x}" cy="${y}" r="20" fill="${color}" stroke="${C.ink}" stroke-width="3"/>`;
+  }).join('');
+  return panel(C.mustard) + falling + funnel
+    + T(540, 330, 'main agents', { size: 40, font: 'mono', fill: C.navy, weight: 600 })
+    + T(540, 380, 'narrow only', { size: 34, fill: C.ink });
+};
+
+S.s26 = t => panel(C.cream)
+  + stamp(230, 280, 'approve', C.green, prog(t, 0.2, 0.35), { rotate: 0 })
+  + line('M370 280 L560 280', prog(t, 0.6, 0.5), { stroke: C.ink, width: 8, marker: 'arrowInk' })
+  + rise(prog(t, 0.9), T(600, 296, 'hold back', { size: 52, anchor: 'start', weight: 700 }))
+  + check(950, 270, 90, C.green, prog(t, 1.3, 0.35))
+  + stamp(230, 600, 'revise', C.red, prog(t, 2.0, 0.35), { rotate: 0 })
+  + line('M370 600 L560 600', prog(t, 2.4, 0.5), { stroke: C.ink, width: 8, marker: 'arrowInk' })
+  + rise(prog(t, 2.7), T(600, 616, 'release', { size: 52, anchor: 'start', weight: 700 }))
+  + cross(950, 600, 90, C.red, prog(t, 3.1, 0.4));
+
+function pairScene(t, { slots, fillColor, start = 0 }) {
+  const slotSvg = [0, 1, 2].map(i => {
+    const x = 390 + i * 150;
+    const filled = slots[i] !== undefined && t > slots[i];
+    return pop(bounce(t, start + 0.2 + i * 0.2), x, 230, `<circle cx="${x}" cy="230" r="56" fill="${filled ? fillColor : C.paper}" stroke="${C.ink}" stroke-width="4"/>`
+      + T(x, 248, String(i + 1), { size: 48, font: 'mono', fill: filled ? C.cream : C.ink, weight: 600 }));
+  }).join('');
+  return slotSvg;
+}
+
+S.s27 = t => panel(C.pink)
+  + `<line x1="400" y1="560" x2="680" y2="560" stroke="${C.ink}" stroke-width="10"/>`
+  + pop(bounce(t, 0), 400, 560, agent(400, 560, 90, 'fix'))
+  + pop(bounce(t, 0.15), 680, 560, agent(680, 560, 90, 'rev'))
+  + pairScene(t, { slots: [], fillColor: C.green })
+  + rise(prog(t, 1.2), T(540, 760, 'three reviews', { size: 44, weight: 700 }));
+
+S.s28 = t => panel(C.green)
+  + `<line x1="400" y1="560" x2="680" y2="560" stroke="${C.ink}" stroke-width="10"/>`
+  + agent(400, 560, 90, 'fix') + agent(680, 560, 90, 'rev')
+  + pairScene(t, { slots: [0.4], fillColor: C.navy, start: -1 })
+  + stamp(540, 730, 'released', C.ink, prog(t, 1.0, 0.35), { w: 300, size: 40, rotate: -5 })
+  + rise(prog(t, 2.0), doc(860, 360, 110, 140, { title: 'handoff' }))
+  + cross(915, 430, 120, C.red, prog(t, 2.4, 0.35));
+
+S.s29 = t => {
+  const retire = prog(t, 4.2, 0.6);
+  const flights = [0, 1].map(i => {
+    const k = prog(t, 2.6 + i * 0.3, 1.2);
+    const sx = 240 + i * 200, ex = 640 + i * 200;
+    const x = lerp(sx, ex, k), y = 440 - Math.sin(k * Math.PI) * 160;
+    return t > 1.8 ? rise(prog(t, 1.8 + i * 0.2), `<g transform="translate(${x - 45} ${y - 60})">${doc(0, 0, 90, 115, { title: 'handoff' })}</g>`) : '';
+  }).join('');
+  const slots = [0, 1, 2].map(i => {
+    const x = 220 + i * 110;
+    const filled = t > 0.3 + i * 0.4;
+    return `<circle cx="${x}" cy="220" r="40" fill="${filled ? C.red : C.paper}" stroke="${C.ink}" stroke-width="4"/>`
+      + (filled ? cross(x, 220, 34, C.cream, 1) : T(x, 236, String(i + 1), { size: 36, font: 'mono' }));
+  }).join('');
+  return panel(C.cream) + slots
+    + `<line x1="240" y1="620" x2="440" y2="620" stroke="${retire > 0 ? C.grey : C.ink}" stroke-width="8" opacity="${1 - retire * 0.6}"/>`
+    + (retire > 0.5 ? agent(240, 620, 70, 'fix', { ghost: true }) + agent(440, 620, 70, 'rev', { ghost: true }) + T(340, 760, 'retired', { size: 34, fill: C.grey })
+      : agent(240, 620, 70, 'fix') + agent(440, 620, 70, 'rev'))
+    + pop(bounce(t, 3.4), 740, 620, agent(740, 620, 70, 'fix', { fresh: true }))
+    + pop(bounce(t, 3.6), 920, 620, agent(920, 620, 70, 'rev', { fresh: true }))
+    + rise(prog(t, 3.8), T(830, 760, 'fresh pair', { size: 34, fill: C.ink, weight: 700 }))
+    + flights;
+};
+
+S.s30 = t => {
+  const growth = prog(t, 0.6, 3.4);
+  const height = 80 + growth * 560;
+  const count = Math.round(growth * 726);
+  return panel(C.cream)
+    + T(70, 190, `${count},000`, { size: 120, anchor: 'start', fill: C.red })
+    + T(76, 260, 'tokens', { size: 56, anchor: 'start', fill: C.red })
+    + rise(prog(t, 3.2), T(76, 330, 'in three days', { size: 40, anchor: 'start', fill: C.navy }))
+    + box3d(640, 800, 260, height, { depth: 40 })
+    + rise(prog(t, 5.0), T(500, 700, 'run start →', { size: 32, font: 'mono', anchor: 'middle', fill: C.ink }) )
+    + pop(bounce(t, 5.6), 400, 790, box3d(330, 800, 140, 60, { depth: 26, face: C.lightGreen }))
+    + rise(prog(t, 5.9), T(400, 840, 'fresh', { size: 30, font: 'mono', fill: C.green, weight: 600 }));
+};
+
+S.s31 = t => {
+  const groups = [
+    [200, 'clones', box3d(130, 680, 80, 90, { depth: 18 }) + box3d(220, 680, 80, 90, { depth: 18 })],
+    [540, 'handoffs', doc(450, 560, 80, 110, { title: 'handoff' }) + doc(550, 580, 80, 110, { title: 'handoff' })],
+    [880, 'open questions', bubble(780, 560, 90, 70, ['?'], { size: 40 }) + bubble(890, 600, 90, 70, ['?'], { size: 40 })],
+  ];
+  return panel(C.sky)
+    + groups.map(([x, label, svg], i) => rise(prog(t, 0.2 + i * 0.5), svg + T(x, 790, label, { size: 30, font: 'mono', weight: 600 }))
+      + line(`M${x} 540 Q${x} 330 ${540 + (x - 540) * 0.2} 290`, prog(t, 2.0 + i * 0.2, 0.7), { stroke: C.ink, width: 7, marker: 'arrowInk' })).join('')
+    + pop(bounce(t, 2.9), 540, 190, agent(540, 190, 80, 'fix', { main: true, fresh: true }))
+    + rise(prog(t, 3.1), T(760, 160, 'new run', { size: 36, anchor: 'start', weight: 700 }));
+};
+
+S.s32 = t => {
+  const queued = [0, 1, 2].map(i => rise(prog(t, 1.2 + i * 0.2), `<rect x="${740 + i * 26}" y="${300 + i * 26}" width="250" height="110" rx="18" fill="${C.paper}" stroke="${C.ink}" stroke-width="3" opacity="${0.75 - i * 0.2}"/>`)).reverse().join('');
+  return panel(C.cream) + queued
+    + rise(prog(t, 1.6), T(860, 520, 'next, next…', { size: 30, font: 'mono', fill: C.grey }))
+    + phone(220, 90, 380, 740)
+    + rise(prog(t, 0.4), bubble(250, 150, 320, 150, ['custom-footer shows', 'context twice.', 'Hide ours?'], { size: 28 }))
+    + rise(prog(t, 0.9), `<rect x="250" y="330" width="150" height="60" rx="12" fill="${C.sky}" stroke="${C.ink}" stroke-width="3"/>` + T(325, 370, 'Hide ours', { size: 24 })
+      + `<rect x="420" y="330" width="150" height="60" rx="12" fill="${C.sky}" stroke="${C.ink}" stroke-width="3"/>` + T(495, 370, 'Keep both', { size: 24 }))
+    + rise(prog(t, 2.2), T(410, 780, 'one at a time', { size: 30, font: 'mono', fill: C.navy, weight: 600 }));
+};
+
+S.s33 = t => {
+  const flight = prog(t, 0.9, 0.9);
+  const awake = t > 1.9;
+  const zs = awake ? '' : [0, 1].map(i => T(840 + i * 40, 290 - i * 40 - (t * 20 % 20), 'z', { size: 40 + i * 10, fill: C.cream })).join('');
+  const burst = awake ? Array.from({ length: 8 }, (_, i) => {
+    const a = i / 8 * 2 * Math.PI, k = prog(t, 1.9, 0.4);
+    return `<line x1="${760 + Math.cos(a) * 130}" y1="${430 + Math.sin(a) * 130}" x2="${760 + Math.cos(a) * (130 + 40 * k)}" y2="${430 + Math.sin(a) * (130 + 40 * k)}" stroke="${C.mustard}" stroke-width="8" stroke-linecap="round"/>`;
+  }).join('') : '';
+  return panel(C.night) + stars(23, 60)
+    + `<circle cx="940" cy="120" r="50" fill="${C.cream}"/><circle cx="915" cy="105" r="46" fill="${C.night}"/>`
+    + T(120, 130, '03:12', { size: 54, font: 'mono', fill: C.cream, anchor: 'start' })
+    + phone(110, 230, 300, 560)
+    + rise(prog(t, 0.2), bubble(150, 380, 220, 80, ['Yes for A'], { fill: C.lightGreen, size: 30, tail: 'right' }))
+    + (t > 0.9 && flight < 1 ? envelope(lerp(380, 640, flight), lerp(420, 430, flight), 60) : '')
+    + burst + agent(760, 430, 110, 'fix', { main: true, dim: !awake }) + zs;
+};
+
+S.s34 = t => {
+  const first = prog(t, 0.6, 1.2);
+  const second = prog(t, 4.6, 1.6);
+  return panel(C.cream)
+    + agent(190, 430, 96, 'fix', { main: true })
+    + line('M300 400 Q520 230 740 250', prog(t, 0.3, 0.8), { stroke: C.ink, width: 6, marker: 'arrowInk' })
+    + (t < 1.9 ? envelope(lerp(300, 740, first), lerp(400, 250, first) - Math.sin(first * Math.PI) * 60, 60) : '')
+    + agent(810, 250, 64, 'fix') + T(810, 355, 'delegate that asked', { size: 26, font: 'mono' })
+    + check(910, 200, 60, C.green, prog(t, 1.9, 0.3))
+    + rise(prog(t, 3.4), T(560, 520, 'if it retired:', { size: 36, font: 'mono', fill: C.grey }))
+    + rise(prog(t, 3.6), agent(560, 660, 64, 'fix', { ghost: true }))
+    + line('M300 470 Q560 830 790 690', prog(t, 4.2, 0.8), { stroke: C.ink, width: 6, marker: 'arrowInk' })
+    + (t > 4.6 && second < 1 ? envelope(lerp(300, 790, second), 470 + Math.sin(second * Math.PI) * 280, 60) + `<g transform="translate(${lerp(320, 810, second)} ${430 + Math.sin(second * Math.PI) * 300})">${doc(0, 0, 60, 76)}</g>` : '')
+    + pop(bounce(t, 4.0), 880, 660, agent(880, 660, 64, 'fix', { fresh: true }))
+    + (second >= 1 ? rise(prog(t, 6.2), doc(960, 590, 70, 90, { title: 'note' })) : '')
+    + rise(prog(t, 6.2), T(860, 790, 'fresh + context note', { size: 26, font: 'mono' }));
+};
+
+S.s35 = t => {
+  const questions = ['Q2 · output-kit', 'Q3 · ctx-have', 'Q4 · footer', 'Q5 · time-sense'];
+  const settled = [0, 1];
+  const chips = questions.map((label, i) => {
+    let y = 220 + i * 130;
+    const settledNow = settled.includes(i);
+    const strike = settledNow ? prog(t, 1.8 + i * 0.3, 0.35) : 0;
+    const gone = settledNow ? prog(t, 2.8, 0.5) : 0;
+    let x = 660;
+    if (i === 2) { const k = prog(t, 4.0, 0.8); x = lerp(660, 250, k); y = lerp(y, 420, k); }
+    if (i === 3) y = lerp(y, 220 + 2 * 130, prog(t, 4.2, 0.6));
+    return fade(1 - gone, `<rect x="${x}" y="${y}" width="330" height="80" rx="16" fill="${C.paper}" stroke="${C.ink}" stroke-width="3"/>` + T(x + 165, y + 50, label, { size: 26, font: 'mono' })
+      + line(`M${x + 20} ${y + 42} L${x + 310} ${y + 42}`, strike, { stroke: C.red, width: 7 }));
+  }).join('');
+  return panel(C.cream)
+    + phone(200, 100, 400, 720)
+    + bubble(330, 230, 220, 80, ['Hide ours'], { fill: C.lightGreen, size: 30, tail: 'right' })
+    + T(825, 170, 'queue', { size: 34, font: 'mono', fill: C.navy, weight: 600 })
+    + chips
+    + rise(prog(t, 2.0), T(825, 820, 'settled → gone', { size: 30, font: 'mono', fill: C.red }));
+};
+
+S.s36 = t => {
+  const struck = prog(t, 2.6, 0.3);
+  return panel(C.pink)
+    + rise(prog(t, 0), card(150, 470, 200, 230, 'output-kit'))
+    + rise(prog(t, 0.1), card(730, 470, 200, 230, 'ctx-have'))
+    + line('M350 585 L490 585', prog(t, 0.5, 0.4), { stroke: C.ink, width: 8 })
+    + line('M590 585 L730 585', prog(t, 0.5, 0.4), { stroke: C.ink, width: 8 })
+    + pop(bounce(t, 0.8), 540, 585, `<circle cx="540" cy="585" r="52" fill="${C.mustard}" stroke="${C.ink}" stroke-width="4"/>` + T(540, 602, 'X', { size: 50, font: 'mono', weight: 600 }))
+    + rise(prog(t, 1.3), bubble(110, 760, 170, 64, ['Q · A'], { size: 28 }) + bubble(800, 760, 170, 64, ['Q · B'], { size: 28 }))
+    + line('M120 795 L270 795', struck, { stroke: C.red, width: 7 }) + line('M810 795 L960 795', struck, { stroke: C.red, width: 7 })
+    + pop(bounce(t, 3.2), 540, 160, agent(540, 160, 76, 'fix', { main: true }))
+    + rise(prog(t, 3.8), bubble(640, 110, 330, 110, ['Is X-D acceptable?'], { size: 32, tail: 'left' }) );
+};
+
+S.s37 = t => panel(C.mustard)
+  + pop(bounce(t, 0), 300, 150, tag(120, 150, 'Pi 1.4.0', { size: 48, fill: C.paper }))
+  + rise(prog(t, 0.6), `<rect x="110" y="240" width="860" height="150" rx="8" fill="${C.paper}" stroke="${C.ink}" stroke-width="3"/>`
+    + T(140, 300, 'Extension tools the branch never added or', { size: 28, font: 'mono', anchor: 'start' })
+    + T(140, 350, 'removed are now active.', { size: 28, font: 'mono', anchor: 'start', fill: C.green, weight: 600 }))
+  + rise(prog(t, 2.2), doc(170, 470, 260, 300, { fill: C.pink, title: 'ctx-have patch' }))
+  + rise(prog(t, 2.5), doc(650, 470, 260, 300, { fill: C.pink, title: 'output-kit patch' }))
+  + stamp(300, 650, 'unpublished', C.navy, prog(t, 3.2, 0.3), { w: 250, size: 28, rotate: -8 })
+  + stamp(780, 650, 'unpublished', C.navy, prog(t, 3.5, 0.3), { w: 250, size: 28, rotate: 6 })
+  + rise(prog(t, 4.4), T(540, 835, 'still needed?', { size: 44, weight: 700, fill: C.red }));
+
+S.s38 = t => {
+  const item = (y, text, at) => `<rect x="110" y="${y - 40}" width="52" height="52" rx="6" fill="${C.paper}" stroke="${C.ink}" stroke-width="4"/>`
+    + check(138, y - 16, 56, C.green, prog(t, at, 0.35))
+    + T(190, y, text, { size: 36, anchor: 'start' });
+  return panel(C.cream)
+    + T(100, 130, 'Pass', { size: 80, anchor: 'start', fill: C.green, weight: 700 })
+    + rise(prog(t, 0.3), item(250, 'drop both unpublished patches', 1.4))
+    + rise(prog(t, 2.2), item(350, 'ask before removing the', 3.6) + T(190, 400, 'pi-simple-team workaround', { size: 36, anchor: 'start', font: 'mono' }))
+    + rise(prog(t, 4.6), T(100, 580, 'Fail', { size: 80, anchor: 'start', fill: C.red, weight: 700 })
+      + T(110, 680, '× publish either patch', { size: 36, anchor: 'start', fill: C.red })
+      + T(110, 750, '× remove the workaround silently', { size: 36, anchor: 'start', fill: C.red }));
+};
+
+S.s39 = t => {
+  const pulse = 1 + Math.sin(t * 4) * 0.03;
+  return panel(C.navy)
+    + rise(prog(t, 0), T(540, 150, 'remotes-automation', { size: 72, fill: C.mustard, weight: 700 }))
+    + rise(prog(t, 0.4), `<rect x="170" y="210" width="740" height="250" rx="8" fill="${C.paper}" stroke="${C.ink}" stroke-width="3"/>`
+      + T(200, 270, 'desks/2026-10-22-one-scope-design/', { size: 28, font: 'mono', anchor: 'start', fill: C.navy, weight: 600 })
+      + T(230, 335, '- README.md', { size: 28, font: 'mono', anchor: 'start' })
+      + T(230, 385, '- FLOW.md', { size: 28, font: 'mono', anchor: 'start' })
+      + `<rect x="650" y="370" width="230" height="56" rx="8" fill="${C.red}"/>` + T(765, 408, 'proposal', { size: 30, font: 'mono', fill: C.cream, weight: 600 }))
+    + pop(bounce(t, 1.0) * pulse, 540, 570, `<rect x="270" y="520" width="540" height="100" rx="50" fill="${C.mustard}" stroke="${C.ink}" stroke-width="4"/>` + T(540, 584, 'waiting for your go-ahead', { size: 38, weight: 700 }))
+    + rise(prog(t, 1.6), T(540, 760, 'every frame of this film was drawn', { size: 34, fill: C.cream }) + T(540, 805, 'by an SVG renderer Claude wrote', { size: 34, fill: C.cream }));
+};
+
+// ---------- frame ----------
+const DEFS = `<defs>
+  <pattern id="htBlue" width="7" height="7" patternUnits="userSpaceOnUse"><rect width="7" height="7" fill="${C.blue}"/><circle cx="3.5" cy="3.5" r="2.1" fill="${C.navy}"/></pattern>
+  <pattern id="htNavy" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="${C.blue}"/><circle cx="4" cy="4" r="2.8" fill="${C.navy}"/></pattern>
+  ${['Ink:' + C.ink, 'Red:' + C.red, 'Green:' + C.green, 'Mustard:' + C.mustard, 'Paper:' + C.paper].map(pair => {
+    const [name, color] = pair.split(':');
+    return `<marker id="arrow${name}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="${color}"/></marker>`;
+  }).join('')}
+  ${[0, 1, 2].map(seed => `<filter id="wob${seed}" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="${seed * 7 + 1}"/><feDisplacementMap in="SourceGraphic" scale="4.5"/></filter>`).join('')}
+  <filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="9" stitchTiles="stitch"/><feColorMatrix type="matrix" values="0 0 0 0 0.12  0 0 0 0 0.12  0 0 0 0 0.2  0.9 0 0 0 -0.32"/></filter>
+</defs>`;
+
+function caption(text) {
+  const lines = text.split('\n');
+  const top = lines.length === 1 ? 960 : 940;
+  return lines.map((ln, i) => T(540, top + i * 52, ln, { size: 40, fill: C.ink })).join('');
+}
+
+let TIMELINE = [];
+function renderFrame(t) {
+  let scene = TIMELINE[TIMELINE.length - 1];
+  for (const entry of TIMELINE) if (t >= entry.start && t < entry.start + entry.duration) { scene = entry; break; }
+  const local = t - scene.start;
+  const seed = Math.floor(t * 8) % 3;
+  document.getElementById('stage').innerHTML = DEFS
+    + `<rect width="1080" height="1080" fill="${C.cream}"/>`
+    + `<g filter="url(#wob${seed})">${S[scene.id](local, scene.duration)}</g>`
+    + caption(scene.caption)
+    + `<rect width="1080" height="1080" filter="url(#grain)" opacity="0.55" style="mix-blend-mode:multiply"/>`;
+}
+</script>
+</body>
+</html>

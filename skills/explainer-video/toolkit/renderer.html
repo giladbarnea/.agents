@@ -1,0 +1,266 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=IBM+Plex+Mono:wght@400;600&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; background: #ECE5D3; }
+  svg { display: block; }
+  .sans { font-family: 'Andika', sans-serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+</style>
+</head>
+<body>
+<svg id="stage" width="1080" height="1080" viewBox="0 0 1080 1080" xmlns="http://www.w3.org/2000/svg"></svg>
+<script>
+const C = {
+  cream: '#ECE5D3', paper: '#F7F2E6', ink: '#1E2340', navy: '#26368C', night: '#1B1F3B',
+  red: '#C8352B', pink: '#E6A99F', mustard: '#E5B53A', green: '#2E9A5E', sky: '#AFC6D8',
+  blue: '#A6BFE0', grey: '#8E8E96', lightGreen: '#7CC49A',
+};
+
+// ---------- timing ----------
+const clamp = x => Math.max(0, Math.min(1, x));
+const ease = x => 1 - Math.pow(1 - clamp(x), 3);
+const back = x => { const c1 = 1.70158, c3 = c1 + 1, k = clamp(x); return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); };
+const prog = (t, start, duration = 0.5) => ease((t - start) / duration);
+const bounce = (t, start, duration = 0.45) => (t < start ? 0 : back((t - start) / duration));
+const lerp = (a, b, k) => a + (b - a) * k;
+
+// ---------- primitives ----------
+const escape = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function T(x, y, s, { size = 40, fill = C.ink, font = 'sans', anchor = 'middle', weight = 400, opacity = 1, extra = '' } = {}) {
+  return `<text x="${x}" y="${y}" class="${font}" font-size="${size}" fill="${fill}" text-anchor="${anchor}" font-weight="${weight}" opacity="${opacity}" ${extra}>${escape(s)}</text>`;
+}
+
+const rise = (k, svg, distance = 26) => k <= 0 ? '' : `<g opacity="${clamp(k)}" transform="translate(0 ${(1 - k) * distance})">${svg}</g>`;
+const pop = (k, x, y, svg) => k <= 0 ? '' : `<g transform="translate(${x} ${y}) scale(${Math.max(0, k)}) translate(${-x} ${-y})" opacity="${clamp(k * 3)}">${svg}</g>`;
+const fade = (k, svg) => k <= 0 ? '' : `<g opacity="${clamp(k)}">${svg}</g>`;
+
+function panel(fill) {
+  return `<rect x="24" y="24" width="1032" height="840" rx="10" fill="${fill}"/>`;
+}
+
+function line(d, k, { stroke = C.ink, width = 6, dash = '', cap = 'round', marker = '', opacity = 1 } = {}) {
+  if (k <= 0) return '';
+  const dashing = dash
+    ? `stroke-dasharray="${dash}"`
+    : `pathLength="1" stroke-dasharray="1 1" stroke-dashoffset="${1 - clamp(k)}"`;
+  const markerEnd = marker && k >= 0.98 ? `marker-end="url(#${marker})"` : '';
+  const dashOpacity = dash ? clamp(k) * opacity : opacity;
+  return `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="${cap}" stroke-linejoin="round" ${dashing} ${markerEnd} opacity="${dashOpacity}"/>`;
+}
+
+function wrench(x, y, size, fill) {
+  const s = size / 60;
+  return `<g transform="translate(${x} ${y}) rotate(-45) scale(${s})" fill="${fill}">
+    <rect x="-7" y="-6" width="14" height="44" rx="6"/>
+    <circle cx="0" cy="-16" r="17"/>
+    <rect x="-6" y="-38" width="12" height="20" rx="2" fill="var(--hole)"/>
+  </g>`;
+}
+
+function magnifier(x, y, size, stroke) {
+  const r = size * 0.3;
+  return `<g stroke="${stroke}" fill="none" stroke-linecap="round">
+    <circle cx="${x - size * 0.08}" cy="${y - size * 0.08}" r="${r}" stroke-width="${size * 0.1}"/>
+    <line x1="${x + r * 0.62}" y1="${y + r * 0.62}" x2="${x + size * 0.38}" y2="${y + size * 0.38}" stroke-width="${size * 0.13}"/>
+  </g>`;
+}
+
+// kind: 'fix' or 'rev'. main agents get a second ring.
+function agent(x, y, r, kind, { main = false, dim = false, ghost = false, fresh = false } = {}) {
+  const fill = dim ? C.grey : (kind === 'fix' ? C.red : C.navy);
+  if (ghost) {
+    return `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${C.grey}" stroke-width="4" stroke-dasharray="10 9"/>`;
+  }
+  const ring = main ? `<circle cx="${x}" cy="${y}" r="${r + 12}" fill="none" stroke="${fill}" stroke-width="5"/>` : '';
+  const sparkle = fresh ? [0, 1, 2, 3].map(i => {
+    const angle = -Math.PI / 4 + i * 0.5;
+    const x1 = x + Math.cos(angle) * (r + 14), y1 = y + Math.sin(angle) * (r + 14);
+    const x2 = x + Math.cos(angle) * (r + 34), y2 = y + Math.sin(angle) * (r + 34);
+    return `<line x1="${x1}" y1="${y1 - 2 * r}" x2="${x2}" y2="${y2 - 2 * r}" stroke="${C.mustard}" stroke-width="6" stroke-linecap="round" transform="translate(0 ${2 * r})"/>`;
+  }).join('') : '';
+  const icon = kind === 'fix' ? wrench(x, y, r * 1.1, C.paper) : magnifier(x, y, r * 1.2, C.paper);
+  return `<g style="--hole:${fill}">${ring}<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}" stroke="${C.ink}" stroke-width="4"/>${icon}${sparkle}</g>`;
+}
+
+function card(x, y, w, h, name, { fill = C.paper, dim = false, accent = C.red } = {}) {
+  const rows = [0.42, 0.56, 0.7, 0.84].map((f, i) => {
+    const width = w * [0.7, 0.55, 0.65, 0.4][i];
+    const color = i === 2 ? accent : C.ink;
+    return `<line x1="${x + 14}" y1="${y + h * f}" x2="${x + 14 + width}" y2="${y + h * f}" stroke="${color}" stroke-width="4" stroke-linecap="round"/>`;
+  }).join('');
+  return `<g opacity="${dim ? 0.3 : 1}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${fill}" stroke="${C.ink}" stroke-width="3"/>
+    ${T(x + w / 2, y + h * 0.24, name, { size: Math.min(22, w / name.length * 1.45), font: 'mono', fill: C.navy, weight: 600 })}${rows}</g>`;
+}
+
+function box3d(x, y, w, h, { depth = 30, face = C.blue, label = '' } = {}) {
+  // (x, y) is the bottom-left corner of the front face.
+  const top = y - h;
+  const stripes = [];
+  for (let sy = top + 12; sy < y - 4; sy += 9) stripes.push(`<line x1="${x}" y1="${sy}" x2="${x + w}" y2="${sy}" stroke="${C.navy}" stroke-width="1.6" opacity="0.55"/>`);
+  return `<g>
+    <path d="M${x} ${top} L${x + depth} ${top - depth} L${x + w + depth} ${top - depth} L${x + w} ${top} Z" fill="${C.paper}" stroke="${C.ink}" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M${x + w} ${top} L${x + w + depth} ${top - depth} L${x + w + depth} ${y - depth} L${x + w} ${y} Z" fill="url(#htBlue)" stroke="${C.ink}" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="${x}" y="${top}" width="${w}" height="${h}" fill="${face}"/>${stripes.join('')}
+    <rect x="${x}" y="${top}" width="${w}" height="${h}" fill="none" stroke="${C.ink}" stroke-width="3"/>
+    ${label ? T(x + w / 2, y + 36, label, { size: 22, font: 'mono', fill: C.ink }) : ''}
+  </g>`;
+}
+
+function doc(x, y, w, h, { fill = C.paper, title = '', diff = false, titleColor = C.navy } = {}) {
+  const rows = [];
+  const count = Math.floor((h - 40) / 16);
+  for (let i = 0; i < count; i++) {
+    const ly = y + 34 + i * 16;
+    const width = (w - 28) * [0.8, 0.6, 0.9, 0.5, 0.7][i % 5];
+    const color = diff ? (i % 3 === 1 ? C.red : (i % 3 === 2 ? C.green : C.ink)) : C.ink;
+    rows.push(`<line x1="${x + 14}" y1="${ly}" x2="${x + 14 + width}" y2="${ly}" stroke="${color}" stroke-width="3.5" stroke-linecap="round" opacity="0.85"/>`);
+  }
+  return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="5" fill="${fill}" stroke="${C.ink}" stroke-width="3"/>
+    ${title ? T(x + w / 2, y + 24, title, { size: 17, font: 'mono', fill: titleColor, weight: 600 }) : ''}${title ? '' : rows.join('')}${title ? rows.slice(1).join('') : ''}</g>`;
+}
+
+function envelope(x, y, w = 70) {
+  const h = w * 0.66;
+  return `<g><rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="4" fill="${C.paper}" stroke="${C.ink}" stroke-width="3"/>
+    <path d="M${x - w / 2} ${y - h / 2} L${x} ${y + h * 0.08} L${x + w / 2} ${y - h / 2}" fill="none" stroke="${C.ink}" stroke-width="3" stroke-linejoin="round"/></g>`;
+}
+
+function stamp(x, y, word, color, k, { rotate = -8, w = 220, h = 78, size = 36 } = {}) {
+  if (k <= 0) return '';
+  const scale = lerp(1.7, 1, ease(k));
+  return `<g transform="translate(${x} ${y}) rotate(${rotate}) scale(${scale})" opacity="${clamp(k * 2)}">
+    <rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="8" fill="${C.paper}" stroke="${color}" stroke-width="6"/>
+    ${T(0, size * 0.36, word, { size, font: 'mono', fill: color, weight: 600 })}</g>`;
+}
+
+function tag(x, y, label, { fill = C.mustard, size = 40, color = C.ink } = {}) {
+  const w = label.length * size * 0.62 + 70, h = size * 1.5;
+  return `<g><path d="M${x} ${y} L${x + 28} ${y - h / 2} L${x + w} ${y - h / 2} L${x + w} ${y + h / 2} L${x + 28} ${y + h / 2} Z" fill="${fill}" stroke="${C.ink}" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="${x + 26}" cy="${y}" r="6" fill="none" stroke="${C.ink}" stroke-width="3"/>
+    ${T(x + 46, y + size * 0.35, label, { size, font: 'mono', anchor: 'start', fill: color })}</g>`;
+}
+
+function check(x, y, s, color = C.green, k = 1) {
+  return line(`M${x - s * 0.5} ${y} L${x - s * 0.15} ${y + s * 0.35} L${x + s * 0.55} ${y - s * 0.4}`, k, { stroke: color, width: s * 0.18 });
+}
+
+function cross(x, y, s, color = C.red, k = 1) {
+  return line(`M${x - s / 2} ${y - s / 2} L${x + s / 2} ${y + s / 2}`, k * 2, { stroke: color, width: s * 0.16 })
+    + line(`M${x + s / 2} ${y - s / 2} L${x - s / 2} ${y + s / 2}`, k * 2 - 1, { stroke: color, width: s * 0.16 });
+}
+
+function bubble(x, y, w, h, lines, { fill = C.paper, size = 26, color = C.ink, tail = 'left' } = {}) {
+  const tailPath = tail === 'left'
+    ? `M${x + 24} ${y + h} L${x + 14} ${y + h + 22} L${x + 50} ${y + h}`
+    : `M${x + w - 24} ${y + h} L${x + w - 14} ${y + h + 22} L${x + w - 50} ${y + h}`;
+  const text = lines.map((s, i) => T(x + 20, y + 40 + i * size * 1.3, s, { size, anchor: 'start', fill: color })).join('');
+  return `<g><path d="${tailPath}" fill="${fill}" stroke="${C.ink}" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="18" fill="${fill}" stroke="${C.ink}" stroke-width="3"/>
+    <path d="${tailPath.replace(/L[^L]*$/, '')}" fill="none"/>${text}</g>`;
+}
+
+function phone(x, y, w, h) {
+  return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="40" fill="${C.ink}"/>
+    <rect x="${x + 14}" y="${y + 14}" width="${w - 28}" height="${h - 28}" rx="28" fill="${C.paper}"/>
+    <rect x="${x + w / 2 - 50}" y="${y + 24}" width="100" height="18" rx="9" fill="${C.ink}"/>
+    ${T(x + w / 2, y + 82, 'Telegram', { size: 24, fill: C.navy, weight: 700 })}
+    <line x1="${x + 14}" y1="${y + 100}" x2="${x + w - 14}" y2="${y + 100}" stroke="${C.ink}" stroke-width="2" opacity="0.3"/></g>`;
+}
+
+function terminal(x, y, w, lines, t, { size = 30, start = 0.2, perLine = 0.42 } = {}) {
+  return lines.map((ln, i) => {
+    const at = start + (ln.at !== undefined ? ln.at : i * perLine);
+    if (t < at) return '';
+    const shown = Math.floor(clamp((t - at) / 0.3) * ln.text.length);
+    return T(x, y + i * size * 1.45, ln.text.slice(0, shown), { size, font: 'mono', anchor: 'start', fill: ln.color || C.cream, weight: ln.bold ? 600 : 400 });
+  }).join('');
+}
+
+function stars(seed, count) {
+  let state = seed;
+  const random = () => (state = (state * 16807) % 2147483647) / 2147483647;
+  return Array.from({ length: count }, () => `<circle cx="${40 + random() * 1000}" cy="${40 + random() * 800}" r="${1 + random() * 2.4}" fill="${C.cream}" opacity="${0.4 + random() * 0.6}"/>`).join('');
+}
+
+// four extensions used in tree scenes
+const FOUR = ['simple-team', 'ctx-have', 'output-kit', 'footer'];
+const EIGHT = ['simple-team', 'ctx-have', 'output-kit', 'footer', 'pretty-bash', 'time-sense', 'user-agents', 'heads-up'];
+const COLUMNS = [180, 420, 660, 900];
+
+function tree(rootX, rootY, childY, xs, kind, t, { start = 0, rootR = 60, childR = 34, invert = false, stroke = C.ink, dimRoot = false } = {}) {
+  const branches = xs.map((cx, i) => {
+    const mid = (rootY + childY) / 2;
+    const d = `M${rootX} ${rootY} C${rootX} ${mid}, ${cx} ${mid}, ${cx} ${childY}`;
+    return line(d, prog(t, start + 0.3 + i * 0.08, 0.7), { stroke, width: 12 });
+  }).join('');
+  const root = pop(bounce(t, start), rootX, rootY, agent(rootX, rootY, rootR, kind, { main: true, dim: dimRoot }));
+  const children = xs.map((cx, i) => pop(bounce(t, start + 0.8 + i * 0.1), cx, childY, agent(cx, childY, childR, kind))).join('');
+  return branches + root + children;
+}
+
+// ---------- scenes ----------
+// One function per scene id from script.json: (t seconds since scene start, d scene duration) => SVG string.
+// Pure functions of t. Every scene draws its own panel(). See ../examples/one-scope-design/renderer.html for 39 more.
+const S = {};
+
+S.s06 = t => panel(C.night) + terminal(80, 130, 900, [
+  { text: '$ review ctx-have' },
+  { text: 'REVISE 1/3  the question misstates', color: C.red, bold: true },
+  { text: '            the tradeoff', color: C.red },
+  { text: '$ repair ctx-have' },
+  { text: '  question is shared with output-kit:', color: C.mustard },
+  { text: '  keep it exactly unchanged', color: C.mustard },
+  { text: 'REVISE 2/3  the question misstates...', color: C.red, bold: true, at: 2.9 },
+  { text: 'REVISE 3/3  the question misstates...', color: C.red, bold: true, at: 3.5 },
+], t, { size: 32, perLine: 0.42 })
+  + pop(bounce(t, 4.4), 540, 760, `<rect x="380" y="710" width="320" height="100" rx="8" fill="${C.red}"/>` + T(540, 783, 'STUCK', { size: 66, font: 'mono', fill: C.cream, weight: 600 }));
+
+S.s07 = t => panel(C.red)
+  + pop(bounce(t, 0.1, 0.6), 540, 440, T(548, 488, 'One scope', { size: 180, fill: C.ink, weight: 700 }) + T(540, 480, 'One scope', { size: 180, fill: C.cream, weight: 700 }))
+  + rise(prog(t, 0.9), T(540, 600, 'the fixer and the reviewer see the same work', { size: 38, fill: C.cream }));
+
+S.s08 = t => panel(C.cream)
+  + tree(290, 210, 540, [110, 230, 350, 470], 'fix', t, { start: 0.1 })
+  + tree(790, 210, 540, [610, 730, 850, 970], 'rev', t, { start: 0.5 })
+  + rise(prog(t, 1.9), T(290, 700, 'fixes', { size: 64, fill: C.red, weight: 700 }))
+  + rise(prog(t, 2.3), T(790, 700, 'reviews', { size: 64, fill: C.navy, weight: 700 }));
+
+// ---------- frame ----------
+const DEFS = `<defs>
+  <pattern id="htBlue" width="7" height="7" patternUnits="userSpaceOnUse"><rect width="7" height="7" fill="${C.blue}"/><circle cx="3.5" cy="3.5" r="2.1" fill="${C.navy}"/></pattern>
+  <pattern id="htNavy" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="${C.blue}"/><circle cx="4" cy="4" r="2.8" fill="${C.navy}"/></pattern>
+  ${['Ink:' + C.ink, 'Red:' + C.red, 'Green:' + C.green, 'Mustard:' + C.mustard, 'Paper:' + C.paper].map(pair => {
+    const [name, color] = pair.split(':');
+    return `<marker id="arrow${name}" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="${color}"/></marker>`;
+  }).join('')}
+  ${[0, 1, 2].map(seed => `<filter id="wob${seed}" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="${seed * 7 + 1}"/><feDisplacementMap in="SourceGraphic" scale="4.5"/></filter>`).join('')}
+  <filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="9" stitchTiles="stitch"/><feColorMatrix type="matrix" values="0 0 0 0 0.12  0 0 0 0 0.12  0 0 0 0 0.2  0.9 0 0 0 -0.32"/></filter>
+</defs>`;
+
+function caption(text) {
+  const lines = text.split('\n');
+  const top = lines.length === 1 ? 960 : 940;
+  return lines.map((ln, i) => T(540, top + i * 52, ln, { size: 40, fill: C.ink })).join('');
+}
+
+let TIMELINE = [];
+function renderFrame(t) {
+  let scene = TIMELINE[TIMELINE.length - 1];
+  for (const entry of TIMELINE) if (t >= entry.start && t < entry.start + entry.duration) { scene = entry; break; }
+  const local = t - scene.start;
+  const seed = Math.floor(t * 8) % 3;
+  document.getElementById('stage').innerHTML = DEFS
+    + `<rect width="1080" height="1080" fill="${C.cream}"/>`
+    + `<g filter="url(#wob${seed})">${S[scene.id](local, scene.duration)}</g>`
+    + caption(scene.caption)
+    + `<rect width="1080" height="1080" filter="url(#grain)" opacity="0.55" style="mix-blend-mode:multiply"/>`;
+}
+</script>
+</body>
+</html>

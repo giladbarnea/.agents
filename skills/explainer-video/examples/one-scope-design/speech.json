@@ -1,0 +1,197 @@
+[
+ {
+  "id": "s01",
+  "caption": "Your Pi extensions break when Pi changes.\nA system on your Mac repairs them.",
+  "speech": 5.3
+ },
+ {
+  "id": "s02",
+  "caption": "Three times a day,\nit checks for a new Pi release.",
+  "speech": 3.375
+ },
+ {
+  "id": "s03",
+  "caption": "An Opus agent fixes.\nAn Astra agent, from another vendor, reviews.",
+  "speech": 5.075
+ },
+ {
+  "id": "s04",
+  "caption": "In the old design, the fixer\nsaw every extension at once.",
+  "speech": 4.125
+ },
+ {
+  "id": "s05",
+  "caption": "But each review and repair\nsaw only one.",
+  "speech": 2.95
+ },
+ {
+  "id": "s06",
+  "caption": "So a question about two extensions could not\nbe repaired. It got stuck, three reviews in a row.",
+  "speech": 6.4
+ },
+ {
+  "id": "s07",
+  "caption": "The new design gives both sides\nthe same scope.",
+  "speech": 3.2
+ },
+ {
+  "id": "s08",
+  "caption": "Now there are two trees:\none that fixes, and one that reviews.",
+  "speech": 4.275
+ },
+ {
+  "id": "s09",
+  "caption": "The main fixer owns the whole job.\nIt never touches code.",
+  "speech": 4.05
+ },
+ {
+  "id": "s10",
+  "caption": "It forks one delegate per extension.\nEach delegate owns one patch, in one clone.",
+  "speech": 5.65
+ },
+ {
+  "id": "s11",
+  "caption": "The review tree is a mirror: a main reviewer,\nand one reviewer delegate per extension.",
+  "speech": 5.85
+ },
+ {
+  "id": "s12",
+  "caption": "The system makes every fork\nand carries every message. It never judges.",
+  "speech": 4.95
+ },
+ {
+  "id": "s13",
+  "caption": "Delegates never talk to each other. Only the\ntwo main agents see across extensions.",
+  "speech": 5.55
+ },
+ {
+  "id": "s14",
+  "caption": "Here is one round.",
+  "speech": 1.85
+ },
+ {
+  "id": "s15",
+  "caption": "First, the quota gate. If there is not\nenough quota left, the round waits.",
+  "speech": 4.7
+ },
+ {
+  "id": "s16",
+  "caption": "Then each clone moves to\nthe newest main on GitHub.",
+  "speech": 3.575
+ },
+ {
+  "id": "s17",
+  "caption": "The fixer delegates work in parallel. Each one\nsends its diff straight to its reviewer.",
+  "speech": 5.5
+ },
+ {
+  "id": "s18",
+  "caption": "Each reviewer delegate answers:\napprove, or revise.",
+  "speech": 3.9
+ },
+ {
+  "id": "s19",
+  "caption": "The main reviewer reads all verdicts together. It can\nreject a fix that breaks another extension.",
+  "speech": 6.625
+ },
+ {
+  "id": "s20",
+  "caption": "Then the main fixer:\nthe last gate before anything leaves.",
+  "speech": 3.825
+ },
+ {
+  "id": "s21",
+  "caption": "For each extension, it releases,\nholds back, or sends the findings back.",
+  "speech": 4.825
+ },
+ {
+  "id": "s22",
+  "caption": "It can also change a finding.\nThe reviewer sees the reason next round.",
+  "speech": 4.65
+ },
+ {
+  "id": "s23",
+  "caption": "A released fix gets an ntfy notice, then a push.\nA product change also waits for your tap.",
+  "speech": 6.375
+ },
+ {
+  "id": "s24",
+  "caption": "Nothing moves while a main agent decides.\nSo nothing races.",
+  "speech": 4.45
+ },
+ {
+  "id": "s25",
+  "caption": "One rule holds this together: the main agents\ncan only narrow what gets published.",
+  "speech": 5.35
+ },
+ {
+  "id": "s26",
+  "caption": "They can hold an approval back. They can never\nrelease what a reviewer rejected.",
+  "speech": 4.925
+ },
+ {
+  "id": "s27",
+  "caption": "Each delegate pair gets three reviews.",
+  "speech": 2.7
+ },
+ {
+  "id": "s28",
+  "caption": "If its work is released,\nthe pair is done. No handoff.",
+  "speech": 3.725
+ },
+ {
+  "id": "s29",
+  "caption": "If three reviews pass without a release, each one\nwrites a handoff, and a fresh pair continues.",
+  "speech": 6.225
+ },
+ {
+  "id": "s30",
+  "caption": "Every run starts fresh main agents. The old fixer\nonce grew to 726,000 tokens in three days.",
+  "speech": 8.025
+ },
+ {
+  "id": "s31",
+  "caption": "Work carries over in the clones,\nthe handoffs, and the open questions.",
+  "speech": 4.55
+ },
+ {
+  "id": "s32",
+  "caption": "Questions reach you on Telegram,\none at a time.",
+  "speech": 3.475
+ },
+ {
+  "id": "s33",
+  "caption": "Your answer wakes the current\nmain fixer, at any hour.",
+  "speech": 3.525
+ },
+ {
+  "id": "s34",
+  "caption": "It passes the answer to the delegate that asked.\nIf it retired, a fresh one gets the context note.",
+  "speech": 8.325
+ },
+ {
+  "id": "s35",
+  "caption": "The next question goes out only after your answer\nis handled. Questions it settled disappear first.",
+  "speech": 6.45
+ },
+ {
+  "id": "s36",
+  "caption": "When one concern touches two extensions,\nthe main fixer asks you once, about the decision.",
+  "speech": 6.15
+ },
+ {
+  "id": "s37",
+  "caption": "The first test is Pi 1.4.0. It fixes the bug\nthat two unpublished patches worked around.",
+  "speech": 6.6
+ },
+ {
+  "id": "s38",
+  "caption": "To pass, the system drops both patches, and asks\nyou before it removes pi-simple-team's workaround.",
+  "speech": 7.275
+ },
+ {
+  "id": "s39",
+  "caption": "The design is not built yet.\nIt waits for your go-ahead.",
+  "speech": 3.775
+ }
+]
