@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 mkdir -p build
 total=$(uv run render.py total)
-frames=$(python3 -c "import math; print(math.ceil($total * 24))")
+frames=$(awk "BEGIN { print int($total * 24 + 0.999) }")
 workers=6
 per=$(( (frames + workers - 1) / workers ))
 rm -f build/part_*.mp4 build/parts.txt
