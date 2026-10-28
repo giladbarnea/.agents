@@ -12,18 +12,11 @@ import sys
 from playwright.sync_api import sync_playwright
 
 FPS = 24
-LEAD = 0.3
-TAIL = 0.55
 HERE = pathlib.Path(__file__).parent
 
 
 def timeline() -> list[dict]:
-    entries, start = [], 0.0
-    for line in json.loads((HERE / "speech.json").read_text()):
-        duration = round(LEAD + line["speech"] + TAIL, 3)
-        entries.append({"id": line["id"], "caption": line["caption"], "start": round(start, 3), "duration": duration})
-        start += duration
-    return entries
+    return json.loads((HERE / "speech.json").read_text())
 
 
 def open_page(playwright):

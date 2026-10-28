@@ -12,7 +12,6 @@ import soundfile as sf
 
 HERE = pathlib.Path(__file__).parent
 RATE = 48000
-LEAD, TAIL = 0.3, 0.55
 NOTE = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 CHORDS = [["C3", "E4", "G4", "B4"], ["A2", "C4", "E4", "G4"], ["F2", "A3", "C4", "E4"], ["G2", "B3", "D4", "A4"]]
 BEAT = 60 / 72
@@ -28,15 +27,13 @@ def frequency(name: str) -> float:
 
 def narration() -> tuple[np.ndarray, float]:
     lines = json.loads((HERE / "speech.json").read_text())
-    total = sum(LEAD + line["speech"] + TAIL for line in lines)
+    total = lines[-1]["start"] + lines[-1]["duration"]
     track = np.zeros(int(total * RATE) + RATE)
-    start = 0.0
     for line in lines:
         voice, voice_rate = sf.read(HERE / "audio" / f"{line['id']}.wav")
         resampled = np.interp(np.arange(0, len(voice), voice_rate / RATE), np.arange(len(voice)), voice)
-        offset = int((start + LEAD) * RATE)
+        offset = int((line["start"] + line["lead"]) * RATE)
         track[offset:offset + len(resampled)] += resampled
-        start += LEAD + line["speech"] + TAIL
     return track / np.abs(track).max() * 0.9, total
 
 

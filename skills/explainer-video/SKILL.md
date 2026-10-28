@@ -5,17 +5,25 @@ description: Make a narrated, captioned, illustrated explainer video (square, fl
 
 # Explainer videos
 
-You will make a 2–3 minute square video. Each scene is one animated illustration with one narrated sentence pair, shown as a caption under it. A soft music bed plays under the voice. You draw every frame yourself with an SVG renderer and record it with Chrome. This is code, not a video tool. The working pipeline is in `toolkit/`, and a full worked example is in `examples/one-scope-design/`.
+You will make a square video, about 3:30–4:30 long. Each scene is one animated illustration with one narrated sentence pair, shown as a caption under it. After each line, the scene stays on screen in silence for a moment, so the viewer can take it in. A soft music bed plays under the voice. You draw every frame yourself with an SVG renderer and record it with Chrome. This is code, not a video tool. The working pipeline is in `toolkit/`.
 
-The first version of this skill made `examples/one-scope-design/`: a 3:45 film about the remotes-automation "one scope" design, built from Pi session `01a16893-…`. Look at `examples/one-scope-design/sheet-*.jpg` before you start. Those four contact sheets are the quality bar. `reference/kevin-ngo-bend-contact-sheet.jpg` is the style source: Kevin Ngo's "Why agents might prefer Bend" (x.com/kevin_t_ngo/status/2113663060888203642). Claude made that video too.
+Look at the contact sheets of the two worked examples before you start. They are the quality bar:
+
+1. `examples/one-scope-design/` (Claude): the remotes-automation "one scope" design, from Pi session `01a16893-…`. It has the full 39-scene `renderer.html`.
+2. `examples/two-trees-latest/` (Codex, made from this skill, then revised once after the user's feedback): the same system two days later, with four open decisions. This is the stronger example. It runs 4:15 with 28 scenes, at the current pace, with an ElevenLabs voice. Copy its moves: a fact record (`FACTS.md`), a scene kicker that defines the scene's term ("RETURN = SEND BACK FOR REVISION"), "OPEN n/4" markers, decision options drawn side by side, and a "TODAY" strip that shows the current build's behavior.
+
+Example 1 ran at the old, faster pace. The user found that pace too fast. The toolkit now speaks 1.2 times slower and pauses after each line, which makes each scene about 1.5 times longer.
+
+`reference/kevin-ngo-bend-contact-sheet.jpg` is the style source: Kevin Ngo's "Why agents might prefer Bend" (x.com/kevin_t_ngo/status/2113663060888203642). Claude made that video too.
 
 ## What done means
 
 1. A 1080×1080, 24 fps H.264 MP4 with AAC audio. The audio and video durations match.
-2. 2:00–3:00 long, with 25–32 scenes. The first version ran 3:45 with 39 scenes, which was too long. Cut the background story to 2–3 scenes.
+2. 22–30 scenes. At the toolkit's pace, a scene lasts about 8–10 seconds, so the video runs about 3:30–4:30. When the video is too long, cut scenes. Never shorten the pause. Keep the background story to 2–3 scenes.
 3. Each scene explains one idea with a picture of the mechanism, such as who sends what to whom, what blocks what, or what changes state. No decorative scenes.
-4. Every caption is a true statement about the current source, and each one is checked against it.
-5. The user got the file in the conversation. If it is over 30 MB, send a 720p copy and give the path to the full file.
+4. Every term that is not everyday language is explained, in words or in a picture, before or when it first appears.
+5. Every caption is a true statement about the current source, and each one is checked against it.
+6. The user got the file in the conversation. If it is over 30 MB, send a 720p copy and give the path to the full file.
 
 ## Workflow
 
@@ -40,17 +48,21 @@ A session transcript is a history, not a spec. Most of it describes states that 
 2. Use plain, literal language. Use one name for each thing in the whole video, because the viewer learns the names from the captions.
 3. Address the viewer as "you" when the user is the viewer. A video for the user's own design works as a recall aid, so give the motivating problem first.
 4. Use the arc: problem (2–3 scenes) → the parts → one pass through the flow → the rules that hold it together → edge cases (lifetimes, failures, async input) → how it will be tested → status and next step.
-5. Add a `say` field when TTS would misread the caption. Spell out version numbers ("Pi one point four"), hyphenated names ("pi simple team"), large numbers, and tool names that are not words ("ntfy" → "a notification").
-6. Proofread the script against the fact list before you synthesize anything. A wrong line costs a re-render later.
+5. Introduce every term before you rely on it. List each term that is not everyday language, such as a component name, a project name, or jargon like "RPC" or "lock". For each one, either give it a scene (or half a scene) that shows what it is, or replace it with plain words. A viewer who was not in the sessions must be able to follow the video.
+6. Give an open decision 2–3 scenes: what is at stake, what each option does, and what the build does today. Say plainly that it waits for the user.
+7. Add a `say` field when TTS would misread the caption. Spell out version numbers ("Pi one point four"), hyphenated names ("pi simple team"), large numbers, and tool names that are not words ("ntfy" → "a notification").
+8. Proofread the script against the fact list before you synthesize anything. A wrong line costs a re-render later.
 
 ### 3. Synthesize the voice first, and let it set the timing
 
-`uv run tts.py` writes `audio/<id>.wav` and `speech.json` with each line's length. Each scene lasts `0.3 s lead + speech + 0.55 s tail`. `render.py` and `audio.py` both compute this from `speech.json`, so picture and voice cannot drift.
+`uv run tts_elevenlabs.py` (ElevenLabs) or `uv run tts.py` (Kokoro) writes `audio/<id>.wav` and `speech.json`. To re-synthesize only some lines after a script fix, pass their ids: `uv run tts_elevenlabs.py s04 s17`. This saves API cost. Each scene lasts `0.4 s lead + speech + 2.3 s pause`, and the voice speaks at about 0.82–0.83 of its normal speed. These constants live only at the top of the two TTS scripts. It writes each scene's `start`, `lead` and `duration` into `speech.json`, and `render.py` and `audio.py` only read them, so picture and voice cannot drift. Change the pace there and nowhere else.
+
+The pace is the user's choice. At speed 0.98 with a 0.55 s tail, the user found the video too fast. Keep the slower pace unless the user asks for a different one.
 
 Voice options, from best to worst:
 
-1. **ElevenLabs.** The reference video used it. Use it only if `ELEVENLABS_API_KEY` exists. Check `env` first. In October 2026, no key was set.
-2. **Kokoro (`af_heart`), local and free.** This is the default in `tts.py`. It is clear and natural, but plainer than ElevenLabs.
+1. **ElevenLabs, the default.** The reference video used it. The API key is in `/Users/giladbarnea/.elevenlabs-gilad-barnea-com-basic-api-key`. Read it from that file at run time, and never print it or copy it into another file. `toolkit/tts_elevenlabs.py` does all of this: it reads the key, uses the voice from the approved revision at speed 0.83, and keeps the same timeline contract as `tts.py`.
+2. **Kokoro (`af_heart`), local and free.** `tts.py` uses it. It is clear and natural, but plainer than ElevenLabs. Use it as the fallback, or for quick drafts.
 3. **Do not** use a cloud TTS that bills a gcloud or AWS project you found in the config. The active gcloud project on this Mac belongs to a client.
 
 The user said the voice can be replaced later. The visuals matter more. Do not spend time on voice quality.
@@ -66,8 +78,10 @@ The toolkit renderer has the primitives, the frame pipeline and three sample sce
 3. Change the panel background color from scene to scene for rhythm. Use cream, sky, mustard, pink, green, navy and red.
 4. Keep the same layout when consecutive scenes contrast with each other, so that only the point changes. In the example, "fixer sees all" and "reviewer sees one" share one layout.
 5. Use short mono labels inside the art. The caption carries the sentence, so the art must not repeat it.
-6. Make things appear on the beat of the narration. Use `rise` and `pop` for entrances, `line(d, k)` to draw paths, `stamp` for verdicts and `terminal` for typed logs. Elements should land roughly when the voice names them.
-7. Copy the reference's signature moves: a big title card with a drop-shadow word, a typed terminal with a red error line, a tag like `Pi 1.4.0`, a tree of thick curved branches, halftone shading on 3D shapes, and an end card that says "every frame of this film was drawn by an SVG renderer Claude wrote".
+6. Make things appear on the beat of the narration. Use `rise` and `pop` for entrances, `line(d, k)` to draw paths, `stamp` for verdicts and `terminal` for typed logs. Elements should land roughly when the voice names them. Read each scene's `lead` and `speech` from `speech.json` to place the beats.
+7. Finish every entrance before the voice ends. During the pause, the picture stays complete and still, apart from slow ambient motion such as a ticking clock hand or a looping envelope. Nothing new appears in the pause.
+8. Draw each option of a decision as a mechanism, not as a list of words. Show what happens to the item under each option: side-by-side before and after states, or the same path with a different branch taken. Mark the current build's behavior and the "OPEN" status.
+9. Copy the reference's signature moves: a big title card with a drop-shadow word, a typed terminal with a red error line, a tag like `Pi 1.4.0`, a tree of thick curved branches, halftone shading on 3D shapes, and an end card that says "every frame of this film was drawn by an SVG renderer Claude wrote". Codex added a good one: a small uppercase mono kicker at the top left that names the scene's topic, such as "THE FIX GATE".
 
 **Style constants.** These are already in the toolkit:
 
@@ -117,4 +131,6 @@ Check that the `ffprobe` durations of the audio and video streams match. Grab 4�
 5. **Check with contact sheets at two moments.** End frames hide entrance bugs, and mid frames hide end-state collisions. One glance at 12 scenes beats watching the video.
 6. **Smoke-test the toolkit on a tiny input from a clean folder.** That run found a crash that the full-length run never reached.
 7. **Check facts by falsification.** For each caption, ask "which line of the source says this?". For the audio, transcribe it back and compare.
-8. **Cut length on purpose.** A complete explanation can still be too long. Aim for the shortest film that covers the mechanism, then stop.
+8. **Cut length on purpose.** A complete explanation can still be too long. Aim for the fewest scenes that cover the mechanism, then stop.
+9. **Pace for the viewer, not the speaker.** A viewer needs time to look after each point. Silence after a line is part of the explanation. Cut content before you cut that time.
+10. **Explain to someone who was not there.** You know every term from the sources, but the viewer does not. Introduce each term before you use it.

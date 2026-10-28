@@ -1,0 +1,226 @@
+[
+ {
+  "id": "r01",
+  "caption": "Pi updates can break your extensions.\nThis system maintains those add-ons for you.",
+  "start": 0.0,
+  "lead": 0.4,
+  "speech": 6.13,
+  "duration": 8.83
+ },
+ {
+  "id": "r02",
+  "caption": "Two lead agents assign work to delegates:\nspecialists who fix or review an extension.",
+  "start": 8.83,
+  "lead": 0.4,
+  "speech": 6.502,
+  "duration": 9.202
+ },
+ {
+  "id": "r03",
+  "caption": "Fixer delegates edit their extension\u2019s copy.\nReviewer delegates check the work.",
+  "start": 18.032,
+  "lead": 0.4,
+  "speech": 5.944,
+  "duration": 8.644
+ },
+ {
+  "id": "r04",
+  "caption": "Reviewers approve or reject code changes.\nThey also judge questions for you.",
+  "start": 26.676,
+  "lead": 0.4,
+  "speech": 5.991,
+  "duration": 8.691
+ },
+ {
+  "id": "r05",
+  "caption": "The main fixer chooses what happens next:\nrelease, return or hold.",
+  "start": 35.367,
+  "lead": 0.4,
+  "speech": 6.548,
+  "duration": 9.248
+ },
+ {
+  "id": "r06",
+  "caption": "Release moves approved work forward.\nProduct changes still need your separate push tap.",
+  "start": 44.615,
+  "lead": 0.4,
+  "speech": 6.455,
+  "duration": 9.155
+ },
+ {
+  "id": "r07",
+  "caption": "A return sends work back for revision.\nThe next review sees the reasons too.",
+  "start": 53.77,
+  "lead": 0.4,
+  "speech": 5.991,
+  "duration": 8.691
+ },
+ {
+  "id": "r08",
+  "caption": "After three returns, both delegates write\nhandoffs: notes for their replacements.",
+  "start": 62.461,
+  "lead": 0.4,
+  "speech": 5.851,
+  "duration": 8.551
+ },
+ {
+  "id": "r09",
+  "caption": "A hold waits for a named answer.\nThe main fixer can ask you directly.",
+  "start": 71.012,
+  "lead": 0.4,
+  "speech": 5.433,
+  "duration": 8.133
+ },
+ {
+  "id": "r10",
+  "caption": "Telegram asks one question at a time.\nYour answer is handled before the next.",
+  "start": 79.145,
+  "lead": 0.4,
+  "speech": 6.13,
+  "duration": 8.83
+ },
+ {
+  "id": "r11",
+  "caption": "Late answers reach the current main fixer.\nA retired delegate is replaced, with notes.",
+  "start": 87.975,
+  "lead": 0.4,
+  "speech": 7.152,
+  "duration": 9.852
+ },
+ {
+  "id": "r12",
+  "caption": "A run groups maintenance work. Usage limits\npause it without replacing the agents.",
+  "start": 97.827,
+  "lead": 0.4,
+  "speech": 5.898,
+  "duration": 8.598
+ },
+ {
+  "id": "r13",
+  "caption": "Programs restart when work arrives.\nSaved conversations preserve the agents\u2019 memory.",
+  "start": 106.425,
+  "lead": 0.4,
+  "speech": 6.548,
+  "duration": 9.248
+ },
+ {
+  "id": "r14",
+  "caption": "The first trial must discard two old patches.\nPi 1.4 already fixes their problem.",
+  "start": 115.673,
+  "lead": 0.4,
+  "speech": 6.827,
+  "duration": 9.527
+ },
+ {
+  "id": "r15",
+  "caption": "The team extension still helps Pi 1.3 users.\nRemoving that extra fix needs your choice.",
+  "start": 125.2,
+  "lead": 0.4,
+  "speech": 7.57,
+  "duration": 10.27
+ },
+ {
+  "id": "r16",
+  "caption": "The first version is built, but switched off.\nAutomatic crash recovery comes later.",
+  "start": 135.47,
+  "lead": 0.4,
+  "speech": 5.944,
+  "duration": 8.644
+ },
+ {
+  "id": "r17",
+  "caption": "Bend checks design rules, called laws,\nagainst a simplified model of the system.",
+  "start": 144.114,
+  "lead": 0.4,
+  "speech": 5.805,
+  "duration": 8.505
+ },
+ {
+  "id": "r18",
+  "caption": "Its 52 checks cover the model, not the code.\nYou still need to approve those rules.",
+  "start": 152.619,
+  "lead": 0.4,
+  "speech": 6.455,
+  "duration": 9.155
+ },
+ {
+  "id": "r19",
+  "caption": "First choice: two items go back to one delegate.\nDoes that spend one return, or two?",
+  "start": 161.774,
+  "lead": 0.4,
+  "speech": 6.455,
+  "duration": 9.155
+ },
+ {
+  "id": "r20",
+  "caption": "Counting once saves a retry for the delegate.\nThe build counts each item separately.",
+  "start": 170.929,
+  "lead": 0.4,
+  "speech": 6.084,
+  "duration": 8.784
+ },
+ {
+  "id": "r21",
+  "caption": "Second choice: the system refuses\na forbidden action. What happens next?",
+  "start": 179.713,
+  "lead": 0.4,
+  "speech": 6.687,
+  "duration": 9.387
+ },
+ {
+  "id": "r22",
+  "caption": "The build pauses, notifies you, then retries.\nYou have not approved that failure policy.",
+  "start": 189.1,
+  "lead": 0.4,
+  "speech": 7.012,
+  "duration": 9.712
+ },
+ {
+  "id": "r23",
+  "caption": "Third choice: GitHub changes after a review.\nPushing the old patch is blocked.",
+  "start": 198.812,
+  "lead": 0.4,
+  "speech": 6.269,
+  "duration": 8.969
+ },
+ {
+  "id": "r24",
+  "caption": "The build updates the copy before retrying.\nA new product patch needs another review and tap.",
+  "start": 207.781,
+  "lead": 0.4,
+  "speech": 6.92,
+  "duration": 9.62
+ },
+ {
+  "id": "r25",
+  "caption": "Fourth choice: withdrawing a held question\ncan leave it able to reappear. How should it close?",
+  "start": 217.401,
+  "lead": 0.4,
+  "speech": 7.57,
+  "duration": 10.27
+ },
+ {
+  "id": "r26",
+  "caption": "Dropping could close any obsolete item.\nWider withdrawal could close unreleased questions.",
+  "start": 227.671,
+  "lead": 0.4,
+  "speech": 6.827,
+  "duration": 9.527
+ },
+ {
+  "id": "r27",
+  "caption": "Or close old held items when a new run starts.\nNew delegates would reconsider the work.",
+  "start": 237.198,
+  "lead": 0.4,
+  "speech": 6.502,
+  "duration": 9.202
+ },
+ {
+  "id": "r28",
+  "caption": "Choose the policies and review the rules.\nThen decide whether to start the live trial.",
+  "start": 246.4,
+  "lead": 0.4,
+  "speech": 6.13,
+  "duration": 8.83
+ }
+]
