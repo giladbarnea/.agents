@@ -1,6 +1,6 @@
 ---
 description: Preserve explanatory history while removing the highest-cost duplication and support material.
-last_updated: 2026-10-07
+last_updated: 2026-10-31
 ---
 
 # Conservative Pareto compaction
@@ -67,7 +67,7 @@ If a file is absent, do not invent a current version. Keep a marked historical s
 
 ## Select thinking blocks through their surrounding work
 
-Preserve thinking blocks by default. With user approval, remove only whole blocks whose surrounding work clearly supports that decision.
+Apply the parent's [thinking rules](../../SKILL.md#keep-thinking-with-the-work-it-explains). Select thinking through its surrounding work, not its size or age.
 
 1. First decide independently which readable notions or content deserve removal or dilution.
 2. Use preceding events and subsequent responses to attribute a thinking block to that selected work. For example: a stale file read, opaque thinking, then a response using those stale assumptions.
@@ -75,7 +75,7 @@ Preserve thinking blocks by default. With user approval, remove only whole block
 
 Do not guess what ciphertext contains. Age, size, a broad chapter label or a token target alone never justifies removal.
 
-Remove a selected block and its associated signature together. Never truncate, rewrite or partially summarize a thinking payload. Preserve retained blocks and signatures unchanged.
+Remove a selected block and its associated signature together. Never partially rewrite a native signed or encrypted payload. When plaintext needs summarization or replay could fail, use the parent's ordinary-text promotion. Preserve unselected native blocks and signatures unchanged.
 
 Audit each removal by stable identity, the surrounding evidence and the independent removal or dilution decision it follows.
 
@@ -91,7 +91,7 @@ Use the [parent toolkit](../../SKILL.md) for formats, exports, backups, and stab
 
 **The standard pipeline does not support this conservative selection.** Its pruner removes raw structured-file outputs; its plan generator removes unselected raw tools; its applier rejects surviving raw tools. Do not run destructive preprocessing before deciding what must remain. Use a checksum-bound selective transformation when retained raw payloads or passage-level cuts are required.
 
-The native applier supports Pi, not Claude. A selective native Claude transformation must preserve message UUIDs, parent links, exact tool-call/result identities, and retained thinking blocks and signatures. Keep changes to selected payloads and their duplicate caches explicit. Inspect caches separately: model-visible results can contain harness text that cached payloads omit. Preserve unselected cache metadata. A readable export is not a resumable native session.
+The native applier supports Pi, not Claude. A selective native Claude transformation must preserve message UUIDs, parent links, exact tool-call/result identities, and unselected thinking blocks and signatures. Keep changes to selected payloads and their duplicate caches explicit. Inspect caches separately: model-visible results can contain harness text that cached payloads omit. Preserve unselected cache metadata. A readable export is not a resumable native session.
 
 Validate every linked passage against its retained version. Confirm that reference targets remain unchanged and available after all cuts. Verify semantic repeats by accounting for their differences, not by byte equality alone.
 

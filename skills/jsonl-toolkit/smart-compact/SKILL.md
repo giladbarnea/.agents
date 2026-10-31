@@ -2,7 +2,7 @@
 name: smart-compact
 parent: jsonl-toolkit
 description: Tree-shake an AI session transcript while preserving its semantic story
-last_updated: 2026-10-07
+last_updated: 2026-10-31
 ---
 
 Read [`../SKILL.md`](../SKILL.md) first. The parent owns file formats, large-file inspection, stable identities, generic transcript analysis, and native Pi structure.
@@ -21,7 +21,7 @@ The main agent owns semantic decisions. One teammate owns edits to the copied JS
 4. Send the editing batch at the pseudocode skill's detail level: intent, selected stable identities, expected result and preservation boundaries. Leave implementation choices to the teammate.
 5. Let the teammate edit the copy in the background while you analyze the next part. Queue further batches to the same teammate; it applies them sequentially.
 6. Repeat until analysis and all editing batches are complete. The teammate reports each batch's changes, savings and validation against its source checksum.
-7. Validate the final session's structure, tool pairing, retained references and unselected payloads before installing it. Preserve retained thinking blocks and signatures unchanged. Follow the conservative reference's context-based rule for whole-block removal.
+7. Validate the final session's structure, tool pairing, retained references and unselected payloads before installing it. Apply the parent's [thinking rules](../SKILL.md#keep-thinking-with-the-work-it-explains), using surrounding work to select blocks.
 
 The teammate executes your classifications; it does not independently broaden removal or summarization. For conservative work, use the selective workflow in the reference above, not destructive preprocessing.
 
@@ -278,7 +278,7 @@ The generator:
 - Audits every inferred and explicit change.
 - Verifies the plan through the apply stage before emitting it.
 
-Non-tool structured blocks pass through unchanged. This includes thinking and subagent task blocks.
+Non-tool structured blocks pass through unchanged, including thinking and subagent task blocks. The standard appliers do not implement thinking promotion or removal. Use a checksum-bound selective transformation for those [thinking rules](../SKILL.md#keep-thinking-with-the-work-it-explains).
 
 The apply stage rejects stale checksums, missing indices, changed tool IDs, surviving raw tools, changed passthrough blocks, and duplicate footers.
 
