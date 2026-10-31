@@ -67,7 +67,7 @@ If a file is absent, do not invent a current version. Keep a marked historical s
 
 ## Select thinking blocks through their surrounding work
 
-Apply the parent's [thinking rules](../../SKILL.md#keep-thinking-with-the-work-it-explains). Select thinking through its surrounding work, not its size or age.
+Apply the parent's [thinking rules](../SKILL.md#keep-thinking-with-the-work-it-explains). Select thinking through its surrounding work, not its size or age.
 
 1. First decide independently which readable notions or content deserve removal or dilution.
 2. Use preceding events and subsequent responses to attribute a thinking block to that selected work. For example: a stale file read, opaque thinking, then a response using those stale assumptions.

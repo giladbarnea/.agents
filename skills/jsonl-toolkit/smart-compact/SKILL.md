@@ -11,6 +11,18 @@ Smart-compaction removes redundant information while keeping contentful messages
 
 For conservative or Pareto compaction, read [Conservative Pareto compaction](references/conservative-pareto-compaction.md) before applying the rules below. Its selective-retention guidance takes precedence over broad file-payload replacement and tool removal, including deterministic preprocessing.
 
+## Keep thinking with the work it explains
+
+During compaction, treat thinking according to its associated messages and tools:
+
+1. **Unchanged work:** preserve its reasoning verbatim.
+2. **Summarized work:** summarize plaintext reasoning proportionately. Remove associated encrypted reasoning.
+3. **Removed work:** remove its associated reasoning too.
+
+Signed thinking can become invalid if its text or surrounding context changes. If replay could fail, promote retained plaintext to ordinary assistant text inside `<thinking>…</thinking>` or after `Thinking:`. Keep it verbatim or summarize it under the rules above. Do not attach the original signature to this text representation. It is editable historical reasoning, not authenticated thinking.
+
+Never invent plaintext for encrypted reasoning. Preserve original blocks in source history or a verified backup.
+
 ## Split analysis from background editing
 
 The main agent owns semantic decisions. One teammate owns edits to the copied JSONL. Do not run concurrent writers.
@@ -21,7 +33,7 @@ The main agent owns semantic decisions. One teammate owns edits to the copied JS
 4. Send the editing batch at the pseudocode skill's detail level: intent, selected stable identities, expected result and preservation boundaries. Leave implementation choices to the teammate.
 5. Let the teammate edit the copy in the background while you analyze the next part. Queue further batches to the same teammate; it applies them sequentially.
 6. Repeat until analysis and all editing batches are complete. The teammate reports each batch's changes, savings and validation against its source checksum.
-7. Validate the final session's structure, tool pairing, retained references and unselected payloads before installing it. Apply the parent's [thinking rules](../SKILL.md#keep-thinking-with-the-work-it-explains), using surrounding work to select blocks.
+7. Validate the final session's structure, tool pairing, retained references and unselected payloads before installing it. Apply the [thinking rules](#keep-thinking-with-the-work-it-explains), using surrounding work to select blocks.
 
 The teammate executes your classifications; it does not independently broaden removal or summarization. For conservative work, use the selective workflow in the reference above, not destructive preprocessing.
 
@@ -278,7 +290,7 @@ The generator:
 - Audits every inferred and explicit change.
 - Verifies the plan through the apply stage before emitting it.
 
-Non-tool structured blocks pass through unchanged, including thinking and subagent task blocks. The standard appliers do not implement thinking promotion or removal. Use a checksum-bound selective transformation for those [thinking rules](../SKILL.md#keep-thinking-with-the-work-it-explains).
+Non-tool structured blocks pass through unchanged, including thinking and subagent task blocks. The standard appliers do not implement thinking promotion or removal. Use a checksum-bound selective transformation for those [thinking rules](#keep-thinking-with-the-work-it-explains).
 
 The apply stage rejects stale checksums, missing indices, changed tool IDs, surviving raw tools, changed passthrough blocks, and duplicate footers.
 

@@ -12,18 +12,6 @@ Load [`smart-compact/SKILL.md`](smart-compact/SKILL.md) only when the task is se
 
 During compaction, detect referenced files that changed or moved. Ask the user before refreshing historical file calls or payloads. See [approval-gated file refresh](smart-compact/references/conservative-pareto-compaction.md#refresh-historical-file-snapshots-only-with-approval).
 
-## Keep thinking with the work it explains
-
-During compaction, treat thinking according to its associated messages and tools:
-
-1. **Unchanged work:** preserve its reasoning verbatim.
-2. **Summarized work:** summarize plaintext reasoning proportionately. Remove associated encrypted reasoning.
-3. **Removed work:** remove its associated reasoning too.
-
-Signed thinking can become invalid if its text or surrounding context changes. If replay could fail, promote retained plaintext to ordinary assistant text inside `<thinking>…</thinking>` or after `Thinking:`. Keep it verbatim or summarize it under the rules above. Do not attach the original signature to this text representation. It is editable historical reasoning, not authenticated thinking.
-
-Never invent plaintext for encrypted reasoning. Preserve original blocks in source history or a verified backup.
-
 ## Use DeepSeek Flash for routine questions
 
 Use this general-purpose helper for quick where, whether, how or which questions over data and transcripts. Treat calls as effectively free, ordinary programmatic operations. No subagent or team setup is needed.
