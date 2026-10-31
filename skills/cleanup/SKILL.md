@@ -1,7 +1,29 @@
 ---
 name: cleanup
-description: "Cleanup best practices. Load after work is finished."
-last_updated: 2026-10-28
+description: "Close out finished work: leave no loose ends and reclaim disk space. Load after work is finished, or when the user wants disk space back."
+last_updated: 2026-10-31
 ---
-Clean up after yourself. Is there a Git worktree to merge, or unpushed work? Are there files, scripts, drafts, or junk that need to be deleted? Are there things in temporary directories or work desks that should be promoted to become an official part of the project, and perhaps with files in their periphery consolidated or thrown away? Terminal multiplexer windows you opened that are no longer needed? Any processes to shut down? Subagents/forks which the harness keeps technically "active" unless shut down explicitly? Artifacts (build, etc), bloated caches, or environments that are no longer needed (global or local alike)? Will a `gi repack -a -d --cruft` make a difference and won’t hurt anything?
-Tell and confirm with the user.
+# Cleanup
+
+Cleanup has two goals:
+1. **No loose ends.** The next person or agent finds committed, pushed, documented work, and no stray processes, panes, forks or drafts.
+2. **Disk space.** Reclaim every byte that is stale, superseded or rebuildable.
+
+**Span: the whole project and its footprint on this machine, not only what you created.** Include leftovers from earlier sessions and teams, project temp folders, and global caches this project's tools filled. Exclude other projects, protected items, and anything a live session uses.
+
+## Domains
+
+1. **Git:** worktrees, unpushed branches, stashes, the object store.
+2. **Live state:** processes, locks, terminal panes, agents and forks you started.
+3. **Documents:** promote desk or temp content that belongs in the project. Consolidate or delete its periphery. Fix pointers to stale entries.
+4. **Build outputs and caches:** compiled artifacts, packaged builds, and the caches of compilers, bundlers and engines.
+5. **Temporary areas:** temp folders, scratchpads, run folders.
+6. **Environments and tool caches.**
+
+## Method
+
+1. Run the loose-ends checks and report them.
+2. Measure every candidate, project-wide and global. Rank by size.
+3. For each candidate, check what references it and what it rebuilds from. Shared or cloned files can make a measured size overstate the gain.
+4. Present one table: item, size, rebuilds from, references, risk, default action. Get one approval.
+5. Delete, then report the space actually freed.
