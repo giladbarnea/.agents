@@ -173,6 +173,8 @@ A call marked `no-result-in-file` says only that. In a raw export it means an in
 
 Read [`references/pi-session-jsonl.md`](references/pi-session-jsonl.md) before changing a native Pi session.
 
+To install an already prepared JSON message array, use the [native context installer](smart-compact/references/native-pi-session.md#install-a-prepared-context-window).
+
 Use `scripts/pi_session.py` for session resolution, JSONL loading, active-path extraction, identity work, and loader checks.
 
 Run Pi's own loader with:

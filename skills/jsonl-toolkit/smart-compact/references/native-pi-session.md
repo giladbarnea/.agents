@@ -1,3 +1,7 @@
+---
+last_updated: 2026-10-31
+---
+
 # Native Pi smart-compaction preserves resumability
 
 Read [`../../references/pi-session-jsonl.md`](../../references/pi-session-jsonl.md) first. It owns Pi's format, tree, identity, backup, and verification contracts.
@@ -11,10 +15,33 @@ Paths below are relative to the `jsonl-toolkit` root.
 | `generate_compaction_plan.py` and `apply_compaction_plan.py` | Compacted `ch` transcript | Yes | Writes a new transcript |
 | `compact_native_pi_session.py` | Resumable native session | No | Creates a new session beside the source |
 | `compact_existing_pi_session_inline.py` | Resumable native session | Yes | Backs up and changes an explicit target copy |
+| `install_pi_context.mjs` | Original archive with a prepared context installed | Already prepared | Writes a new output file with the archive's identity |
 
 The transcript applier and native applier consume one semantic plan in different ways.
 
 Do not pass a compacted transcript to the native applier. Pass the pruned source, plan, and native target copy.
+
+## Install a prepared context window
+
+```bash
+node scripts/install_pi_context.mjs session.jsonl prepared-context.json output.jsonl
+```
+
+`prepared-context.json` is an ordered JSON array of Pi messages, not a `ch` export. It needs no session header or tree entries. The same interface is importable:
+
+```javascript
+import { installPiContext } from './scripts/install_pi_context.mjs';
+
+installPiContext('session.jsonl', 'prepared-context.json', 'output.jsonl');
+```
+
+The output preserves the archive's bytes, session identity, title, selected model, and thinking level. Only the prepared messages enter the active context. A new native root starts that context because Pi's `context_edit` API cannot omit system, Bash, or summary entries.
+
+The installer uses Pi's normal conversion for custom, Bash, and summary messages. It preserves message content, tool-call IDs, and thinking payloads. It clears imported usage so context installation neither duplicates costs nor reuses historical context-token counts. It makes no compaction or thinking decisions.
+
+Both inputs stay unchanged. The output must not exist. Keep it outside Pi's session directory until replacing the stopped original, since both files carry the same session ID.
+
+Run its tests with `node --test tests/test_install_pi_context.mjs`. They use the installed Pi loader without model calls.
 
 ## The default native compactor uses a fixed decisions schema
 

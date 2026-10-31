@@ -146,6 +146,14 @@ The original session is protected. An explicitly named target copy can be change
 
 The default native compactor creates a new session. The semantic-plan applier changes a named target copy.
 
+If the context is already prepared, use the [context installer](references/native-pi-session.md#install-a-prepared-context-window):
+
+```bash
+node ../scripts/install_pi_context.mjs session.jsonl prepared-context.json output.jsonl
+```
+
+It preserves the original archive and installs an ordered JSON message array as the active context in a new output file.
+
 ## Run deterministic preprocessing before semantic review
 
 ```bash

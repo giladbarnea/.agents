@@ -1,3 +1,7 @@
+---
+last_updated: 2026-10-31
+---
+
 # A native Pi session is a tree stored as JSONL
 
 Read this reference before inspecting or changing a native Pi session file.
@@ -50,7 +54,7 @@ Use `scripts/pi_session.py` to resolve a session, load its entries, and extract 
 
 ## Five invariants keep a session resumable
 
-1. Exactly one tree entry has `parentId: null`.
+1. Each ancestry ends at an entry with `parentId: null`. Native `resetLeaf()` can create multiple roots.
 2. Every non-null `parentId` resolves to another tree entry.
 3. The chain from the last entry reaches every active entry exactly once.
 4. Every surviving tool call has its matching result occurrence.
@@ -107,7 +111,7 @@ Preserve untouched native lines byte-for-byte when the transformation supports i
 
 First verify the JSONL structure directly:
 
-1. Confirm one root.
+1. Confirm the active ancestry reaches a root without cycles.
 2. Resolve every parent.
 3. Walk from the last entry and reach every active entry.
 4. Pair every tool-call occurrence with one result occurrence.
@@ -128,7 +132,7 @@ const reached = buildContextEntries(entries, undefined, byId).length;
 const context = buildSessionContext(entries, undefined, byId);
 ```
 
-`reached` must equal `entries.length - 1`. Pass `undefined` as the leaf ID. `null` asks Pi for an empty context.
+`reached` counts selected context entries, not all stored history. It can be smaller with abandoned branches, multiple roots, or compaction. Use `SessionManager.getBranch()` to inspect the active ancestry. Pass `undefined` as the leaf ID. `null` asks Pi for an empty context.
 
 Run the packaged loader with:
 
