@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-10-31
+last_updated: 2026-11-01
 ---
 
 # A native Pi session is a tree stored as JSONL
@@ -50,7 +50,7 @@ Pi treats the last tree entry as the active leaf. It follows `parentId` links ba
 
 Entries outside that walk are abandoned branches. Raw file order is not conversation order when the session contains rewinds.
 
-Use `scripts/pi_session.py` to resolve a session, load its entries, and extract its active path.
+In Node, [`lib/pi.mjs`](pi-lib.md) resolves a session, reads its entries without changing the file, and gives its active path as `session.branch`. The Python converters use `scripts/pi_session.py` for the same jobs.
 
 ## Five invariants keep a session resumable
 
@@ -117,22 +117,7 @@ First verify the JSONL structure directly:
 4. Pair every tool-call occurrence with one result occurrence.
 5. Compare conversation text against the source when text must remain unchanged.
 
-Then load the result through Pi's own session manager:
-
-```js
-import {
-  loadEntriesFromFile,
-  buildContextEntries,
-  buildSessionContext,
-} from '/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/dist/core/session-manager.js';
-
-const entries = loadEntriesFromFile(file);
-const byId = new Map(entries.map(entry => [entry.id, entry]));
-const reached = buildContextEntries(entries, undefined, byId).length;
-const context = buildSessionContext(entries, undefined, byId);
-```
-
-`reached` counts selected context entries, not all stored history. It can be smaller with abandoned branches, multiple roots, or compaction. Use `SessionManager.getBranch()` to inspect the active ancestry. Pass `undefined` as the leaf ID. `null` asks Pi for an empty context.
+`open(file).check()` in [the library](pi-lib.md) does steps 1 to 4. It parses strictly, refuses duplicate IDs and missing parents, builds the context through Pi's own projection, and raises on an unpaired tool call or result. It reports stored, active and abandoned entry counts. Do not verify with Pi's `loadEntriesFromFile` on a file you must not change: it appends a missing final newline to the file it reads.
 
 Run the packaged loader with:
 
