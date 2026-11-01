@@ -124,9 +124,13 @@ Use the parent file reporter when presenting the set:
 ../scripts/filestats.sh <path> [path ...]
 ```
 
-## Build from a current structured export
+## Read the session through the library
 
-Follow the parent `ch` export contract, but export with `-t` rather than `-t:s`:
+Read a Pi session with [`lib/pi.mjs`](../references/pi-lib.md): `context.outline()` gives one line per entry and `context.render({ clip })` gives the text. It reads the session file itself, so it cannot lose entries a `ch` export leaves out. Collect decisions in a `Draft`, as [the native workflow](#choose-the-native-workflow-explicitly) describes.
+
+## Legacy: build the plan pipeline from a `ch` export
+
+Everything from [deterministic preprocessing](#run-deterministic-preprocessing-before-semantic-review) through [the native-copy transfer](#transfer-the-same-plan-to-a-named-native-pi-copy) is the legacy `ch`-transcript plan pipeline. Use it only to finish an existing plan; do not start new work with it. It needs an export made with `-t` rather than `-t:s`:
 
 ```bash
 ch <session-id> -t -f json > transcription.json
@@ -319,7 +323,11 @@ uv run --script ../scripts/compact_existing_pi_session_inline.py \
 
 The native applier currently remains at the parent script level while its reusable Pi-session logic is refactored.
 
-## Regenerate Markdown from final JSON
+## Render the final context
+
+Preview a library edit with `draft.context().render()` before applying it. From a shell, `node ../scripts/pi_context_edit.mjs dump SESSION out/` writes `context.md`.
+
+For the legacy pipeline's `compacted.json`:
 
 ```bash
 ch parse compacted.json > compacted.md

@@ -4,6 +4,8 @@ description: Tools and workflows for inspecting large JSONL files and AI session
 last_updated: 2026-11-01
 ---
 
+> Nov 1 2026 update: `ch` is best used for skimming, searching and reading, with generic tool filters and length control, before the actual data work, to gain an understanding of the session (preparation). Try to avoid relying on it for "real work". Its export omits important information, the tool as a whole is often out of date with the data types that recent JSONLs have, and it has other issues. It does do a good job with a naive `ch ...` to read the agent and user text messages, `ch ... -t` to include all tools in the output, `ch ... -t:<SPEC>` to filter, and `ch ... --shorten=...`/`ch ... -t:s=...` to control how much you skim versus deep dive, so you avoid undesired context bombs (accidentally reading hundreds of thousands of tokens' worth of transcript in one go). Therefore, you'll need to build your own means based on the raw JSONL, `lib/pi.mjs` for Pi sessions, or both. If you're manually overcoming `lib/pi.mjs` shortcomings, surface that to your leader, because it might point to a general underlying issue with the library, which should be promoted into the library if it adheres to the library's design and intent.
+
 Use this skill to inspect, search, summarize, or transform large JSONL files without loading unwieldy lines into the terminal.
 
 The toolkit also supports AI session collections, exported transcripts, native Pi sessions, conversion between Codex and Pi, and conversion from Codex or Pi to Claude Code.
@@ -123,7 +125,7 @@ ch <session-id> -t:s > transcription.md
 
 `-t:s` splices each long tool value down to about 500 characters, keeping both ends around a bare `...` line. It does this to arguments as well as results, so a truncated value still opens and closes correctly and can look whole. Export with `-t` instead whenever the content matters.
 
-Treat the structured JSON as the source of truth. Convert between the structured export and rendered Markdown with:
+Convert between the structured export and rendered Markdown with:
 
 ```bash
 ch parse transcription.json > transcription.md

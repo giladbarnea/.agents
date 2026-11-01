@@ -14,8 +14,8 @@ Paths below are relative to the `jsonl-toolkit` root.
 |---|---|---:|---|
 | [`lib/pi.mjs`](../../references/pi-lib.md) `Draft` | The same session, with selected context entries omitted or replaced | Written by you | Appends native `context_edit` entries in place after a verified backup, or writes a copy |
 | `lib/pi.mjs` `Session.install` | Original archive with a prepared context installed | Already prepared | Writes a new output file with the archive's identity |
-| `generate_compaction_plan.py` and `apply_compaction_plan.py` | Compacted `ch` transcript | Yes | Writes a new transcript |
-| `compact_existing_pi_session_inline.py` | Resumable native session | Yes | Backs up and changes an explicit target copy |
+| Legacy: `generate_compaction_plan.py` and `apply_compaction_plan.py` | Compacted `ch` transcript | Yes | Writes a new transcript |
+| Legacy: `compact_existing_pi_session_inline.py` | Resumable native session | Yes | Backs up and changes an explicit target copy |
 
 Prefer the library for a native Pi session. It reads the session file itself, so it needs no `ch` export and cannot lose entries an export leaves out. Every other row [should eventually be eliminated](../../references/pi-lib.md#shrink-everything-else). Until someone removes it, the inline applier serves only to transfer an existing `ch`-transcript plan.
 
