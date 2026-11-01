@@ -146,6 +146,8 @@ The original session is protected. An explicitly named target copy can be change
 
 The default native compactor creates a new session. The semantic-plan applier changes a named target copy.
 
+To compact a Pi session in place, including one compacted before, [edit its live context](references/native-pi-session.md#edit-the-live-context-in-place). Read `context.md` from `pi_context_edit.mjs dump`, write your decisions as context edits, then `apply`. This path needs no `ch` export, keeps every stored byte, and checks tool pairing before it writes.
+
 If the context is already prepared, use the [context installer](references/native-pi-session.md#install-a-prepared-context-window):
 
 ```bash

@@ -177,6 +177,8 @@ To install an already prepared JSON message array, use the [native context insta
 
 Use `scripts/pi_session.py` for session resolution, JSONL loading, active-path extraction, identity work, and loader checks.
 
+To see what the model actually receives, after compactions and context edits, run `node scripts/pi_context_edit.mjs dump session.jsonl out/`. To change that context in place, see [edit the live context](smart-compact/references/native-pi-session.md#edit-the-live-context-in-place).
+
 Run Pi's own loader with:
 
 ```bash
