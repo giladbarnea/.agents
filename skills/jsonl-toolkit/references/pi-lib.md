@@ -39,13 +39,13 @@ Facts about the harness belong in the library, because without them it is not us
 3. Add a falsifiable test to `tests/test_pi_lib.mjs`. Break the guarantee on purpose and confirm that the test fails.
 4. Update this reference, and remove whatever the change made redundant.
 
-## Everything else is being sunset
+## Shrink everything else
 
-Gilad decided on 2026-11-01 that this library is where the toolkit's capability grows. Every other script, pipeline and tool reference in `jsonl-toolkit` and `smart-compact` is being sunset. It still works for now, but it will be phased out and removed.
+Gilad decided on 2026-11-01 that this library is where the toolkit's capability grows. Every other script, pipeline and tool reference in `jsonl-toolkit` and `smart-compact` should eventually be eliminated. Help that happen: keep a light finger on the trigger.
 
 1. When an old resource fails or falls short, do not repair or extend it. Add the missing building block to the library, under the design approach above.
-2. When the library covers an old resource's job, remove the resource and its docs. `compact_native_pi_session.py` went this way on 2026-11-01.
-3. The judgment guidance in `smart-compact`, such as relevance, summaries and thinking rules, is not being sunset. It tells the agent what to decide; the library carries out the decisions.
+2. When the library covers all or part of an old resource's job, remove the resource, or cut it down to what the library does not cover yet. Remove its docs and tests with it. `compact_native_pi_session.py` went this way on 2026-11-01.
+3. The judgment guidance in `smart-compact`, such as relevance, summaries and thinking rules, is not a resource to eliminate. It tells the agent what to decide; the library carries out the decisions.
 
 ## Use it
 

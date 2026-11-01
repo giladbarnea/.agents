@@ -8,7 +8,7 @@ Use this skill to inspect, search, summarize, or transform large JSONL files wit
 
 The toolkit also supports AI session collections, exported transcripts, native Pi sessions, conversion between Codex and Pi, and conversion from Codex or Pi to Claude Code.
 
-> **Everything in this toolkit except [`lib/pi.mjs`](references/pi-lib.md) is being sunset.** The other scripts, pipelines and their docs still work for now, but they will be phased out and removed. Do not extend or modify them. When one fails or falls short, build what you need into the library, under its [design approach](references/pi-lib.md#design-approach). When the library covers a resource's job, remove that resource.
+> **Grow [`lib/pi.mjs`](references/pi-lib.md); shrink everything else.** Every other script, pipeline and tool doc in this toolkit should eventually be eliminated. Help that happen: keep a light finger on the trigger, and remove an old resource or cut its scope whenever you safely can. Never extend one. When one fails or falls short, build what you need into the library, under its [design approach](references/pi-lib.md#design-approach).
 
 Load [`smart-compact/SKILL.md`](smart-compact/SKILL.md) only when the task is session compaction.
 
