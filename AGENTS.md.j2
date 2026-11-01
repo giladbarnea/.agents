@@ -1,5 +1,5 @@
 ---
-updated: 2026-10-21
+updated: 2026-11-01
 ---
 # Global Instructions
 
@@ -53,7 +53,7 @@ You’re on a Mac M2 Pro. In addition to base Unix coreutils and Python 3, you c
 ### Fetching Web Pages & Files
 
 Use the `rf` tool (stands for robust fetch) to fetch and convert web content or documents to Markdown.
-Usage: `rf [-h] [--cache] [--timeout N_SEC (default 30)] [-s,--scraper {playwright,firecrawl,markitdown}] URL`
+Usage: `rf [-h] [--timeout N_SEC (default 30)] [-s,--scraper {playwright,firecrawl,markitdown}] URL`
 
 </web-fetching>
 
