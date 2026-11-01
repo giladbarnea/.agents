@@ -17,7 +17,7 @@ Paths below are relative to the `jsonl-toolkit` root.
 | `generate_compaction_plan.py` and `apply_compaction_plan.py` | Compacted `ch` transcript | Yes | Writes a new transcript |
 | `compact_existing_pi_session_inline.py` | Resumable native session | Yes | Backs up and changes an explicit target copy |
 
-Prefer the library for a native Pi session. It reads the session file itself, so it needs no `ch` export and cannot lose entries an export leaves out. The inline applier remains for transferring an existing `ch`-transcript plan.
+Prefer the library for a native Pi session. It reads the session file itself, so it needs no `ch` export and cannot lose entries an export leaves out. Every other row is [being sunset](../../references/pi-lib.md#everything-else-is-being-sunset). Until it is removed, the inline applier serves only to transfer an existing `ch`-transcript plan.
 
 Do not pass a compacted transcript to the native applier. Pass the pruned source, plan, and native target copy.
 

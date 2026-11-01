@@ -2,10 +2,12 @@
 name: smart-compact
 parent: jsonl-toolkit
 description: Tree-shake an AI session transcript while preserving its semantic story
-last_updated: 2026-10-31
+last_updated: 2026-11-01
 ---
 
 Read [`../SKILL.md`](../SKILL.md) first. The parent owns file formats, large-file inspection, stable identities, generic transcript analysis, and native Pi structure.
+
+> **This skill's scripts and pipelines are being sunset in favor of [`lib/pi.mjs`](../references/pi-lib.md).** Do not extend or modify them. Build missing capability into the library instead. The judgment guidance in this skill stays in force: what to keep, how to summarize, and the thinking rules.
 
 Smart-compaction removes redundant information while keeping contentful messages intact.
 
