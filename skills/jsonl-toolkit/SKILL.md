@@ -10,6 +10,8 @@ The toolkit also supports AI session collections, exported transcripts, native P
 
 Load [`smart-compact/SKILL.md`](smart-compact/SKILL.md) only when the task is session compaction.
 
+File papercuts about this toolkit in its own log: pass the absolute path `file: /Users/giladbarnea/.agents/skills/jsonl-toolkit/.papercuts.jsonl` to the papercuts tool. Without it, the tool writes to the git root of your working directory, which is usually a temporary directory.
+
 During compaction, detect referenced files that changed or moved. Ask the user before refreshing historical file calls or payloads. See [approval-gated file refresh](smart-compact/references/conservative-pareto-compaction.md#refresh-historical-file-snapshots-only-with-approval).
 
 ## Use DeepSeek Flash for routine questions
