@@ -175,17 +175,9 @@ A call marked `no-result-in-file` says only that. In a raw export it means an in
 
 Read [`references/pi-session-jsonl.md`](references/pi-session-jsonl.md) before changing a native Pi session.
 
-To install an already prepared JSON message array, use the [native context installer](smart-compact/references/native-pi-session.md#install-a-prepared-context-window).
+Do the work in a Node script with [`lib/pi.mjs`](references/pi-lib.md). It opens a session by path or session-ID prefix, shows what the model receives, selects entries, previews context edits and applies them safely. It also installs a prepared message array as a new context. Compose its building blocks; it decides nothing for you.
 
-Use `scripts/pi_session.py` for session resolution, JSONL loading, active-path extraction, identity work, and loader checks.
-
-To see what the model actually receives, after compactions and context edits, run `node scripts/pi_context_edit.mjs dump session.jsonl out/`. To change that context in place, see [edit the live context](smart-compact/references/native-pi-session.md#edit-the-live-context-in-place).
-
-Run Pi's own loader with:
-
-```bash
-node scripts/pi-goldload.mjs session.jsonl
-```
+The Python converters keep their own helpers in `scripts/pi_session.py`. They check output with Pi's loader through `node scripts/pi-goldload.mjs session.jsonl`.
 
 A current Pi transcript export includes exact native provenance:
 

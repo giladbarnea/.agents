@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-10-31
+last_updated: 2026-11-01
 ---
 
 # Native Pi smart-compaction preserves resumability
@@ -12,33 +12,24 @@ Paths below are relative to the `jsonl-toolkit` root.
 
 | Workflow | Output | Semantic skeletons | Write behavior |
 |---|---|---:|---|
+| [`lib/pi.mjs`](../../references/pi-lib.md) `Draft` | The same session, with selected context entries omitted or replaced | Written by you | Appends native `context_edit` entries in place after a verified backup, or writes a copy |
+| `lib/pi.mjs` `Session.install` | Original archive with a prepared context installed | Already prepared | Writes a new output file with the archive's identity |
 | `generate_compaction_plan.py` and `apply_compaction_plan.py` | Compacted `ch` transcript | Yes | Writes a new transcript |
-| `compact_native_pi_session.py` | Resumable native session | No | Creates a new session beside the source |
 | `compact_existing_pi_session_inline.py` | Resumable native session | Yes | Backs up and changes an explicit target copy |
-| `install_pi_context.mjs` | Original archive with a prepared context installed | Already prepared | Writes a new output file with the archive's identity |
-| `pi_context_edit.mjs` | The same session, with selected context entries omitted or replaced | Written by you | Appends native `context_edit` entries in place, after a verified backup |
 
-The transcript applier and native applier consume one semantic plan in different ways.
+Prefer the library for a native Pi session. It reads the session file itself, so it needs no `ch` export and cannot lose entries an export leaves out. The inline applier remains for transferring an existing `ch`-transcript plan.
 
 Do not pass a compacted transcript to the native applier. Pass the pruned source, plan, and native target copy.
 
 ## Edit the live context in place
 
-Use this for a session that keeps running, including one already compacted this way. Pi's own `context_edit` entry omits or replaces one model-visible entry. A later edit of the same entry wins. Stored history stays untouched.
+Use this for a session that keeps running, including one compacted this way before. Pi's own `context_edit` entry omits or replaces one model-visible entry. A later edit of the same entry wins. Stored history stays untouched.
 
-```bash
-node scripts/pi_context_edit.mjs dump session.jsonl out/   # context.md to read, context.jsonl outline, messages.jsonl exact content
-node scripts/pi_context_edit.mjs apply session.jsonl edits.json --dry-run
-node scripts/pi_context_edit.mjs apply session.jsonl edits.json --marker '{"pass":2}'
-```
+Work in a Node script with [the library](../../references/pi-lib.md). Read `context.outline()` and `context.render()`, select spans, and collect decisions in a `Draft`. Preview with `draft.context()`, then `apply()`. To fold a tool exchange, replace the assistant entry with a skeleton and omit its result. `selection.complete()` finds both sides.
 
-`edits.json` is an ordered array of `{"targetId": "<entry id>", "replacement": null | {"content": ...}}`. Build replacements from `messages.jsonl` when you trim rather than rewrite. Only user, assistant, toolResult and custom-message entries are editable; system and Bash-execution entries are not.
-
-`apply` refuses to write when the edited context would hold a tool call without its result, or the reverse. Fold a call and its result together: replace the assistant entry with a skeleton and omit the result. It then backs up the file, appends the edits and a `smart-compact-context-edits` marker, and checks that Pi reloads exactly the validated context. Its token report uses one character estimator on both sides; `piContextTokensBefore` is the last billed context.
+From a shell, `node scripts/pi_context_edit.mjs dump SESSION out/` writes `context.md` and `outline.txt`. `apply SESSION decisions.json` applies decisions that `draft.save()` wrote.
 
 A running Pi process keeps its context in memory and would append its next turn to the old leaf, which orphans the edits. Apply only to a stopped session, or restart that Pi and resume the session before its next turn.
-
-Run its tests with `node --test tests/test_pi_context_edit.mjs`.
 
 ## Install a prepared context window
 
@@ -46,13 +37,9 @@ Run its tests with `node --test tests/test_pi_context_edit.mjs`.
 node scripts/install_pi_context.mjs session.jsonl prepared-context.json output.jsonl
 ```
 
-`prepared-context.json` is an ordered JSON array of Pi messages, not a `ch` export. It needs no session header or tree entries. The same interface is importable:
+In a script, call `open('session.jsonl').install(messages).apply({ to: 'output.jsonl' })`.
 
-```javascript
-import { installPiContext } from './scripts/install_pi_context.mjs';
-
-installPiContext('session.jsonl', 'prepared-context.json', 'output.jsonl');
-```
+`prepared-context.json` is an ordered JSON array of Pi messages, not a `ch` export. It needs no session header or tree entries.
 
 The output preserves the archive's bytes, session identity, title, selected model, and thinking level. Only the prepared messages enter the active context. A new native root starts that context because Pi's `context_edit` API cannot omit system, Bash, or summary entries.
 
@@ -61,53 +48,6 @@ The installer uses Pi's normal conversion for custom, Bash, and summary messages
 Both inputs stay unchanged. The output must not exist. Keep it outside Pi's session directory until replacing the stopped original, since both files carry the same session ID.
 
 Run its tests with `node --test tests/test_install_pi_context.mjs`. They use the installed Pi loader without model calls.
-
-## The default native compactor uses a fixed decisions schema
-
-Run its dry-run before other investigation:
-
-```bash
-uv run smart-compact/scripts/compact_native_pi_session.py \
-  <session-id-or-path> --dry-run --outline
-```
-
-The dry-run resolves the file and prints:
-
-- Entry and message counts
-- Active and abandoned branch counts
-- Byte weights by role
-- Tool distribution
-- Shrink candidates
-- Old session-ID occurrences
-- The active-path story with `DROP`, `SHRINK`, and `KEEP` actions
-
-Commit the reviewed policy with:
-
-```bash
-uv run smart-compact/scripts/compact_native_pi_session.py \
-  <session-id-or-path> \
-  [--decisions decisions.json] \
-  [--rewrite-content-id]
-```
-
-The optional decisions file has this shape:
-
-```json
-{
-  "drop_custom_types": ["pi-time-sense"],
-  "drop_tool_units": ["todo"],
-  "keep_thinking": true,
-  "shrink_always": ["read", "read_many_files", "write"],
-  "shrink_threshold": 800,
-  "drop_entry_ids": []
-}
-```
-
-The compactor creates a new session identity and file. It never changes its source.
-
-It keeps only the active path, removes selected tool units atomically, shrinks selected results, and re-chains survivors.
-
-It verifies the result through the parent Pi-session helpers. It also runs Pi's loader and `ch` discovery when available.
 
 ## The semantic-plan applier changes an explicit target copy
 

@@ -54,7 +54,7 @@ test('apply refuses edits that orphan a tool call, before writing anything', t =
   writeFileSync(edits, JSON.stringify([{ targetId: 'result', replacement: null }]));
   const refused = run('apply', session, edits);
   assert.equal(refused.status, 1);
-  assert.match(refused.stderr, /Tool calls without results in context: tool-1/);
+  assert.match(refused.stderr, /Tool call tool-1 in call has no result in context/);
   assert(readFileSync(session).equals(bytes), 'A refused edit must leave the session unchanged');
   assert(!existsSync(`${session}.backup-0`), 'A refused edit must not create a backup');
 });
@@ -69,14 +69,22 @@ test('dry-run reports savings without writing', t => {
   assert(readFileSync(session).equals(bytes));
 });
 
-test('dump writes a readable view and exact messages keyed by entry', t => {
+test('apply --to writes a reviewed copy and leaves the session alone', t => {
+  const { directory, session, bytes, edits } = fixture(t);
+  writeFileSync(edits, JSON.stringify([{ targetId: 'call', replacement: { content: 'folded' } }, { targetId: 'result', replacement: null }]));
+  const copy = join(directory, 'copy.jsonl');
+  const applied = run('apply', session, edits, '--to', copy, '--marker', '{"pass":3}');
+  assert.equal(applied.status, 0, applied.stderr);
+  assert(readFileSync(session).equals(bytes));
+  assert.equal(SessionManager.open(copy).buildSessionContext().messages.length, 3);
+  assert.equal(SessionManager.open(copy).getEntries().at(-1).data.pass, 3);
+});
+
+test('dump writes a readable view and a one-line-per-entry outline', t => {
   const { directory, session } = fixture(t);
   const dumped = run('dump', session, join(directory, 'out'));
   assert.equal(dumped.status, 0, dumped.stderr);
-  const records = readFileSync(join(directory, 'out', 'context.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
-  assert.deepEqual(records.map(record => record.entryId), ['question', 'call', 'result', 'answer']);
-  assert.deepEqual(records[1].toolCallIds, ['tool-1']);
+  assert.equal(JSON.parse(dumped.stdout).items, 4);
+  assert.deepEqual(readFileSync(join(directory, 'out', 'outline.txt'), 'utf8').trim().split('\n').map(line => line.split(' ')[0]), ['question', 'call', 'result', 'answer']);
   assert.match(readFileSync(join(directory, 'out', 'context.md'), 'utf8'), /### \[call\] assistant .*\n→ toolCall bash id=tool-1\n  command: time herdr-tree session list/);
-  const messages = readFileSync(join(directory, 'out', 'messages.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
-  assert.equal(messages[3].messages[0].content[0].text, 'Reading every session file takes 1.3 s.');
 });
