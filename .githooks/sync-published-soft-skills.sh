@@ -40,7 +40,7 @@ main() {
   # notes stay private). Skill and root file names are a hardcoded whitelist.
   local skill_name
   for skill_name in ai-to-leader ai-to-delegated handoff peer-review theory-of-mind; do
-    rsync -a --delete --exclude='.*' "$personal_plugin_directory/skills/$skill_name/" "$published_plugin_directory/skills/$skill_name/"
+    rsync -a --delete --delete-excluded --exclude='.*' "$personal_plugin_directory/skills/$skill_name/" "$published_plugin_directory/skills/$skill_name/"
   done
   rm -f "$published_plugin_directory/references/roles.md"
   rmdir "$published_plugin_directory/references" 2>/dev/null || true
