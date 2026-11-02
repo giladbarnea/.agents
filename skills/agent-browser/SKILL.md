@@ -97,3 +97,9 @@ Techniques worth reusing:
 - For searching Polymarket prediction markets with high recall and precision, read `references/polymarket.md`.
 
 For these tailored cases, lightly skim the core docs and then follow the dedicated reference.
+
+---
+
+## Lightpanda
+
+`lightpanda` is a relatively new tech that looks promising to me. I haven’t tested it. It’s a programmatic browser for AI agents. It’s installed on this machine. Run `lightpanda --help`, `lightpanda agent --help`, and other `lightpanda <command> --help` commands to figure out whether it can help. I’m keen on seeing whether it helps agents in your situation. https://lightpanda.io/ . 
