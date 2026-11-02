@@ -32,8 +32,8 @@ rerun_completed_release() {
 
 case "${1:-}" in
   --retry|--cancel-pending) ;;
-  --merge) git -C "$repository_root" diff --quiet ORIG_HEAD HEAD -- plugins/soft-skills && exit 0 ;;
-  *) git -C "$repository_root" diff --quiet HEAD^ HEAD -- plugins/soft-skills && exit 0 ;;
+  --push) git -C "$repository_root" diff --quiet '@{upstream}' HEAD -- plugins/soft-skills && exit 0 ;;
+  *) printf 'Usage: %s --push|--retry|--cancel-pending\n' "$0" >&2; exit 1 ;;
 esac
 pending_file="$(git -C "$repository_root" rev-parse --path-format=absolute --git-path soft-skills-publication-pending)"
 source_commit="$(git -C "$repository_root" rev-parse HEAD)"

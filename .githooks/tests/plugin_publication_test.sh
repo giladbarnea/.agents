@@ -10,7 +10,7 @@ remote="$temporary_directory/public.git"
 mkdir -p "$hub/.githooks" "$hub/plugins" "$temporary_directory/bin"
 git -C "$hub_source" archive HEAD plugins/soft-skills | tar -x -C "$hub"
 cp "$hub_source/plugins/soft-skills/token-economic-communication.md" "$hub/plugins/soft-skills/"
-for script in pre-commit post-commit post-merge guard-published-soft-skills.sh publish-soft-skills.sh sync-published-soft-skills.sh check-published-private-names.sh; do
+for script in pre-commit pre-push post-merge guard-published-soft-skills.sh publish-soft-skills.sh sync-published-soft-skills.sh check-published-private-names.sh; do
   [[ -e "$hub_source/.githooks/$script" ]] && cp "$hub_source/.githooks/$script" "$hub/.githooks/$script"
 done
 cat >"$hub/.githooks/common.sh" <<'EOF'
@@ -27,6 +27,9 @@ git -C "$hub" config user.name Test
 git -C "$hub" config user.email test@example.com
 git -C "$hub" add plugins/soft-skills
 git -C "$hub" -c core.hooksPath=/dev/null commit -qm 'Initial source'
+git init -q --bare "$temporary_directory/hub-origin.git"
+git -C "$hub" remote add origin "$temporary_directory/hub-origin.git"
+git -C "$hub" push -q -u origin main
 git -C "$hub" config core.hooksPath .githooks
 
 git clone -q "$hub_source/plugins/.published-soft-skills" "$published"
@@ -87,6 +90,7 @@ EOF
 chmod +x "$temporary_directory/bin/pi" "$temporary_directory/bin/gh" "$temporary_directory/bin/sleep"
 export TEST_RELEASE_PENDING_FILE="$temporary_directory/release-pending" TEST_RERUN_MARKER="$temporary_directory/rerun-called"
 export PATH="$temporary_directory/bin:$PATH"
+push_hub() { (cd "$hub" && git push -q); }
 expected_version="${initial_version%.*}.$((${initial_version##*.} + 1))"
 source_file="$hub/plugins/soft-skills/skills/ai-to-delegated/briefing/forked-context.md"
 original_source_hash="$(git -C "$hub" hash-object "$source_file")"
@@ -103,7 +107,11 @@ fi
 EOF
 chmod +x "$remote/hooks/update"
 touch "$remote/reject-main"
-(cd "$hub" && git commit -qm 'Change plugin source' 2>"$temporary_directory/publish.log")
+(cd "$hub" && git commit -qm 'Change plugin source')
+if (cd "$hub" && git push -q 2>"$temporary_directory/publish.log"); then
+  printf '%s\n' 'A push passed although its release failed.' >&2
+  exit 1
+fi
 ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$expected_version"
 [[ -f "$hub/.git/soft-skills-publication-pending" ]]
 git -C "$hub" restore "$source_file"
@@ -132,9 +140,15 @@ changed_paths="$(git -C "$published" show --format= --name-only HEAD)"
 ! rg -q '^\.venv/' <<<"$changed_paths"
 [[ -z "$(git -C "$published" status --porcelain --untracked-files=all)" ]]
 git -C "$hub" restore "$source_file"
+push_hub
 
 revert_version="${expected_version%.*}.$((${expected_version##*.} + 1))"
-(cd "$hub" && git revert --no-edit HEAD >"$temporary_directory/revert.log" 2>&1)
+(cd "$hub" && git revert --no-edit HEAD) >"$temporary_directory/revert.log" 2>&1
+if git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$revert_version"; then
+  printf '%s\n' 'A commit released without a push.' >&2
+  exit 1
+fi
+push_hub >>"$temporary_directory/revert.log" 2>&1
 if ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$revert_version"; then
   printf '%s\n' 'Reverting to previously published content did not make a new release.' >&2
   cat "$temporary_directory/revert.log" >&2
@@ -155,7 +169,11 @@ fi
 EOF
 chmod +x "$remote/hooks/update"
 touch "$remote/reject-tag"
-(cd "$hub" && git commit -qm 'Publish across a tag failure' 2>"$temporary_directory/pending.log")
+(cd "$hub" && git commit -qm 'Publish across a tag failure')
+if (cd "$hub" && git push -q 2>"$temporary_directory/pending.log"); then
+  printf '%s\n' 'A push passed although its release failed.' >&2
+  exit 1
+fi
 rg -q 'Publication pending' "$temporary_directory/pending.log"
 [[ "$(jq -r .version "$published/plugins/soft-skills/.claude-plugin/plugin.json")" == "$pending_version" ]]
 ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$pending_version"
@@ -188,6 +206,7 @@ git -C "$hub" -c core.hooksPath=/dev/null revert --no-edit HEAD >/dev/null
 rm "$remote/reject-tag"
 (cd "$hub" && .githooks/publish-soft-skills.sh --retry >"$temporary_directory/retry.log" 2>&1)
 git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$pending_version"
+push_hub
 ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v${pending_version%.*}.$((${pending_version##*.} + 1))"
 [[ -z "$(git -C "$published" status --porcelain --untracked-files=all)" ]]
 
@@ -195,7 +214,11 @@ private_version="${pending_version%.*}.$((${pending_version##*.} + 1))"
 remote_head="$(git --git-dir="$remote" rev-parse refs/heads/main)"
 printf '\nAn anonymization test instruction.\n' >>"$hub/plugins/soft-skills/skills/ai-to-leader/references/help.md"
 git -C "$hub" add plugins/soft-skills
-(cd "$hub" && TEST_PI_TOUCH_OTHER=1 git commit -qm 'Reject extra AI edit' 2>"$temporary_directory/ai-failure.log")
+(cd "$hub" && git commit -qm 'Reject extra AI edit')
+if (cd "$hub" && TEST_PI_TOUCH_OTHER=1 git push -q 2>"$temporary_directory/ai-failure.log"); then
+  printf '%s\n' 'A push passed although its release failed.' >&2
+  exit 1
+fi
 rg -q 'Anonymization changed a file outside' "$temporary_directory/ai-failure.log"
 [[ "$(git --git-dir="$remote" rev-parse refs/heads/main)" == "$remote_head" ]]
 [[ -z "$(git -C "$published" status --porcelain --untracked-files=all)" ]]
@@ -207,6 +230,7 @@ rg -q 'outside its requested file list' "$temporary_directory/symlink.log"
 [[ "$(git --git-dir="$remote" rev-parse refs/heads/main)" == "$remote_head" ]]
 (cd "$hub" && .githooks/publish-soft-skills.sh --retry >"$temporary_directory/ai-retry.log" 2>&1)
 git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$private_version"
+push_hub
 
 merge_version="${private_version%.*}.$((${private_version##*.} + 1))"
 git -C "$hub" checkout -qb feature
@@ -214,32 +238,26 @@ printf '\nMerged plugin change.\n' >>"$source_file"
 git -C "$hub" add plugins/soft-skills
 git -C "$hub" -c core.hooksPath=/dev/null commit -qm 'Change plugin on branch'
 git -C "$hub" checkout -q main
-(cd "$hub" && git merge --no-ff --no-edit feature >"$temporary_directory/merge.log" 2>&1)
+(cd "$hub" && git merge --no-ff --no-edit feature && git push -q) >"$temporary_directory/merge.log" 2>&1
 if ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$merge_version"; then
   printf '%s\n' 'The merged plugin change did not publish.' >&2
   cat "$temporary_directory/merge.log" >&2
   exit 1
 fi
-
-failed_render_version="${merge_version%.*}.$((${merge_version##*.} + 1))"
-git -C "$hub" checkout -qb render-failure
-printf '\nMerged despite local render failure.\n' >>"$source_file"
-git -C "$hub" add plugins/soft-skills
-git -C "$hub" -c core.hooksPath=/dev/null commit -qm 'Change plugin before render failure'
-git -C "$hub" checkout -q main
-(cd "$hub" && TEST_RENDER_FAILURE=1 git merge --no-ff --no-edit render-failure >"$temporary_directory/render-failure.log" 2>&1)
-rg -q 'Render blocked for test' "$temporary_directory/render-failure.log"
-if ! git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$failed_render_version"; then
-  printf '%s\n' 'A local rendering failure stopped the merged plugin release.' >&2
+if git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v${merge_version%.*}.$((${merge_version##*.} + 1))"; then
+  printf '%s\n' 'One push of two plugin commits made two releases.' >&2
   exit 1
 fi
-[[ ! -e "$hub/.git/soft-skills-publication-pending" ]]
-merge_version="$failed_render_version"
+
 
 remote_head="$(git --git-dir="$remote" rev-parse refs/heads/main)"
 printf '\nGilad is private.\n' >>"$source_file"
 git -C "$hub" add plugins/soft-skills
-(cd "$hub" && git commit -qm 'Reject private source outside AI list' 2>"$temporary_directory/private-source.log")
+(cd "$hub" && git commit -qm 'Reject private source outside AI list')
+if (cd "$hub" && git push -q 2>"$temporary_directory/private-source.log"); then
+  printf '%s\n' 'A push passed although its release failed.' >&2
+  exit 1
+fi
 rg -q 'private names' "$temporary_directory/private-source.log"
 [[ "$(git --git-dir="$remote" rev-parse refs/heads/main)" == "$remote_head" ]]
 [[ -z "$(git -C "$published" status --porcelain --untracked-files=all)" ]]
@@ -254,6 +272,7 @@ fi
 [[ ! -e "$hub/.git/soft-skills-publication-pending" ]]
 [[ "$(git --git-dir="$remote" rev-parse refs/heads/main)" == "$remote_head" ]]
 (cd "$hub" && git commit -qm 'Correct rejected source' 2>"$temporary_directory/corrected.log")
+push_hub
 [[ ! -e "$hub/.git/soft-skills-publication-pending" ]]
 [[ "$(git --git-dir="$remote" rev-parse refs/heads/main)" == "$remote_head" ]]
 
@@ -261,7 +280,11 @@ failed_release_version="${merge_version%.*}.$((${merge_version##*.} + 1))"
 printf 'v%s\n' "$failed_release_version" >"$TEST_RELEASE_PENDING_FILE"
 printf '\nRelease workflow retry test.\n' >>"$source_file"
 git -C "$hub" add plugins/soft-skills
-(cd "$hub" && git commit -qm 'Publish with a failed release workflow' 2>"$temporary_directory/workflow-failure.log")
+(cd "$hub" && git commit -qm 'Publish with a failed release workflow')
+if (cd "$hub" && git push -q 2>"$temporary_directory/workflow-failure.log"); then
+  printf '%s\n' 'A push passed although its release failed.' >&2
+  exit 1
+fi
 [[ -f "$hub/.git/soft-skills-publication-pending" ]]
 git --git-dir="$remote" show-ref --verify --quiet "refs/tags/v$failed_release_version"
 remote_head="$(git --git-dir="$remote" rev-parse refs/heads/main)"

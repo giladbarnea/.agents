@@ -121,7 +121,7 @@ No interactive terminal
 
 `pre-commit` first blocks staged plugin changes if the public repository has local edits, unpublished commits, or a pending release. It then renders instruction files, generates runtime skills, links shared skills, materializes local Pi plugin skills, and inspects broken links. It never writes to the public repository.
 
-`pre-commit` also stages the local `AGENTS.md` and generated runtime `SKILL.md` files. `post-commit` publishes changed plugin commits. `post-merge` publishes plugin changes before it renders local instructions and skills, so a local render failure cannot skip publication. The submodule update in `post-merge` is commented out.
+`pre-commit` also stages the local `AGENTS.md` and generated runtime `SKILL.md` files. `pre-push` publishes plugin changes before the push sends them. `post-merge` renders local instructions and skills. The submodule update in `post-merge` is commented out.
 
 Rendering does not require existing consumer links.
 When a consumer-relative import is absent, the loader falls back to the canonical hub source.
@@ -180,9 +180,9 @@ Codex uses `.agents/plugins/marketplace.json` and `.codex-plugin/plugin.json`, w
 Pi uses the root `package.json`, whose `pi.skills` field points to `./plugins/soft-skills/skills`. The release workflow publishes it to npm as `soft-skills`.
 Gemini receives no plugin materialization from these hooks.
 
-### A source commit or merge publishes the public plugin
+### A source push publishes the public plugin
 
-`post-commit` calls `publish-soft-skills.sh` when the commit changes `plugins/soft-skills`. `post-merge` also calls it when a merge changes that path. It reads the committed plugin tree, not unstaged files. It refuses a dirty public repository and builds in an isolated Git worktree.
+Commits and merges stay local. `pre-push` calls `publish-soft-skills.sh --push`, which publishes when `plugins/soft-skills` differs between the upstream branch and `HEAD`. One push of several plugin commits makes one release. A failed publication stops the push. The publisher reads the committed plugin tree, not unstaged files. It refuses a dirty public repository and builds in an isolated Git worktree.
 
 `sync-published-soft-skills.sh` mirrors five named skills and the root files `roles.md` and `token-economic-communication.md`, and copies the source `README.md` to the public repository root. For `human.md`, `help.md`, `coordination/leading-leaders.md`, and `roles.md`, it compares the current committed source with the source commit named in the last public release commit's `from <commit>` suffix. Unchanged sources keep their published anonymized copies. Changed files without whole-word `Gilad` or `ADHD` copy directly. Only changed files containing either term, case-insensitively, go to Pi. The check ignores standalone `I` and adds no state file. AI edits outside the requested files fail validation.
 
@@ -190,7 +190,7 @@ Gemini receives no plugin materialization from these hooks.
 
 The publisher then bumps both plugin manifests and `package.json` by one patch version, commits, pushes, tags, and waits for the GitHub release workflow. That workflow publishes to npm before it creates the GitHub release, so a release implies an npm version. `.plugin-source-checksum` identifies the current published source. The publisher skips only when that source matches the current public commit and its release succeeded. A return to earlier content makes a new release.
 
-Edit the public README in `plugins/soft-skills/README.md`; a release overwrites the public copy. A failed publication cannot undo the source commit or merge. The publisher records its source commit under `.git/soft-skills-publication-pending`; `pre-commit` blocks another plugin commit until that release succeeds. Run `.githooks/publish-soft-skills.sh --retry` after fixing the cause. If validation rejects the source, run `--cancel-pending` before committing a correction; cancellation works only while the current public commit has a successful release. A partial push resumes the same version, and retry reruns a completed GitHub workflow when the release is missing. The skill and root-file whitelists remain hardcoded in `sync-published-soft-skills.sh`.
+Edit the public README in `plugins/soft-skills/README.md`; a release overwrites the public copy. The publisher records its source commit under `.git/soft-skills-publication-pending`; `pre-commit` blocks another plugin commit until that release succeeds. Run `.githooks/publish-soft-skills.sh --retry` after fixing the cause, then push again. If validation rejects the source, run `--cancel-pending` before committing a correction; cancellation works only while the current public commit has a successful release. A partial push resumes the same version, and retry reruns a completed GitHub workflow when the release is missing. The skill and root-file whitelists remain hardcoded in `sync-published-soft-skills.sh`.
 
 ## Local Pi skills are symlinks to personal content
 
@@ -236,7 +236,7 @@ A non-interactive run reports each link and leaves it unchanged.
 An instruction-rendering, runtime-generation, structure-validation, or symlink-creation failure stops the hook before broken-link cleanup.
 A concrete destination refusal does not stop the hook.
 Cleanup's result does not control the final hook exit status.
-A dirty or pending public repository blocks a staged plugin change before rendering. A publication failure after a commit or merge reports a pending release but cannot undo the Git operation.
+A dirty or pending public repository blocks a staged plugin change before rendering. A publication failure stops the push and reports a pending release.
 
 ---
 
