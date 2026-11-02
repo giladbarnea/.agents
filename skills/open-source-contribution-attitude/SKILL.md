@@ -1,7 +1,9 @@
 ---
 name: "open-source-contribution-attitude"
-description: "A description of my preferred approach to opening a PR in a project where I’m a guest."
+description: "Research an open-source project's health, direction, governance, or contribution experience, and follow Gilad's approach when contributing as a guest."
 ---
+
+For project research, read [Research a project](references/research-a-project.md). The guidance below applies when contributing.
 
 **I bring proof without presuming permission.**
 
