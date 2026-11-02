@@ -31,7 +31,7 @@ main() {
     plugins/soft-skills/roles.md
   )
   local published_release published_source_commit
-  published_release="$(git -C "$published_repository" log -1 --format=%s)"
+  published_release="$(git -C "$published_repository" log -1 --grep='^Release soft-skills .* from ' --format=%s)"
   published_source_commit="$(git -C "$repository_root" rev-parse --verify "${published_release##* from }^{commit}")"
 
   cd "$published_repository"
