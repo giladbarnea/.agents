@@ -162,7 +162,9 @@ It preserves the original archive and installs an ordered JSON message array as 
 
 ## Offer to resume the compacted session
 
-After validation, ask whether the user wants to resume in Herdr, in a new sibling pane or an existing pane they choose. If approved, load the `herdr` skill, create or inspect the agreed pane, then run `cd <session.header.cwd>` and `pi --session <session-id>`. Wait until Pi is ready, then send: “Welcome back. Your context was compacted for <current effort>. Read <handoff path>, then continue <pending work>.” Use the actual handoff and task, include any user-specified continuation instructions, and verify that Pi accepted the message.
+After validation, ask whether the user wants to resume the compacted session in Herdr, in a new sibling pane or an existing pane they choose. If approved, load the `herdr` skill, create or inspect the agreed pane, then run `cd <session.header.cwd>` and `pi --session <session-id>`. Wait until Pi is ready, then send: “Welcome back. Your context was compacted for <current effort — under 10 words>. Read <handoff doc path if one exists>, then continue <pending work — under 10 words>.” Verify that Pi accepted the message. 
+
+Note this can work with `claude -r <session-id>` and `codex resume <session-id>` as well.
 
 ## Run deterministic preprocessing before semantic review
 
