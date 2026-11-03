@@ -101,12 +101,16 @@ It prints `<datetime> <@handle> <Replying to ...> :: <text> :: <url>`, one line 
 
 ## Grok
 
-Grok (`https://x.com/i/grok`, "Grok" in the left sidebar) searches X semantically. It complements operator search; for thoroughness, do both.
+Grok (`https://x.com/i/grok`, "Grok" in the left sidebar) searches X semantically. It complements operator search. For thoroughness, run both in parallel:
 
-- A free account offers only the Fast model. Choosing Auto or Expert redirects to the Premium sign-up page.
-- Brief Grok like any fresh-context delegate: load the `ai-to-delegated` skill. State why you are asking and what you want to know. Do not hint at the answers you expect.
-- Fill the "Ask anything" textbox, press Enter, and wait until the text of `main` stops growing. A first answer took about 35 seconds.
-- To get an answer as markdown, click the response's own `Copy` button. It sits beside "Good response", while "Copy message" copies your prompt. Then run `pbpaste`. The click overwrites the user's clipboard. If that matters, save and restore the clipboard, or scrape the response element with `get text`, which loses links and tables. A Share button also exists.
+1. Load the `ai-to-delegated` skill, then write Grok's brief as you would for any fresh-context delegate. State why you are asking and what you want to know. Do not hint at the answers you expect.
+2. In Grok's own session and tab, fill the "Ask anything" textbox, press Enter, and note the `?conversation=<id>` URL.
+3. Without waiting for the answer, do the operator searches. `scripts/x_search.sh` uses its own session and tab.
+4. When done, return to Grok's tab and read its response. If the text of `main` is still growing, wait until it stops. Grok finishes on the server even if its tab was hidden or closed, and reopening the conversation URL shows the answer.
+
+A free account offers only the Fast model. Choosing Auto or Expert redirects to the Premium sign-up page. Answers took 30–60 seconds.
+
+To get an answer as markdown, click the response's own `Copy` button. It sits beside "Good response", while "Copy message" copies your prompt. Then run `pbpaste`. The click overwrites the user's clipboard. If that matters, save and restore the clipboard, or scrape the response element with `get text`, which loses links and tables. A Share button also exists.
 
 In one test on whether an account planned to retire a product, Grok matched the operator-search conclusion. All 9 links it cited were real. It also found 4 on-topic user questions that keyword search had missed. It also missed a direct on-topic reply from the account and stated that the account had answered no one. Therefore verify every cited link, and check Grok's "nobody said X" claims with `from:<account> to:<user>` and `filter:replies`.
 
