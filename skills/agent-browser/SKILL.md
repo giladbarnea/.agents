@@ -104,4 +104,15 @@ For these tailored cases, lightly skim the core docs and then follow the dedicat
 
 ## Lightpanda
 
-`lightpanda` is a relatively new tech that looks promising to me. I haven’t tested it. It’s a programmatic browser for AI agents. It’s installed on this machine. Run `lightpanda --help`, `lightpanda agent --help`, and other `lightpanda <command> --help` commands to figure out whether it can help. I’m keen on seeing whether it helps agents in your situation. https://lightpanda.io/ . 
+`lightpanda` (https://lightpanda.io/) is a headless browser for agents, installed on this machine. It has no layout engine: pages run their JavaScript, but screenshots are text-only. Tested 2026-11-03 (1.1.0-nightly) against the logged-in Chrome on X:
+
+- `lightpanda fetch --dump markdown --wait-until networkidle <url>` renders single-page apps in 2–5 seconds. `--dump html` keeps collapsed `<details>` content that markdown drops.
+- `--cookie <file>` loads a CDP-format JSON cookie array, so it can browse logged in. Export the cookies from the debug Chrome with `Storage.getCookies`, limit them to the site's domains, write them to an owner-only temp file, and delete it afterward.
+- `lightpanda serve --port 9333 --cookie <file>` is a CDP server that agent-browser drives unchanged with `--cdp 9333`: `open`, `snapshot -i`, `click`, `eval`, `get text`, and `scroll` work. It never touches the user's windows or tabs.
+- Limits:
+  - `fill`, `type`, and `keyboard type` do not reach rich-text (`contenteditable`) editors, and `document.execCommand` is missing. Grok's prompt box accepted a dispatched `beforeinput` event with `inputType: "insertText"`.
+  - Scrolling does not trigger infinite-scroll loading. The first load renders more items than Chrome, because nothing is virtualized, but you cannot page further.
+  - `eval` shares one global scope across calls, so wrap code in `(() => { ... })()` to avoid redeclaration errors.
+  - It refuses user agents containing "Mozilla", so sites can tell it is a bot. X's search API returns 404 to it even when logged in.
+
+Prefer the logged-in Chrome when a site blocks bots, needs infinite scroll, or needs rich-text input. Prefer lightpanda for quick reads of public or cookie-authenticated pages, and when you must not touch the user's browser.

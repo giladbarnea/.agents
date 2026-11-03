@@ -122,6 +122,8 @@ Use the logged-in browser whenever you can. Without login:
 - `lightpanda fetch --dump markdown --wait-until networkidle https://x.com/<handle>` renders the profile timeline.
 - Search, `with_replies`, and Grok redirect to the login page.
 
+lightpanda with exported cookies (see `SKILL.md` § Lightpanda) reads `with_replies`, threads, and Grok logged in. X search returns "Something went wrong" there, because the search API answers it with 404.
+
 ## Tabs and window focus
 
 `SKILL.md` § Session isolation covers tab ownership, focus, and cleanup. Specific to X:
