@@ -124,8 +124,7 @@ Use the logged-in browser whenever you can. Without login:
 
 ## Tabs and window focus
 
-- A fresh `--pin-tab` session creates its own tab and raises Chrome to the front once. `tab new` raises it too. Later commands, including clicks and the Copy button, work while Chrome stays behind other windows.
-- Without `--pin-tab`, `open` navigates one of the user's existing tabs.
-- Binding a session to a tab created with `Target.createTarget` (`background: true`) still raises Chrome, through either `tab <targetId>` or a page-level WebSocket `connect`.
+`SKILL.md` § Session isolation covers tab ownership, focus, and cleanup. Specific to X:
+
+- Clicks, including Grok's Copy button, work while Chrome stays behind other windows.
 - If the user switches to another tab, the pinned tab becomes hidden and infinite scroll stops loading.
-- `close` ends the session but leaves its tab open, so run `tab close` first. A session name remembers its tab after `close`; use a fresh session name for each run.

@@ -35,9 +35,11 @@ Run `agent-browser skills list` to see what is available on this install.
 
 Use a different named session for each concurrent task. Reuse that session name on every command with `--session <task-name>`.
 
-When sharing Chrome over CDP, also use `--pin-tab`. It creates a task-owned tab on first attachment and rejects commands if that tab disappears. Tab selection stays separate, but cookies and login state remain shared.
+When sharing Chrome over CDP, also use `--pin-tab`. It creates a task-owned tab on first attachment and rejects commands if that tab disappears. Tab selection stays separate, but cookies and login state remain shared. Without `--pin-tab`, `open` navigates one of the user's existing tabs.
 
-After your task, run `agent-browser --session <your-session> close`, even when attached to the user’s browser.
+Creating the task-owned tab raises Chrome to the front once (as of 0.41.1); later commands run while Chrome stays behind other windows. Binding a session to a tab pre-created with `Target.createTarget` (`background: true`) does not avoid this: `tab <targetId>` raises Chrome, and connecting to the page-level WebSocket ignores that tab and creates a new one. A session name remembers its tab even after `close`, so use a fresh name for each run.
+
+After your task, run `agent-browser --session <your-session> tab close` and then `agent-browser --session <your-session> close`. `close` alone ends the session but leaves its tab open in the user's Chrome.
 
 ## Driving a real logged-in Chrome over CDP
 
