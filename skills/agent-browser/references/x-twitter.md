@@ -69,3 +69,59 @@ That fragility is the price of the internal endpoint. The script pins a `QUERY_I
 ## What a search-index fetch gives instead
 
 A `conversation_id:<id>` search (e.g. the vendored bird-search client in the `last30days` skill) returns only indexed replies — typically the top ~40, and it lags for fresh or low-engagement replies. Fine for a quick read of the loudest replies; wrong tool if you need completeness or a specific reply that may not be indexed yet.
+
+# Finding what an account said
+
+The reply-tree script needs a post id. To learn what an account said about a topic across many posts, use the logged-in debug Chrome, with your own `--session` and `--pin-tab`.
+
+## Read a profile and collect post ids
+
+Open `https://x.com/<handle>`. `agent-browser get text main` reads the pinned and recent posts. To collect post URLs, for example the pinned one for `x_thread.mjs`, evaluate:
+
+```js
+Array.from(document.querySelectorAll('article a[href*="/status/"] time')).map(t => t.closest('a').href)
+```
+
+Post fields inside each `article`: `[data-testid=User-Name]` (its second line is the handle), `[data-testid=tweetText]`, and `time[datetime]`. On a post page, the focal post is `article[tabindex="-1"]`.
+
+X unmounts posts that scroll off screen. Collecting once after scrolling misses the posts you scrolled past. Collect at every scroll step and dedupe. The `with_replies` tab also mixes in old posts, so prefer search.
+
+## Advanced search
+
+Run searches with operators in the logged-in browser:
+
+```bash
+scripts/x_search.sh 'from:herdrdev since:2026-10-28 (migrate OR sync OR sunset)'
+scripts/x_search.sh 'from:herdrdev to:eitanpo'        # did the account answer this user?
+scripts/x_search.sh 'from:herdrdev filter:replies since:2026-10-29' 8
+scripts/x_search.sh 'rex herdr' 5 top                  # tab: live (default) or top
+```
+
+It prints `<datetime> <@handle> <Replying to ...> :: <text> :: <url>`, one line per post. Useful operators: `from:`, `to:`, `since:`/`until:`, `filter:replies`, `-filter:replies`, `( OR )`, and `"exact phrase"`. Keyword search misses paraphrases, typos and other languages.
+
+## Grok
+
+Grok (`https://x.com/i/grok`, "Grok" in the left sidebar) searches X semantically. It complements operator search; for thoroughness, do both.
+
+- A free account offers only the Fast model. Choosing Auto or Expert redirects to the Premium sign-up page.
+- Brief Grok like any fresh-context delegate: load the `ai-to-delegated` skill. State why you are asking and what you want to know. Do not hint at the answers you expect.
+- Fill the "Ask anything" textbox, press Enter, and wait until the text of `main` stops growing. A first answer took about 35 seconds.
+- To get an answer as markdown, click the response's own `Copy` button. It sits beside "Good response", while "Copy message" copies your prompt. Then run `pbpaste`. The click overwrites the user's clipboard. If that matters, save and restore the clipboard, or scrape the response element with `get text`, which loses links and tables. A Share button also exists.
+
+In one test on whether an account planned to retire a product, Grok matched the operator-search conclusion. All 9 links it cited were real. It also found 4 on-topic user questions that keyword search had missed. It also missed a direct on-topic reply from the account and stated that the account had answered no one. Therefore verify every cited link, and check Grok's "nobody said X" claims with `from:<account> to:<user>` and `filter:replies`.
+
+## Logged out
+
+Use the logged-in browser whenever you can. Without login:
+
+- `rf <post url>` returns a single post's text.
+- `lightpanda fetch --dump markdown --wait-until networkidle https://x.com/<handle>` renders the profile timeline.
+- Search, `with_replies`, and Grok redirect to the login page.
+
+## Tabs and window focus
+
+- A fresh `--pin-tab` session creates its own tab and raises Chrome to the front once. `tab new` raises it too. Later commands, including clicks and the Copy button, work while Chrome stays behind other windows.
+- Without `--pin-tab`, `open` navigates one of the user's existing tabs.
+- Binding a session to a tab created with `Target.createTarget` (`background: true`) still raises Chrome, through either `tab <targetId>` or a page-level WebSocket `connect`.
+- If the user switches to another tab, the pinned tab becomes hidden and infinite scroll stops loading.
+- `close` ends the session but leaves its tab open, so run `tab close` first. A session name remembers its tab after `close`; use a fresh session name for each run.

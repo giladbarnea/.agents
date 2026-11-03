@@ -87,7 +87,7 @@ Techniques worth reusing:
 
 ## Tailored references
 
-- For fetching the full reply tree of an X/Twitter post, read `references/x-twitter.md` (uses `scripts/x_thread.mjs`).
+- For X/Twitter (a post's full reply tree, what an account said through operator search, and Grok), read `references/x-twitter.md` (uses `scripts/x_thread.mjs` and `scripts/x_search.sh`).
 - For `pi.dev`, read `references/pi-dev.md`.
 - For Bank Hapoalim (log in, read account data, transfers to `רומי` or `רינת`), read `references/bank-hapoalim.md` (uses `scripts/poalim.py`).
 - For Maccabi Online medication-renewal requests, read `references/maccabi.md`.
