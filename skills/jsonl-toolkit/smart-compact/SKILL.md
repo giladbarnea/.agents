@@ -2,7 +2,7 @@
 name: smart-compact
 parent: jsonl-toolkit
 description: Tree-shake an AI session transcript while preserving its semantic story
-last_updated: 2026-11-01
+last_updated: 2026-11-03
 ---
 
 Read [`../SKILL.md`](../SKILL.md) first. The parent owns file formats, large-file inspection, stable identities, generic transcript analysis, and native Pi structure.
@@ -159,6 +159,10 @@ node ../scripts/install_pi_context.mjs session.jsonl prepared-context.json outpu
 ```
 
 It preserves the original archive and installs an ordered JSON message array as the active context in a new output file.
+
+## Offer to resume the compacted session
+
+After validation, ask whether the user wants to resume in Herdr, in a new sibling pane or an existing pane they choose. If approved, load the `herdr` skill, create or inspect the agreed pane, then run `cd <session.header.cwd>` and `pi --session <session-id>`. Wait until Pi is ready, then send: “Welcome back. Your context was compacted for <current effort>. Read <handoff path>, then continue <pending work>.” Use the actual handoff and task, include any user-specified continuation instructions, and verify that Pi accepted the message.
 
 ## Run deterministic preprocessing before semantic review
 
