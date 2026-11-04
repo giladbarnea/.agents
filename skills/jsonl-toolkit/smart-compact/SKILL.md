@@ -2,7 +2,7 @@
 name: smart-compact
 parent: jsonl-toolkit
 description: Tree-shake an AI session transcript while preserving its semantic story
-last_updated: 2026-11-03
+last_updated: 2026-11-04
 ---
 
 Read [`../SKILL.md`](../SKILL.md) first. The parent owns file formats, large-file inspection, stable identities, generic transcript analysis, and native Pi structure.
@@ -11,7 +11,7 @@ Read [`../SKILL.md`](../SKILL.md) first. The parent owns file formats, large-fil
 
 Smart-compaction removes redundant information while keeping contentful messages intact.
 
-For conservative or Pareto compaction, read [Conservative Pareto compaction](references/conservative-pareto-compaction.md) before applying the rules below. Its selective-retention guidance takes precedence over broad file-payload replacement and tool removal, including deterministic preprocessing.
+For conservative or Pareto compaction, read [Conservative Pareto compaction](references/conservative-pareto-compaction.md) before applying the rules below. Its remove / summarize / keep bar takes precedence over the rules below, including thinking selection, broad file-payload replacement, tool removal and deterministic preprocessing.
 
 ## Keep thinking with the work it explains
 

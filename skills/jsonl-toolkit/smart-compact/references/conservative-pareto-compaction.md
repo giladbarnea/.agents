@@ -1,11 +1,17 @@
 ---
-description: Preserve explanatory history while removing the highest-cost duplication and support material.
-last_updated: 2026-10-31
+description: Remove unquestionable noise and repetition; reduce noise in mixed passages without losing their signal.
+last_updated: 2026-11-04
 ---
 
 # Conservative Pareto compaction
 
-Use this approach when the user wants large token savings with little loss of explanatory knowledge. Preserve content by default. Fewer changed messages do not prove less knowledge loss: one message can contain many important distinctions.
+Apply the same bar to messages, tool payloads and readable reasoning:
+
+1. **Remove** only what is unquestionably noise or repetition. For repeated content, keep one full version and link to it as described below.
+2. **Summarize or tree-shake** only passages with an unquestionably very poor signal-to-noise ratio. Reduce the noise while keeping the signal intact: do not dilute unique assumptions, qualifications, disagreements or corrections.
+3. **Keep as-is** everything else, including borderline cases. Size alone is not a reason to cut, and there is no token-reduction target.
+
+If the user names a domain or chapter to optimize for, weigh signal by its relevance to that scope, including its dependencies and the history needed to understand it. Do not infer a narrower scope from the latest turn alone. Fewer changed messages do not prove less knowledge loss: one message can contain many important distinctions.
 
 ## Keep the reasoning, not every representation of it
 
@@ -21,7 +27,7 @@ An important document is not an indivisible unit. It can mix unique reasoning, r
 
 Same meaning does not require identical bytes. Check scope, qualifications, uncertainty, authority and time before calling two passages repeats. Normalize only known display differences for exact comparisons, such as Read line numbers. Similar headings or fuzzy matches identify candidates, not proof.
 
-Target large, low-value spans rather than many small cuts. A repeated-looking output can still add an example or qualification that explains a later change. A file-tool result may be the only surviving copy of user-authored notes or dialogue. Do not replace it with a path merely because its tool name is `Read`.
+A repeated-looking output can still add an example or qualification that explains a later change. A file-tool result may be the only surviving copy of user-authored notes or dialogue. Do not replace it with a path merely because its tool name is `Read`.
 
 ## Keep each event and link its repeated content
 
@@ -37,9 +43,9 @@ Every placeholder must resolve to a full version that survives the final selecti
 
 ## Summarize what was believed at the time
 
-A large output can be unique and still hold little useful detail for the effort or its continuation. Summarize it without claiming it was a duplicate. Generic instruction catalogues, navigation maps, operational manuals and obsolete handoffs are candidates, not automatic removals.
+Generic instruction catalogues, navigation maps, operational manuals and obsolete handoffs can mix signal with noise. Their type or age does not establish a poor ratio: inspect the passages against the bar above.
 
-When exact wording matters less than historical meaning, replace a selected payload or passage with a short, marked summary. Preserve its source identity and the reason it mattered. Do not make an earlier agent sound as though it already knew the later conclusion.
+For a passage that meets that bar, preserve signal-bearing wording and summarize or tree-shake the surrounding noise. Mark the transformation; do not call unique content a duplicate. Preserve its source identity and the reason it mattered. Do not make an earlier agent sound as though it already knew the later conclusion.
 
 A useful historical summary preserves:
 
@@ -67,17 +73,19 @@ If a file is absent, do not invent a current version. Keep a marked historical s
 
 ## Select thinking blocks through their surrounding work
 
-Apply the parent's [thinking rules](../SKILL.md#keep-thinking-with-the-work-it-explains). Select thinking through its surrounding work, not its size or age.
+Readable reasoning follows the same remove / summarize / keep bar as messages and tools. It is neither exempt from cuts nor automatically cut because an associated tool output was summarized. Read its own content and its surrounding work.
 
-1. First decide independently which readable notions or content deserve removal or dilution.
-2. Use preceding events and subsequent responses to attribute a thinking block to that selected work. For example: a stale file read, opaque thinking, then a response using those stale assumptions.
-3. Remove the whole block only when that attribution is clear. Keep it when its context is mixed, includes retained work, or leaves its subject uncertain.
+Encrypted reasoning cannot be inspected or summarized. A visible reasoning summary does not expose the whole encrypted block:
+
+1. First select surrounding work for removal or summarization under the same bar above.
+2. Attribute the encrypted block to that work using preceding events and subsequent responses.
+3. Remove the block only when it is clearly attributable entirely to the selected work and the retained account preserves that work's signal. Keep it when attribution is uncertain or its context includes retained work.
 
 Do not guess what ciphertext contains. Age, size, a broad chapter label or a token target alone never justifies removal.
 
-Remove a selected block and its associated signature together. Never partially rewrite a native signed or encrypted payload. When plaintext needs summarization or replay could fail, use the parent's ordinary-text promotion. Preserve unselected native blocks and signatures unchanged.
+Remove a selected block and its associated signature together. Never partially rewrite a native signed or encrypted payload. When plaintext needs summarization or replay could fail, use the parent's [ordinary-text promotion](../SKILL.md#keep-thinking-with-the-work-it-explains). Preserve unselected native blocks and signatures unchanged.
 
-Audit each removal by stable identity, the surrounding evidence and the independent removal or dilution decision it follows.
+Audit each reasoning change by stable identity and the evidence that it meets the same bar, including surrounding-work attribution for encrypted blocks.
 
 ## Measure text savings separately from encoding savings
 
@@ -107,4 +115,4 @@ Respect the user's model and cost preferences. Bounded historical review does no
 
 ## Report the boundary, not only the reduction
 
-Explain what was removed, what was borderline and retained, and why the remaining history still explains the latest state. Stop when further savings would remove unique reasoning rather than another representation of it.
+Explain what was removed, what was borderline and retained, and why the remaining history still explains the latest state. Stop when no further cuts meet the bar above.
