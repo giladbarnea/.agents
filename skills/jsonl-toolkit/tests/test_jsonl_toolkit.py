@@ -893,9 +893,9 @@ class AnnotateRoundNineteenTests(unittest.TestCase):
         """`agent` turns come in all three roles, and the type alone cannot say which."""
         transcript = [
             {"type": "agent", "role": "user", "original_index": 74, "agent_id": "a8b",
-             "subagent_type": "fork", "content": ["audit what the pruner dropped"]},
+             "subagent_type": "fork", "content": ["audit the removed entries"]},
             {"type": "agent", "role": "assistant", "original_index": 87, "agent_id": "a8b",
-             "subagent_type": "fork", "content": ["the pruner dropped 31 messages"]},
+             "subagent_type": "fork", "content": ["31 messages were removed"]},
         ]
 
         annotated = render_transcript_review.render_annotated(
@@ -1312,8 +1312,8 @@ class AnnotateDelegateTests(unittest.TestCase):
             f"A delegate's tool run is indistinguishable from the main agent's:\n{annotated}",
         )
 
-    def test_a_pruned_delegate_turn_still_says_whose_it_is(self) -> None:
-        """After pruning, a delegate's file work is a string block, not a tool block."""
+    def test_a_delegate_file_reference_still_says_whose_it_is(self) -> None:
+        """A delegate's file reference is a string block, not a tool block."""
         transcript = [
             {"type": "agent", "role": "assistant", "original_index": 75,
              "agent_id": "a8bad7da3c957de67", "subagent_type": "fork",
@@ -1327,7 +1327,7 @@ class AnnotateDelegateTests(unittest.TestCase):
         self.assertIn(
             "subagent_type='fork'",
             annotated,
-            f"A pruned delegate's file write reads as the main agent's own:\n{annotated}",
+            f"A delegate's file reference reads as the main agent's own:\n{annotated}",
         )
 
     def test_a_wrapper_that_carries_text_does_not_announce_itself_twice(self) -> None:
@@ -1364,7 +1364,7 @@ class AnnotateDelegateTests(unittest.TestCase):
 
 
 class AnnotateFileReferenceTests(unittest.TestCase):
-    def test_a_pruned_file_reference_keeps_its_path_and_id_and_no_speaker(self) -> None:
+    def test_a_file_reference_keeps_its_path_and_id_and_no_speaker(self) -> None:
         """`drop_file_references` annotations are transcribed from exactly these fields."""
         reference = '<Read path="/Users/giladbarnea/dev/tractor-ami/docs/brief.md" id="c1L2"/>'
         transcript = [
@@ -1379,7 +1379,7 @@ class AnnotateFileReferenceTests(unittest.TestCase):
         self.assertEqual(
             annotated.strip(),
             f"[102] {reference}",
-            f"A pruned file reference was mangled or prefixed as prose: {annotated!r}",
+            f"A file reference was mangled or prefixed as prose: {annotated!r}",
         )
 
 

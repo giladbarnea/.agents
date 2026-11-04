@@ -49,7 +49,6 @@ Smart-compaction now contains:
 - `smart-compact/scripts/compact_native_pi_session.py`
 - `smart-compact/scripts/compile_annotations.py`
 - `smart-compact/scripts/generate_compaction_plan.py`
-- `smart-compact/scripts/prune_transcript.py`
 - `smart-compact/tests/test_smart_compact.py`
 
 The old `skills/smart-compact/` directory is empty. It remains only because the original session used it as its current directory.

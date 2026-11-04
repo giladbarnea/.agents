@@ -20,7 +20,6 @@ sys.path.insert(0, str(TOOLKIT_ROOT / "smart-compact" / "scripts"))
 import apply_compaction_plan
 import compile_annotations
 import generate_compaction_plan
-import prune_transcript
 import compact_existing_pi_session_inline
 
 
@@ -111,7 +110,7 @@ skeletons:
     outcome: 12 passed
 """
         with tempfile.TemporaryDirectory() as temporary_directory:
-            source_path = pathlib.Path(temporary_directory, "pruned.json")
+            source_path = pathlib.Path(temporary_directory, "source.json")
             annotations_path = pathlib.Path(temporary_directory, "annotations.yaml")
             source_path.write_bytes(source_bytes)
             annotations_path.write_text(annotations)
@@ -155,313 +154,6 @@ skeletons:
             },
             f"A non-Pi plan gained invalid native occurrence fields: {plan!r}",
         )
-
-    def test_pruner_handles_multi_read_delete_and_mixed_order(self) -> None:
-        mixed = [
-            "before",
-            {
-                "type": "tool-input",
-                "name": "read_many_files",
-                "id": "many",
-                "paths": ["a", "b"],
-                "native_tool_call_id": "call_many-full",
-                "native_content_index": 1,
-            },
-            {"type": "tool-input", "name": "Bash", "id": "bash", "command": "pytest"},
-            {"type": "tool-input", "name": "Delete", "id": "delete", "path": "old"},
-            "after",
-        ]
-        source = [
-            message(1, "assistant", mixed),
-            message(2, "user", [{"type": "tool-output", "name": "read_many_files", "id": "many"}]),
-            message(3, "user", [{"type": "tool-output", "name": "Delete", "id": "delete"}]),
-        ]
-
-        pruned = prune_transcript.prune(source)
-        self.assertEqual([item["original_index"] for item in pruned], [1], f"Got: {pruned!r}")
-        self.assertEqual(
-            pruned[0]["content"],
-            [
-                "before",
-                '<Read path="a" id="many" native_tool_call_id="call_many-full" native_content_index="1"/>',
-                '<Read path="b" id="many" native_tool_call_id="call_many-full" native_content_index="1"/>',
-                mixed[2],
-                '<Delete path="old" id="delete"/>',
-                "after",
-            ],
-            f"Block order changed: {pruned!r}",
-        )
-
-    def test_pruner_preserves_todo_tool_calls_and_drops_outputs(self) -> None:
-        todo_call = {
-            "type": "tool-input",
-            "name": "todo",
-            "id": "tasks",
-            "action": "update",
-        }
-        todo_output = {
-            "type": "tool-output",
-            "name": "todo",
-            "id": "tasks",
-            "content": "Updated task 1",
-        }
-        source = [
-            message(1, "assistant", ["before", todo_call, "after"]),
-            message(2, "user", [todo_output]),
-        ]
-
-        pruned = prune_transcript.prune(source)
-
-        self.assertEqual(
-            pruned,
-            [source[0]],
-            f"Todo calls must survive while todo outputs are removed. Got: {pruned!r}",
-        )
-
-    def test_pruner_drops_explicit_empty_orphan_and_audits_it(self) -> None:
-        source = [
-            message(46, "user", ["keep"]),
-            message(47, "assistant", [{
-                "type": "tool-input",
-                "name": "Edit",
-                "id": "01CC",
-                "native_tool_call_id": "call_01CC-full",
-                "native_content_index": 0,
-            }]),
-        ]
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            source_path = pathlib.Path(temporary_directory, "transcript.json")
-            source_path.write_text(json.dumps(source))
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(pathlib.Path(prune_transcript.__file__)),
-                    str(source_path),
-                    "--drop-orphan-tool-id",
-                    "01CC",
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-
-        self.assertEqual(result.returncode, 0, f"Pruner failed: {result.stderr}")
-        self.assertEqual(
-            [item["original_index"] for item in json.loads(result.stdout)],
-            [46],
-            f"Orphan remained: {result.stdout}",
-        )
-        self.assertIn(
-            "Dropped empty orphan tool calls: Edit '01CC' at message 47",
-            result.stderr,
-            f"Missing audit: {result.stderr}",
-        )
-
-    def test_pruner_explains_how_to_authorize_empty_orphan(self) -> None:
-        source = [message(47, "assistant", [{"type": "tool-input", "name": "Edit", "id": "01CC"}])]
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            source_path = pathlib.Path(temporary_directory, "transcript.json")
-            source_path.write_text(json.dumps(source))
-            result = subprocess.run(
-                [sys.executable, str(pathlib.Path(prune_transcript.__file__)), str(source_path)],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-
-        self.assertNotEqual(result.returncode, 0, "Unapproved orphan was silently dropped")
-        self.assertIn(
-            "--drop-orphan-tool-id 01CC",
-            result.stderr,
-            f"Failure was not actionable: {result.stderr}",
-        )
-
-    def test_pruner_elides_repeated_skill_body_and_preserves_each_instruction(self) -> None:
-        shared_skill = (
-            '<skill name="instruct-another-ai" location="/skills/instruct-another-ai/SKILL.md">'
-            "Shared delegation instructions"
-            "</skill>"
-        )
-        changed_skill = (
-            '<skill name="instruct-another-ai" location="/skills/instruct-another-ai/SKILL.md">'
-            "Changed delegation instructions"
-            "</skill>"
-        )
-        first_instruction = "\n\nplan the dev sandbox"
-        second_instruction = "\n\nplan the Rapier integration"
-        changed_instruction = "\n\nuse the changed instructions"
-        source = [
-            message(36, "user", [shared_skill + first_instruction]),
-            message(195, "user", [shared_skill + second_instruction]),
-            message(196, "user", [changed_skill + changed_instruction]),
-        ]
-
-        pruned = prune_transcript.prune(source)
-        content_by_index = {
-            item["original_index"]: item["content"]
-            for item in pruned
-        }
-
-        self.assertEqual(
-            content_by_index.get(36),
-            [shared_skill, first_instruction],
-            f"The first skill body and its instruction should become separate blocks. Got: {pruned!r}",
-        )
-        self.assertEqual(
-            content_by_index.get(195),
-            [second_instruction],
-            f"Only the repeated body should be elided; its new instruction must survive. Got: {pruned!r}",
-        )
-        self.assertEqual(
-            content_by_index.get(196),
-            [changed_skill, changed_instruction],
-            f"A nonidentical same-named skill body must remain intact. Got: {pruned!r}",
-        )
-
-    def test_pruner_uses_latest_native_watermark_and_excludes_off_path_messages(self) -> None:
-        source = [
-            {**message(1, "user", ["Processed"]), "native_entry_id": "prefix"},
-            {**message(2, "assistant", ["Abandoned"]), "native_entry_id": "off-path"},
-            {**message(3, "user", ["New work"]), "native_entry_id": "tail-user"},
-            {**message(4, "assistant", ["New result"]), "native_entry_id": "tail-assistant"},
-        ]
-        native_lines = [
-            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
-            {"type": "message", "id": "prefix", "parentId": None, "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "Processed"}]}},
-            {"type": "message", "id": "off-path", "parentId": "prefix", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "text", "text": "Abandoned"}]}},
-            {
-                "type": "custom",
-                "customType": "smart-compact-watermark",
-                "display": False,
-                "id": "watermark",
-                "parentId": "prefix",
-                "timestamp": "now",
-                "data": {
-                    "version": 1,
-                    "session_id": "target-session",
-                    "resume_after_entry_id": "prefix",
-                    "source_through_entry_id": "off-path-before-compaction",
-                    "pass": 1,
-                    "stats": {},
-                },
-            },
-            {"type": "message", "id": "tail-user", "parentId": "watermark", "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "New work"}]}},
-            {"type": "message", "id": "tail-assistant", "parentId": "tail-user", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "text", "text": "New result"}]}},
-        ]
-
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            directory = pathlib.Path(temporary_directory)
-            source_path = directory / "transcript.json"
-            session_path = directory / "target.jsonl"
-            source_path.write_text(json.dumps(source))
-            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(pathlib.Path(prune_transcript.__file__)),
-                    str(source_path),
-                    "--native-session",
-                    str(session_path),
-                ],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-
-        self.assertEqual(result.returncode, 0, f"Native tail selection failed: {result.stderr}")
-        self.assertEqual(
-            [item.get("native_entry_id") for item in json.loads(result.stdout)],
-            ["tail-user", "tail-assistant"],
-            f"The pruner did not select the untouched active tail: {result.stdout}",
-        )
-
-    def test_pruner_refuses_a_native_boundary_that_splits_a_tool_pair(self) -> None:
-        source = [
-            {**message(1, "assistant", [{"type": "tool-input", "name": "Bash", "id": "call", "native_tool_call_id": "call-full", "native_content_index": 0}]), "native_entry_id": "assistant"},
-            {**message(2, "user", [{"type": "tool-output", "name": "Bash", "id": "call", "native_tool_call_id": "call-full", "content": "result"}]), "native_entry_id": "result"},
-        ]
-        native_lines = [
-            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
-            {"type": "message", "id": "assistant", "parentId": None, "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "toolCall", "id": "call-full", "name": "Bash", "arguments": {}}]}},
-            {"type": "message", "id": "result", "parentId": "assistant", "timestamp": "now", "message": {"role": "toolResult", "toolCallId": "call-full", "toolName": "Bash", "content": [{"type": "text", "text": "result"}]}},
-        ]
-
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            directory = pathlib.Path(temporary_directory)
-            session_path = directory / "target.jsonl"
-            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
-            with self.assertRaisesRegex(ValueError, "splits tool call/result pairs"):
-                prune_transcript.native_tail(source, session_path, "assistant")
-
-    def test_pruner_accepts_reused_full_ids_wholly_on_each_side_of_boundary(self) -> None:
-        source = [
-            {
-                **message(1, "assistant", [{"type": "tool-input", "name": "Bash", "id": "call", "native_tool_call_id": "call-full", "native_content_index": 0}]),
-                "native_entry_id": "first-call",
-            },
-            {
-                **message(2, "user", [{"type": "tool-output", "name": "Bash", "id": "call", "native_tool_call_id": "call-full", "content": "failed"}]),
-                "native_entry_id": "first-result",
-            },
-            {
-                **message(3, "assistant", [{"type": "tool-input", "name": "Bash", "id": "call", "native_tool_call_id": "call-full", "native_content_index": 0}]),
-                "native_entry_id": "retry-call",
-            },
-            {
-                **message(4, "user", [{"type": "tool-output", "name": "Bash", "id": "call", "native_tool_call_id": "call-full", "content": "passed"}]),
-                "native_entry_id": "retry-result",
-            },
-        ]
-        native_lines = [
-            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
-            {"type": "message", "id": "first-call", "parentId": None, "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "toolCall", "id": "call-full", "name": "Bash", "arguments": {}}]}},
-            {"type": "message", "id": "first-result", "parentId": "first-call", "timestamp": "now", "message": {"role": "toolResult", "toolCallId": "call-full", "toolName": "Bash", "content": [{"type": "text", "text": "failed"}]}},
-            {"type": "message", "id": "retry-call", "parentId": "first-result", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "toolCall", "id": "call-full", "name": "Bash", "arguments": {}}]}},
-            {"type": "message", "id": "retry-result", "parentId": "retry-call", "timestamp": "now", "message": {"role": "toolResult", "toolCallId": "call-full", "toolName": "Bash", "content": [{"type": "text", "text": "passed"}]}},
-        ]
-
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            session_path = pathlib.Path(temporary_directory, "target.jsonl")
-            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
-            selected, _ = prune_transcript.native_tail(
-                source,
-                session_path,
-                "first-result",
-            )
-
-        self.assertEqual(
-            [item.get("native_entry_id") for item in selected],
-            ["retry-call", "retry-result"],
-            f"A completed earlier occurrence blocked a safe retry tail: {selected!r}",
-        )
-
-    def test_transcript_and_native_boundaries_select_the_same_tail(self) -> None:
-        source = [
-            {**message(10, "user", ["First"]), "native_entry_id": "first"},
-            {**message(20, "assistant", ["Boundary"]), "native_entry_id": "boundary"},
-            {**message(30, "user", ["Tail"]), "native_entry_id": "tail"},
-        ]
-        native_lines = [
-            {"type": "session", "version": 3, "id": "target-session", "timestamp": "now", "cwd": "/tmp"},
-            {"type": "message", "id": "first", "parentId": None, "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "First"}]}},
-            {"type": "message", "id": "boundary", "parentId": "first", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "text", "text": "Boundary"}]}},
-            {"type": "message", "id": "tail", "parentId": "boundary", "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "Tail"}]}},
-        ]
-
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            session_path = pathlib.Path(temporary_directory, "target.jsonl")
-            session_path.write_text("".join(json.dumps(line) + "\n" for line in native_lines))
-            transcript_tail = prune_transcript.after_original_index(source, 20)
-            native_tail, _ = prune_transcript.native_tail(source, session_path, "boundary")
-
-        self.assertEqual(
-            [item.get("native_entry_id") for item in transcript_tail],
-            [item.get("native_entry_id") for item in native_tail],
-            f"The transcript and native boundary contracts disagree: {transcript_tail!r}, {native_tail!r}",
-        )
-
-
-
 
     def test_manifest_replaces_by_stable_index_and_builds_footer(self) -> None:
         source = [
@@ -684,8 +376,7 @@ skeletons:
             message(4, "assistant", ["Done"]),
         ]
         source[3]["native_entry_id"] = "done-entry"
-        pruned = prune_transcript.prune(source)
-        source_bytes = json.dumps(pruned).encode()
+        source_bytes = json.dumps(source).encode()
         decisions = generate_compaction_plan.parse_decisions({
             "skeletons": [{
                 "original_index": 2,
@@ -1122,7 +813,7 @@ skeletons:
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = pathlib.Path(temporary_directory)
-            source_path = directory / "pruned.json"
+            source_path = directory / "source.json"
             plan_path = directory / "compaction-plan.json"
             session_path = directory / "target.jsonl"
             source_path.write_bytes(source_bytes)
@@ -1252,7 +943,7 @@ skeletons:
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = pathlib.Path(temporary_directory)
-            source_path = directory / "pruned.json"
+            source_path = directory / "source.json"
             plan_path = directory / "compaction-plan.json"
             session_path = directory / "target.jsonl"
             source_path.write_bytes(source_bytes)
@@ -1375,7 +1066,7 @@ skeletons:
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = pathlib.Path(temporary_directory)
-            source_path = directory / "pruned.json"
+            source_path = directory / "source.json"
             plan_path = directory / "compaction-plan.json"
             session_path = directory / "target.jsonl"
             source_path.write_bytes(source_bytes)
@@ -1461,11 +1152,6 @@ skeletons:
             with session_path.open("a", encoding="utf-8") as session_file:
                 session_file.write(json.dumps({"type": "message", "id": "second-user", "parentId": first_watermark["id"], "timestamp": "now", "message": {"role": "user", "content": [{"type": "text", "text": "Second request"}]}}) + "\n")
                 session_file.write(json.dumps({"type": "message", "id": "second-answer", "parentId": "second-user", "timestamp": "now", "message": {"role": "assistant", "content": [{"type": "text", "text": "Second answer"}]}}) + "\n")
-            selected_second_tail, _ = prune_transcript.native_tail(
-                first_source + second_source,
-                session_path,
-                None,
-            )
             second_rendered, _ = compact_existing_pi_session_inline.apply_native_plan(
                 second_source_bytes,
                 second_plan,
@@ -1493,11 +1179,6 @@ skeletons:
             first_watermark.get("data", {}).get("resume_after_entry_id"),
             "first-answer",
             f"The first watermark does not anchor its surviving tail: {first_watermark!r}",
-        )
-        self.assertEqual(
-            [item.get("native_entry_id") for item in selected_second_tail],
-            ["second-user", "second-answer"],
-            f"The second pass did not select only the new tail: {selected_second_tail!r}",
         )
         self.assertEqual(
             second_rendered[: len(first_rendered)],
@@ -1623,7 +1304,7 @@ skeletons:
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = pathlib.Path(temporary_directory)
-            source_path = directory / "pruned.json"
+            source_path = directory / "source.json"
             plan_path = directory / "plan.json"
             session_path = directory / "target.jsonl"
             source_path.write_bytes(source_bytes)
@@ -1650,7 +1331,7 @@ skeletons:
         self.assertFalse(backups, f"A failed preflight created a backup: {backups!r}")
         self.assertEqual(final_bytes, original_bytes, "A failed preflight changed the target")
 
-    def test_native_plan_application_replaces_multi_file_read_from_pruned_references(self) -> None:
+    def test_native_plan_application_replaces_multi_file_read_from_file_references(self) -> None:
         first_reference = '<Read path="a.md" id="01RF" native_tool_call_id="toolu_01RF-complete" native_content_index="1"/>'
         second_reference = '<Read path="b.md" id="01RF" native_tool_call_id="toolu_01RF-complete" native_content_index="1"/>'
         source = [
@@ -1714,7 +1395,7 @@ skeletons:
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = pathlib.Path(temporary_directory)
-            source_path = directory / "pruned.json"
+            source_path = directory / "source.json"
             plan_path = directory / "compaction-plan.json"
             session_path = directory / "target.jsonl"
             source_path.write_bytes(source_bytes)
@@ -1845,7 +1526,7 @@ skeletons:
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = pathlib.Path(temporary_directory)
-            source_path = directory / "pruned.json"
+            source_path = directory / "source.json"
             plan_path = directory / "compaction-plan.json"
             session_path = directory / "target.jsonl"
             source_path.write_bytes(source_bytes)
@@ -2001,7 +1682,7 @@ skeletons:
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = pathlib.Path(temporary_directory)
-            source_path = directory / "pruned.json"
+            source_path = directory / "source.json"
             plan_path = directory / "compaction-plan.json"
             session_path = directory / "target.jsonl"
             source_path.write_bytes(source_bytes)
@@ -2167,7 +1848,7 @@ skeletons:
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = pathlib.Path(temporary_directory)
-            source_path = directory / "pruned.json"
+            source_path = directory / "source.json"
             plan_path = directory / "compaction-plan.json"
             session_path = directory / "target.jsonl"
             source_path.write_bytes(source_bytes)

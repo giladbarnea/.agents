@@ -97,7 +97,7 @@ Report readable-text estimates, image-payload changes, thinking-block removals a
 
 Use the [parent toolkit](../../SKILL.md) for formats, exports, backups, and stable identities. Make a copy before changing a native session. Bind every decision to the exact source checksum and stable occurrence. Preserve unselected content and validate that preservation, not merely that the result parses.
 
-**The standard pipeline does not support this conservative selection.** Its pruner removes raw structured-file outputs; its plan generator removes unselected raw tools; its applier rejects surviving raw tools. Do not run destructive preprocessing before deciding what must remain. Use a checksum-bound selective transformation when retained raw payloads or passage-level cuts are required.
+**The legacy plan pipeline does not support this conservative selection.** Its plan generator removes unselected raw tools; its applier rejects surviving raw tools. Use `lib/pi.mjs` for selective native Pi edits.
 
 The native applier supports Pi, not Claude. A selective native Claude transformation must preserve message UUIDs, parent links, exact tool-call/result identities, and unselected thinking blocks and signatures. Keep changes to selected payloads and their duplicate caches explicit. Inspect caches separately: model-visible results can contain harness text that cached payloads omit. Preserve unselected cache metadata. A readable export is not a resumable native session.
 

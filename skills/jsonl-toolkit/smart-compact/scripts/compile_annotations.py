@@ -102,7 +102,7 @@ def annotation_list(raw: dict[str, object], key: str) -> list[object]:
 def compile_annotations(
     source_bytes: bytes, raw_annotations: dict[str, object]
 ) -> dict[str, object]:
-    """Compile annotations against one exact pruned transcript."""
+    """Compile annotations against one exact source transcript."""
     unknown_keys = sorted(set(raw_annotations) - ANNOTATION_KEYS)
     if unknown_keys:
         raise ValueError(f"unknown annotation keys: {unknown_keys}")
@@ -128,11 +128,11 @@ def compile_annotations(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("pruned_json", type=pathlib.Path)
+    parser.add_argument("source_json", type=pathlib.Path)
     parser.add_argument("annotations_yaml", type=pathlib.Path)
     arguments = parser.parse_args()
 
-    source_bytes = arguments.pruned_json.read_bytes()
+    source_bytes = arguments.source_json.read_bytes()
     raw_annotations = yaml.safe_load(
         arguments.annotations_yaml.read_text(encoding="utf-8")
     )

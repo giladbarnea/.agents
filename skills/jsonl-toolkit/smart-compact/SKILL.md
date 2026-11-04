@@ -128,19 +128,15 @@ Use the parent file reporter when presenting the set:
 
 Read a Pi session with [`lib/pi.mjs`](../references/pi-lib.md): `context.outline()` gives one line per entry and `context.render({ clip })` gives the text. It reads the session file itself, so it cannot lose entries a `ch` export leaves out. Collect decisions in a `Draft`, as [the native workflow](#choose-the-native-workflow-explicitly) describes.
 
-## Legacy: build the plan pipeline from a `ch` export
+## Legacy: finish an existing transcript plan
 
-Everything from [deterministic preprocessing](#run-deterministic-preprocessing-before-semantic-review) through [the native-copy transfer](#transfer-the-same-plan-to-a-named-native-pi-copy) is the legacy `ch`-transcript plan pipeline. Use it only to finish an existing plan; do not start new work with it. It needs an export made with `-t` rather than `-t:s`:
-
-```bash
-ch <session-id> -t -f json > transcription.json
-```
+The plan commands below are legacy tools for finishing an existing `ch`-transcript plan. Use its saved source; do not start new work with this pipeline. The export must have been made with `-t` rather than `-t:s`.
 
 `-t:s` splices long tool values down to about 500 characters, keeping both ends around a bare `...` line. It cuts arguments as well as results, so a skeleton `command` and a skeleton `outcome` can both be silently wrong. `--annotate` counts spliced values on its stderr summary.
 
 Use `original_index` rather than a shifting array position.
 
-The native plan applier requires current Pi provenance fields. Re-export and re-prune an older transcript that lacks them.
+The native plan applier requires current Pi provenance fields. If the saved source lacks them, use `lib/pi.mjs` on the native session instead.
 
 Always back up a transcript before changing it in place. Do not rerun index-based decisions against already transformed output.
 
@@ -166,56 +162,6 @@ After validation, ask whether the user wants to resume the compacted session in 
 
 Note this can work with `claude -r <session-id>` and `codex resume <session-id>` as well.
 
-## Run deterministic preprocessing before semantic review
-
-```bash
-uv run --script scripts/prune_transcript.py transcription.json > pruned.json
-```
-
-The pruner:
-
-- Preserves todo calls but removes todo outputs.
-- Removes raw outputs from structured file tools.
-- Expands multi-file reads.
-- Replaces file inputs without reordering mixed content.
-- Keeps the first byte-identical skill body.
-- Preserves every invocation-specific user instruction.
-
-An interrupted file-tool call without a path fails loudly. Inspect it before authorizing its removal:
-
-```bash
-uv run --script scripts/prune_transcript.py \
-  transcription.json \
-  --drop-orphan-tool-id <tool-id> \
-  > pruned.json
-```
-
-The exception accepts only one uniquely identified, payload-free, unpaired file-tool call.
-
-## Select a tail through a stable boundary
-
-For an exported transcript, exclude the boundary message itself:
-
-```bash
-uv run --script scripts/prune_transcript.py \
-  transcription.json \
-  --from-index 194 \
-  > pruned.json
-```
-
-For a native Pi target, let the latest completed watermark select the tail:
-
-```bash
-uv run --script scripts/prune_transcript.py \
-  transcription.json \
-  --native-session session-copy.jsonl \
-  > pruned.json
-```
-
-Use `--from-entry-id <native-id>` with `--native-session` for an explicit native boundary.
-
-If the selected tail is empty, stop. Do not create a plan, backup, or watermark.
-
 ## Use generic and compaction-specific diagnostics separately
 
 Start with the parent structural report:
@@ -237,7 +183,7 @@ Read the transcript in full regardless of either report.
 ## Render one chronological review view
 
 ```bash
-uv run --script ../scripts/render_transcript_review.py pruned.json > review.md
+uv run --script ../scripts/render_transcript_review.py source.json > review.md
 ```
 
 The parent renderer preserves message order, pairs tools by exact ID, labels boundaries, and elides only byte-identical skill bodies.
@@ -245,14 +191,14 @@ The parent renderer preserves message order, pairs tools by exact ID, labels bou
 Prefer the annotated view when repetitive tool traffic dominates the transcript:
 
 ```bash
-uv run --script ../scripts/render_transcript_review.py --annotate pruned.json > annotated.txt
+uv run --script ../scripts/render_transcript_review.py --annotate source.json > annotated.txt
 ```
 
 Every tool call and result line carries the `original_index` and the tool identity that a skeleton anchors on, so reading it is the annotation work. Message text prints verbatim, so a long message spans lines that carry no index. Results are shown whole up to a generous budget, because a skeleton `outcome` is usually written from a result.
 
 Check the stderr summary before you trust the view. Any entry on `unrecognized block and wrapper types` is a block type the mode has not vetted, which means the export format moved. Its size is still reported, but nothing else about it is read. A `NOT UNIQUE` verdict on the `tool ids` line means a skeleton anchor may be ambiguous and `no-result-in-file` cannot be believed.
 
-Ignore `no-result-in-file` on a pruned transcript. The pruner removes todo results by design, so the marker there reports its own removals rather than interrupted calls. Run `--annotate` on the export itself when you need that signal to mean something. That costs between nothing and about half again, depending on how much file work the session did, because dropping file-tool results is most of what the pruner saves. Transcribe indices only from the pruned run, because pruning drops whole messages and `compile_annotations.py` rejects an index that no longer exists.
+In an edited transcript, `no-result-in-file` can reflect an intentionally removed result rather than an interrupted call. Review and annotate the exact saved source: `compile_annotations.py` rejects an index that no longer exists.
 
 ## Annotate judgments instead of mechanical plan fields
 
@@ -278,16 +224,16 @@ scratchpad_paths: [/tmp/render_helper.py]
 opaque_artifacts: [/path/created/by/opaque/shell.csv]
 ```
 
-Ranges are inclusive over stable indices that exist in the pruned transcript. Every direct index must exist.
+Ranges are inclusive over stable indices that exist in the saved source transcript. Every direct index must exist.
 
 Compile the annotations against the exact source:
 
 ```bash
 uv run --script scripts/compile_annotations.py \
-  pruned.json annotations.yaml > decisions.json
+  source.json annotations.yaml > decisions.json
 ```
 
-The compiler rejects unknown keys and malformed selections. It binds the result to the pruned source checksum.
+The compiler rejects unknown keys and malformed selections. It binds the result to the saved source checksum.
 
 Do not hand-edit the generated decisions file.
 
@@ -295,10 +241,10 @@ Do not hand-edit the generated decisions file.
 
 ```bash
 uv run --script scripts/generate_compaction_plan.py \
-  pruned.json decisions.json > compaction-plan.json
+  source.json decisions.json > compaction-plan.json
 
 uv run --script scripts/apply_compaction_plan.py \
-  pruned.json compaction-plan.json > compacted.json
+  source.json compaction-plan.json > compacted.json
 ```
 
 The generator:
@@ -320,11 +266,11 @@ Version-1 plans are unsupported. Regenerate them.
 
 Do not pass `compacted.json` to the native applier.
 
-Pass the pruned source, plan, and native target:
+Pass the saved source, plan, and native target:
 
 ```bash
 uv run --script ../scripts/compact_existing_pi_session_inline.py \
-  pruned.json compaction-plan.json session-copy.jsonl
+  source.json compaction-plan.json session-copy.jsonl
 ```
 
 The native applier currently remains at the parent script level while its reusable Pi-session logic is refactored.

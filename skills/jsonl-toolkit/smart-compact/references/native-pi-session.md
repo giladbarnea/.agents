@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-11-01
+last_updated: 2026-11-04
 ---
 
 # Native Pi smart-compaction preserves resumability
@@ -19,7 +19,7 @@ Paths below are relative to the `jsonl-toolkit` root.
 
 Prefer the library for a native Pi session. It reads the session file itself, so it needs no `ch` export and cannot lose entries an export leaves out. Every other row [should eventually be eliminated](../../references/pi-lib.md#shrink-everything-else). Until someone removes it, the inline applier serves only to transfer an existing `ch`-transcript plan.
 
-Do not pass a compacted transcript to the native applier. Pass the pruned source, plan, and native target copy.
+Do not pass a compacted transcript to the native applier. Pass the exact saved source, plan, and native target copy.
 
 ## Edit the live context in place
 
@@ -55,12 +55,12 @@ The native semantic-plan applier currently lives at the parent script level:
 
 ```bash
 uv run scripts/compact_existing_pi_session_inline.py \
-  pruned.json \
+  source.json \
   compaction-plan.json \
   session-copy.jsonl
 ```
 
-The pruned transcript must come from a current `ch -f json` Pi export. It must carry complete native provenance.
+The saved source must carry complete native provenance from a current `ch -f json` Pi export and match the plan's checksum.
 
 The applier validates every mapping before it creates a backup. It then:
 
@@ -85,23 +85,7 @@ The watermark records:
 - The pass number
 - Compaction statistics
 
-The next pruning and transfer pass selects messages after the latest watermark automatically.
-
-Set an explicit native boundary with the same entry ID in both commands:
-
-```bash
-uv run smart-compact/scripts/prune_transcript.py \
-  transcription.json \
-  --native-session session-copy.jsonl \
-  --from-entry-id <native-id> \
-  > pruned.json
-
-uv run scripts/compact_existing_pi_session_inline.py \
-  pruned.json \
-  compaction-plan.json \
-  session-copy.jsonl \
-  --from-entry-id <native-id>
-```
+The applier resolves the latest watermark automatically. The saved source and plan must cover exactly the active tail after it. `--from-entry-id <native-id>` sets an explicit boundary instead.
 
 The boundary message itself is excluded. A boundary cannot split a tool-call and result occurrence.
 

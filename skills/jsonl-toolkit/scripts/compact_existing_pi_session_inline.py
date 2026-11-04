@@ -11,7 +11,7 @@ plan, native mapping, transformed tree, and tool pairing all validate. A
 byte-identical sibling backup is created before the atomic replacement.
 
 Usage:
-    uv run compact_existing_pi_session_inline.py pruned.json compaction-plan.json session-copy.jsonl
+    uv run compact_existing_pi_session_inline.py source.json compaction-plan.json session-copy.jsonl
 """
 
 import argparse
@@ -360,8 +360,8 @@ def validate_source_tail(
         native_entry_id = message.get("native_entry_id")
         if not isinstance(original_index, int) or not isinstance(native_entry_id, str):
             raise fail(
-                "every pruned Pi source message needs original_index and native_entry_id; "
-                "export and prune the active tail again"
+                "every Pi source message needs original_index and native_entry_id; "
+                "use lib/pi.mjs on the native session"
             )
         native_entry = tail_by_identifier.get(native_entry_id)
         if native_entry is None:
@@ -372,10 +372,10 @@ def validate_source_tail(
         mapped[original_index] = native_entry
         native_entry_ids.append(native_entry_id)
     if len(native_entry_ids) != len(set(native_entry_ids)):
-        raise fail("pruned Pi source repeats native_entry_id values")
+        raise fail("Pi source repeats native_entry_id values")
     source_positions = [positions[identifier] for identifier in native_entry_ids]
     if source_positions != sorted(source_positions):
-        raise fail("pruned Pi source messages do not follow native active-path order")
+        raise fail("Pi source messages do not follow native active-path order")
     return mapped, set(native_entry_ids)
 
 
@@ -543,7 +543,7 @@ def source_tool_events(
                 ):
                     raise fail(
                         f"file reference in source message {original_index} lacks native provenance; "
-                        "export it again with the current ch and prune it again"
+                        "use lib/pi.mjs on the native session"
                     )
                 if (
                     previous_reference_event is not None
@@ -583,7 +583,7 @@ def source_tool_events(
             ):
                 raise fail(
                     f"tool-input in source message {original_index} lacks native provenance; "
-                    "export it again with the current ch and prune it again"
+                    "use lib/pi.mjs on the native session"
                 )
             association = exact_skeletons.get(source_content_index)
             skeleton = association.content if association is not None else None
@@ -729,13 +729,13 @@ def verify_source_outputs(
             if not isinstance(native_identifier, str):
                 raise fail(
                     f"tool-output in source message {original_index} lacks native provenance; "
-                    "export it again with the current ch and prune it again"
+                    "use lib/pi.mjs on the native session"
                 )
             native_entry_id = source_message.get("native_entry_id")
             if not isinstance(native_entry_id, str):
                 raise fail(
                     f"tool-output message {original_index} lacks native_entry_id; "
-                    "export it again with the current ch and prune it again"
+                    "use lib/pi.mjs on the native session"
                 )
             event = events_by_result_entry_id.get(native_entry_id)
             if event is None or event.native_occurrence is None:
@@ -896,7 +896,7 @@ def apply_tool_changes(
             f"{occurrence.call.name} {occurrence.call.occurrence_key!r}"
             for occurrence in unsafe_unmatched[:8]
         ]
-        raise fail(f"native tools are absent from the pruned source: {rendered}")
+        raise fail(f"native tools are absent from the source: {rendered}")
 
     removed_occurrence_keys = set(mapped) | {
         occurrence.call.occurrence_key for occurrence in removable_unmatched
@@ -994,7 +994,7 @@ def verify_complete_reviewed_tail(
     events: list[SourceToolEvent],
     removable_unmatched: list[NativeToolOccurrence],
 ) -> str:
-    """Require the pruned source to account for every export-visible tail entry."""
+    """Require the source to account for every export-visible tail entry."""
     reviewed_entry_ids = set(source_entry_ids)
     for event in events:
         occurrence = event.native_occurrence
@@ -1023,7 +1023,7 @@ def verify_complete_reviewed_tail(
     ]
     if unreviewed:
         raise fail(
-            "pruned source does not cover the complete native tail; re-export and prune: "
+            "source does not cover the complete native tail; use lib/pi.mjs on the native session: "
             f"{unreviewed[:8]}"
         )
     if not visible_tail:
@@ -1198,7 +1198,7 @@ def apply_native_plan(
             f"{occurrence.call.name} {occurrence.call.occurrence_key!r}"
             for occurrence in unsafe_unmatched[:8]
         ]
-        raise fail(f"native tools are absent from the pruned source: {rendered_unsafe}")
+        raise fail(f"native tools are absent from the source: {rendered_unsafe}")
     source_through_entry_id = verify_complete_reviewed_tail(
         active_tail,
         source_entry_ids,
@@ -1270,7 +1270,7 @@ def apply_native_plan(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("pruned_json", type=Path)
+    parser.add_argument("source_json", type=Path)
     parser.add_argument("compaction_plan_json", type=Path)
     parser.add_argument("session_copy_jsonl", type=Path)
     parser.add_argument(
@@ -1279,7 +1279,7 @@ def main() -> int:
     )
     arguments = parser.parse_args()
 
-    source_bytes = arguments.pruned_json.read_bytes()
+    source_bytes = arguments.source_json.read_bytes()
     manifest_raw = json.loads(
         arguments.compaction_plan_json.read_text(encoding="utf-8")
     )

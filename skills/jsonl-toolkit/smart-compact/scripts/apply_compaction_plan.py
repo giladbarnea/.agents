@@ -3,7 +3,7 @@
 # requires-python = "==3.12.*"
 # dependencies = []
 # ///
-"""Apply stable-index semantic decisions to a deterministically pruned transcript."""
+"""Apply stable-index semantic decisions to a source transcript."""
 
 import argparse
 import dataclasses

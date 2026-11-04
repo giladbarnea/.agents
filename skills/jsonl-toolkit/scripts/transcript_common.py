@@ -8,7 +8,6 @@ import xml.sax.saxutils
 
 
 FILE_TOOLS = {"Read", "Write", "Edit", "Patch", "Delete"}
-FILE_OUTPUT_TOOLS = FILE_TOOLS | {"read_many_files"}
 SKILL_INVOCATION_PATTERN = re.compile(
     r"\A(?P<body><skill\b.*?</skill>)(?P<tail>.*)\Z", re.DOTALL
 )

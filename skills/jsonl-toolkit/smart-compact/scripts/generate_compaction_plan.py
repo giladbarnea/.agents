@@ -5,7 +5,7 @@
 # ///
 """Generate a complete compaction plan from semantic decisions only.
 
-Reads the pruned transcript plus a semantic decisions file and emits a plan
+Reads the source transcript plus a semantic decisions file and emits a plan
 ready for apply_compaction_plan.py, deriving every mechanical field: the
 checksum, the raw-tool drop set, skeleton replacement entries with their tool
 IDs, and affected-file provenance. Prints a concise audit to stderr.
@@ -523,11 +523,11 @@ def generate_plan(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("pruned_json", type=pathlib.Path)
+    parser.add_argument("source_json", type=pathlib.Path)
     parser.add_argument("decisions_json", type=pathlib.Path)
     arguments = parser.parse_args()
 
-    source_bytes = arguments.pruned_json.read_bytes()
+    source_bytes = arguments.source_json.read_bytes()
     raw_decisions = json.loads(arguments.decisions_json.read_text(encoding="utf-8"))
     if not isinstance(raw_decisions, dict):
         raise ValueError("decisions must be a JSON object")

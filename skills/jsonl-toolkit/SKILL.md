@@ -141,7 +141,7 @@ ch <session-id> -t -f json > full.json
 uv run --script scripts/render_transcript_review.py --annotate full.json > annotated.txt
 ```
 
-This emits one keyed line per tool call and per result, and prints message text verbatim, so a long message still spans many unprefixed lines. It finds long string arguments at any nesting depth and reduces short ones to tags. It names no tool anywhere it reads arguments, so it works on any provider's export. The one exception is recognizing the pruner's own file references.
+This emits one keyed line per tool call and per result, and prints message text verbatim, so a long message still spans many unprefixed lines. It finds long string arguments at any nesting depth and reduces short ones to tags. It names no tool anywhere it reads arguments, so it works on any provider's export. The one exception is recognizing structured file references.
 
 On a raw export the saving is large, because the conventional view spends most of its bytes on raw tool JSON. A 10 MB session renders to about 270 KB. The saving shrinks toward nothing as a session becomes mostly prose, because message text prints verbatim with no budget. A session that is almost entirely conversation saves a few percent, and a session under a kilobyte can come out a few bytes larger. Tool traffic is what this view compresses.
 
@@ -157,7 +157,7 @@ The `values spliced with `...`` line counts values holding a bare `...` line, wh
 
 The `tool ids` line matters when it says anything but `unique`. One provider emits a single constant id for a whole session, and `ch` shortens ids to four characters, so any long session can collide. The line separates a collision inside one message, which makes a skeleton anchor ambiguous, from one across messages, which only makes `no-result-in-file` unreliable.
 
-A call marked `no-result-in-file` says only that. In a raw export it means an interrupted call. In a pruned transcript it also covers results the pruner removed on purpose, so the marker names what it saw and leaves the cause to you.
+A call marked `no-result-in-file` says only that. In a raw export it means an interrupted call. In an edited transcript it also covers intentionally removed results, so the marker names what it saw and leaves the cause to you.
 
 ## Work with a native Pi session
 
