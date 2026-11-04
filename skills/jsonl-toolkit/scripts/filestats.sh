@@ -55,7 +55,7 @@ main() {
         lines=$(wc -l < "$path" | tr -d ' ')
         words=$(wc -w < "$path" | tr -d ' ')
         if LC_ALL=C grep -qI . "$path"; then
-            tokens=$(ttok < "$path")
+            tokens=$(uv tool run ttok < "$path")
             sort_key=$tokens
             tokens=$(grouped "$tokens")
         else

@@ -1,7 +1,7 @@
 ---
 name: jsonl-toolkit
 description: Tools and workflows for inspecting large JSONL files and AI session transcripts
-last_updated: 2026-11-01
+last_updated: 2026-11-04
 ---
 
 > Nov 1 2026 update: `ch` is best used for skimming, searching and reading, with generic tool filters and length control, before the actual data work, to gain an understanding of the session (preparation). Try to avoid relying on it for "real work". Its export omits important information, the tool as a whole is often out of date with the data types that recent JSONLs have, and it has other issues. It does do a good job with a naive `ch ...` to read the agent and user text messages, `ch ... -t` to include all tools in the output, `ch ... -t:<SPEC>` to filter, and `ch ... --shorten=...`/`ch ... -t:s=...` to control how much you skim versus deep dive, so you avoid undesired context bombs (accidentally reading hundreds of thousands of tokens' worth of transcript in one go). Therefore, you'll need to build your own means based on the raw JSONL, `lib/pi.mjs` for Pi sessions, or both. If you're manually overcoming `lib/pi.mjs` shortcomings, surface that to your leader, because it might point to a general underlying issue with the library, which should be promoted into the library if it adheres to the library's design and intent.
@@ -17,22 +17,6 @@ Load [`smart-compact/SKILL.md`](smart-compact/SKILL.md) only when the task is se
 File papercuts about this toolkit in its own log: pass the absolute path `file: /Users/giladbarnea/.agents/skills/jsonl-toolkit/.papercuts.jsonl` to the papercuts tool. Without it, the tool writes to the git root of your working directory, which is usually a temporary directory.
 
 During compaction, detect referenced files that changed or moved. Ask the user before refreshing historical file calls or payloads. See [approval-gated file refresh](smart-compact/references/conservative-pareto-compaction.md#refresh-historical-file-snapshots-only-with-approval).
-
-## Use DeepSeek Flash for routine questions
-
-Use this general-purpose helper for quick where, whether, how or which questions over data and transcripts. Treat calls as effectively free, ordinary programmatic operations. No subagent or team setup is needed.
-
-Put the question and relevant source text in one UTF-8 file:
-
-```bash
-uv run --script scripts/deepseek_prompt.py prompt.txt
-```
-
-The file becomes the sole user message. The script adds no system prompt and prints only the returned answer string. Include source identities when the answer needs references. For large JSONL files, supply selected excerpts rather than the entire archive.
-
-It uses `deepseek/deepseek-v4.1-flash` through OpenRouter, with reasoning enabled, Together only and no provider fallbacks. It reads `~/.openrouter-api-key`. Together must be enabled in the account's provider settings.
-
-Read the answer directly and judge its usefulness. The calling agent owns the decision, especially when distinguishing earlier beliefs from current rules.
 
 ## Identify the file format
 
