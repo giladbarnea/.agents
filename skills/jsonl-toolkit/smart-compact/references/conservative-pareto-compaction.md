@@ -37,6 +37,8 @@ Replace repeated passages with short semantic placeholders, not silent deletion.
 
 > Unchanged §2: same as the earlier Write of `docs/design.md` (call `abc`). The full text remains there.
 
+In a Pi session, the library finds and links byte-identical repeats for you: see `duplicateStrings`, `dedupe` and `dedupePassage` in [its parts](../../references/pi-lib.md#the-parts).
+
 If only part changed, link the unchanged part and keep the differences. Complete versions can also make their diff encodings redundant. Check for unique deleted wording, comments or examples before replacing a diff.
 
 Every placeholder must resolve to a full version that survives the final selection. Do not build chains of placeholders with no retained content. Keep the event's historical state explicit when referring to a later version.

@@ -181,6 +181,69 @@ test('wire converts the context through Pi for the session model', async t => {
   await assert.rejects(context.wire({ provider: 'anthropic', modelId: 'no-such-model' }), /does not know the model/);
 });
 
+const DOCUMENT = 'Design doc line.\n'.repeat(200);
+const SECTION = 'Shared section line.\n'.repeat(80);
+const IMAGE = 'iVBOR'.repeat(400);
+const result = (toolCallId, toolName, text) => ({ role: 'toolResult', toolCallId, toolName, content: [{ type: 'text', text }], isError: false, timestamp: at });
+const picture = { type: 'image', data: IMAGE, mimeType: 'image/png' };
+const DUPLICATES = chain([
+  ['question', { type: 'message', message: user('Write the doc.') }],
+  ['write', { type: 'message', message: assistant([{ type: 'thinking', thinking: DOCUMENT, thinkingSignature: 'signed' }, { type: 'toolCall', id: 'w1', name: 'write', arguments: { path: 'doc.md', content: DOCUMENT } }]) }],
+  ['written', { type: 'message', message: result('w1', 'write', 'Wrote doc.md') }],
+  ['read', { type: 'message', message: assistant([{ type: 'toolCall', id: 'r1', name: 'read', arguments: { path: 'doc.md' } }]) }],
+  ['readResult', { type: 'message', message: result('r1', 'read', DOCUMENT) }],
+  ['screenshot', { type: 'message', message: { role: 'user', content: [picture, { type: 'text', text: 'First shot' }], timestamp: at } }],
+  ['screenshotAgain', { type: 'message', message: { role: 'user', content: [picture, { type: 'text', text: 'Second shot' }], timestamp: at } }],
+  ['sectionA', { type: 'message', message: assistant([{ type: 'text', text: `Output:\n${SECTION}\nTail A` }]) }],
+  ['sectionB', { type: 'message', message: user(`Header\n${SECTION}\nTail B`) }],
+  ['answer', { type: 'message', message: assistant([{ type: 'text', text: 'Done.' }]) }],
+]);
+
+test('duplicateStrings groups exact repeats wherever they sit, but never inside signed thinking or images', t => {
+  const context = open(fixture(t, { entries: DUPLICATES }).path).context();
+  const groups = context.duplicateStrings({ minLength: 1000 });
+  assert.deepEqual(groups.map(({ length, locations }) => ({ length, locations })), [{
+    length: DOCUMENT.length,
+    locations: [
+      { entryId: 'write', path: ['content', 1, 'arguments', 'content'] },
+      { entryId: 'readResult', path: ['content', 0, 'text'] },
+    ],
+  }], 'Expected one group: the written and read document, without its thinking copy, the repeated image, or the section embedded in larger strings');
+  assert.deepEqual(context.duplicateStrings({ minLength: DOCUMENT.length + 1 }), []);
+});
+
+test('dedupe keeps the first copy as a marked anchor and points every repeat at it', t => {
+  const session = open(fixture(t, { entries: DUPLICATES }).path);
+  const [group] = session.context().duplicateStrings({ minLength: 1000 });
+  const preview = session.edit().dedupe(group).check().context();
+  assert.equal(preview.item('write').content[1].arguments.content, `[Payload write:1]\n${DOCUMENT}\n[/Payload]`);
+  assert.deepEqual(preview.item('readResult').content, [{ type: 'text', text: '[Exact duplicate of payload write:1.]' }]);
+  assert.deepEqual(preview.item('write').content[0], { type: 'thinking', thinking: DOCUMENT, thinkingSignature: 'signed' }, 'Signed thinking must stay byte for byte');
+  assert.throws(() => session.edit().dedupe([group.locations[0], { entryId: 'answer', path: ['content', 0, 'text'] }]), /not byte-identical/);
+  assert.throws(() => session.edit().dedupe([{ entryId: 'write', path: ['content', 0, 'thinking'] }, group.locations[1]]), /thinking block/);
+});
+
+test('dedupePassage links a passage shared by larger strings and keeps the text around it', t => {
+  const session = open(fixture(t, { entries: DUPLICATES }).path);
+  const context = session.context();
+  const start = context.item('sectionA').content[0].text.indexOf(SECTION);
+  const passage = { entryId: 'sectionA', path: ['content', 0, 'text'], start, end: start + SECTION.length };
+  const preview = session.edit().dedupePassage(passage, { within: context }).check().context();
+  assert.equal(preview.item('sectionA').content[0].text, `Output:\n[Payload sectionA:1]\n${SECTION}\n[/Payload]\nTail A`);
+  assert.equal(preview.item('sectionB').content[0].text, 'Header\n[Exact duplicate of payload sectionA:1.]\nTail B');
+  assert.throws(() => session.edit().dedupePassage({ ...passage, end: passage.end + '\nTail A'.length }, { within: context }), /nowhere else/);
+  assert.throws(() => session.edit().dedupePassage({ ...passage, end: passage.end + 99 }, { within: context }), /out of range/);
+});
+
+test('a draft refuses a payload reference whose anchor leaves the context', t => {
+  const session = open(fixture(t, { entries: DUPLICATES }).path);
+  const context = session.context();
+  const start = context.item('sectionA').content[0].text.indexOf(SECTION);
+  const draft = session.edit().dedupePassage({ entryId: 'sectionA', path: ['content', 0, 'text'], start, end: start + SECTION.length }, { within: context }).omit('sectionA');
+  assert.throws(() => draft.check(), /payload sectionA:1, which is not in the context/);
+  assert.throws(() => draft.apply(), /payload sectionA:1, which is not in the context/);
+});
+
 test('notation helpers escape attribute values', () => {
   assert.equal(skeleton({ name: 'bash', command: 'a && b', purpose: 'Say "hi"', outcome: '<ok>' }), '<tool-skeleton name="bash" command="a &amp;&amp; b" purpose="Say &quot;hi&quot;" outcome="&lt;ok&gt;"/>');
   assert.equal(fileReference('Read', 'src/a.py', 'r1'), '<Read path="src/a.py" id="r1"/>');

@@ -1,6 +1,6 @@
 ---
 description: Node building blocks for reading and changing native Pi sessions, and the design approach that governs them.
-last_updated: 2026-11-01
+last_updated: 2026-11-05
 ---
 
 # Work with a Pi session through `lib/pi.mjs`
@@ -71,19 +71,20 @@ UUIDv7 session IDs start with a timestamp, so sessions created in the same minut
 
 1. **`open(reference)` returns a `Session`.** It has `path`, `bytes`, `fingerprint`, `header`, `entries`, `entry(id)`, `branch`, `context()`, `edit(decisions)`, `install(messages)` and `check()`. Reading never changes the file.
 2. **`Context` is the whole model context.** It adds `item(id)`, `messages`, `model`, `tokens`, `usage` and `wire(model)` to a selection. `tokens` is Pi's character estimate, counting the current system prompt once. `usage` is what the provider billed for the last assistant message. `wire()` is async and returns the messages after Pi's provider conversion.
-3. **`Selection` is an ordered subset.** `where`, `except`, `between`, `roles`, `custom`, `editable`, `find`, `largest` and `complete` each return a new selection. `ids`, `length`, `tokens`, `first`, `last`, `outline()` and `render({ clip })` read it.
+3. **`Selection` is an ordered subset.** `where`, `except`, `between`, `roles`, `custom`, `editable`, `find`, `largest` and `complete` each return a new selection. `ids`, `length`, `tokens`, `first`, `last`, `outline()` and `render({ clip })` read it. `duplicateStrings({ minLength })` returns groups of byte-identical strings, each with the `{ entryId, path }` locations it sits at. A path is an array from the message, such as `['content', 1, 'arguments', 'content']`.
 4. **Each item** has `id`, `role`, `label`, `customType`, `timestamp`, `content`, `messages`, `entry`, `model`, `tokens`, `editable`, `edited`, `toolCalls`, `answers` and `text`.
-5. **`Draft` collects decisions.** `omit`, `replace`, `rewrite` and `keep` take IDs, items, selections, or arrays of them. The last decision for an entry wins. `decisions` and `save(path)` export them, and `session.edit(decisions)` restores them. `context()`, `check()`, `report()` and `apply({ to, marker })` act on them.
+5. **`Draft` collects decisions.** `omit`, `replace`, `rewrite` and `keep` take IDs, items, selections, or arrays of them. The last decision for an entry wins. `dedupe(group or locations)` keeps the first string and replaces the others with a reference to it. `dedupePassage({ entryId, path, start, end }, { within })` does the same for a passage inside larger strings; tool results that combine several outputs rarely repeat as whole strings, so this is the common case there. `decisions` and `save(path)` export them, and `session.edit(decisions)` restores them. `context()`, `check()`, `report()` and `apply({ to, marker })` act on them.
 6. **`Change` holds the entries to append.** It materializes them once, so the checked entries are the written entries. It has `context`, `check()` and `apply({ to })`.
-7. **Notation:** `skeleton({ name, command, purpose, outcome, meaning })` and `fileReference(operation, path, id)` format smart-compact's notation with escaped attributes.
+7. **Notation:** `skeleton({ name, command, purpose, outcome, meaning })` and `fileReference(operation, path, id)` format smart-compact's notation with escaped attributes. Deduplication marks the kept copy `[Payload <entry>:<n>] … [/Payload]` and writes `[Exact duplicate of payload <entry>:<n>.]` in its place elsewhere.
 
 ## The library enforces these rules
 
 1. Pi's `context_edit` can change only user, assistant, tool-result and custom-message entries. Targeting a system or Bash entry raises.
 2. `check()` raises when a tool call lacks its result, or a result lacks its call. `complete()` adds the missing side of every exchange.
-3. A draft's `check()` also raises when the context would start with a non-user message. Pi sends custom, Bash and summary messages as user messages, so those count as user.
-4. `apply()` runs `check()` first. In place, it refuses a file that changed since `open()`, backs up to `.backup-N`, appends, then reloads and compares. With `{ to }`, it writes the original bytes plus the new entries to a new file, and never overwrites one.
-5. A running Pi keeps its context in memory and appends its next turn to the old leaf. Apply only to a stopped session, or restart Pi and resume the session before its next turn.
+3. A draft's `check()` also raises when the context would start with a non-user message. Pi sends custom, Bash and summary messages as user messages, so those count as user. It also raises when a payload reference the draft wrote points at an anchor no longer in the context.
+4. Deduplication never changes a string inside signed thinking or an image, and raises unless the strings it links are byte-identical.
+5. `apply()` runs `check()` first. In place, it refuses a file that changed since `open()`, backs up to `.backup-N`, appends, then reloads and compares. With `{ to }`, it writes the original bytes plus the new entries to a new file, and never overwrites one.
+6. A running Pi keeps its context in memory and appends its next turn to the old leaf. Apply only to a stopped session, or restart Pi and resume the session before its next turn.
 
 ## Shell access
 

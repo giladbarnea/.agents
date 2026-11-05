@@ -22,6 +22,11 @@ export const SESSIONS_DIRECTORY = join(homedir(), '.pi/agent/sessions');
 const MESSAGE_ROLES = new Set(['system', 'user', 'assistant', 'toolResult', 'custom', 'bashExecution', 'branchSummary', 'compactionSummary']);
 const EDITABLE_ROLES = new Set(['user', 'assistant', 'toolResult']);
 const ZERO_USAGE = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+// Signed reasoning and binary payloads: changing any of their strings corrupts them.
+const OPAQUE_BLOCK_TYPES = new Set(['thinking', 'image']);
+const PAYLOAD_REFERENCE = /\[Exact duplicate of payload ([^\s\]]+)\.\]/g;
+const payloadAnchor = label => `[Payload ${label}]`;
+const payloadReference = label => `[Exact duplicate of payload ${label}.]`;
 
 function demand(condition, message) {
   if (!condition) throw new Error(message);
@@ -249,6 +254,26 @@ export class Selection {
     return this.#select([...this.items].sort((left, right) => right.tokens - left.tokens).slice(0, count));
   }
 
+  /**
+   * Groups of byte-identical strings at least minLength long, each with every {entryId, path} it sits at, largest saving first.
+   * Matching is exact: a differently encoded copy, such as a JSON-stringified one, does not match.
+   * Strings inside signed thinking and images are never listed. A group feeds draft.dedupe.
+   */
+  duplicateStrings({ minLength }) {
+    demand(Number.isInteger(minLength) && minLength > 0, 'duplicateStrings needs a positive integer minLength');
+    const locationsByText = new Map();
+    for (const item of this.items) {
+      for (const { path, text } of stringsOf(item.content).filter(({ text }) => text.length >= minLength)) {
+        locationsByText.set(text, [...(locationsByText.get(text) ?? []), { entryId: item.id, path }]);
+      }
+    }
+    const saving = ({ length, locations }) => length * (locations.length - 1);
+    return [...locationsByText]
+      .filter(([, locations]) => locations.length > 1)
+      .map(([text, locations]) => ({ text, length: text.length, locations }))
+      .sort((left, right) => saving(right) - saving(left));
+  }
+
   /** Add the other side of every tool exchange the selection touches, so omitting it cannot orphan a call or a result. */
   complete() {
     const ids = new Set(this.ids.flatMap(id => [id, ...(this.context.partners.get(id) ?? [])]));
@@ -332,6 +357,31 @@ function pairToolExchanges(items) {
 }
 
 const blocks = content => typeof content === 'string' ? [{ type: 'text', text: content }] : content;
+const samePath = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+
+/** Every string in message content with its path from the message, skipping signed thinking and images. */
+function stringsOf(content) {
+  const found = [];
+  const walk = (value, path) => {
+    if (typeof value === 'string') return void found.push({ path, text: value });
+    if (value === null || typeof value !== 'object' || OPAQUE_BLOCK_TYPES.has(value.type)) return;
+    for (const [key, nested] of Object.entries(value)) walk(nested, [...path, Array.isArray(value) ? Number(key) : key]);
+  };
+  walk(blocks(content), ['content']);
+  return found;
+}
+
+/** The string at a path from the message. Raises when the path is not a string or runs through signed thinking or an image. */
+function stringAt(content, { entryId, path }) {
+  demand(path[0] === 'content', `Path ${JSON.stringify(path)} must start at the message content`);
+  let value = { content };
+  for (const key of path) {
+    demand(!OPAQUE_BLOCK_TYPES.has(value?.type), `${entryId} ${JSON.stringify(path)} runs through a ${value?.type} block, which must not change`);
+    value = value?.[key];
+  }
+  demand(typeof value === 'string', `${entryId} ${JSON.stringify(path)} is not a string`);
+  return value;
+}
 
 /** Context edits under construction: one decision per entry, the last one wins. Nothing is written until apply. */
 export class Draft {
@@ -377,6 +427,76 @@ export class Draft {
     });
   }
 
+  /**
+   * Keep the first location's string as a marked payload anchor and replace each other location with a reference to it.
+   * Takes a group from selection.duplicateStrings, or an array of {entryId, path}. Raises unless every string is byte-identical.
+   * Matching is exact: a differently encoded copy, such as a JSON-stringified one, does not match.
+   */
+  dedupe(locations) {
+    const [survivor, ...repeats] = locations.locations ?? locations;
+    demand(repeats.length > 0, 'dedupe needs a surviving location and at least one repeat');
+    demand(new Set([survivor, ...repeats].map(location => JSON.stringify(location))).size === repeats.length + 1, 'dedupe got the same location twice');
+    const text = this.#stringAt(survivor);
+    for (const repeat of repeats) {
+      demand(this.#stringAt(repeat) === text, `${repeat.entryId} ${JSON.stringify(repeat.path)} is not byte-identical to ${survivor.entryId} ${JSON.stringify(survivor.path)}`);
+    }
+    const label = this.#nextLabel(survivor.entryId);
+    this.#setString(survivor, `${payloadAnchor(label)}\n${text}\n[/Payload]`);
+    for (const repeat of repeats) this.#setString(repeat, payloadReference(label));
+    return this;
+  }
+
+  /**
+   * Mark one passage of a string as a payload anchor, and replace its other occurrences in the within entries with a reference to it.
+   * start and end index the string as context.item(entryId) shows it. Strings inside signed thinking and images are left alone.
+   * Raises when the passage is not unique in its own string, occurs nowhere else, or sits in an entry Pi cannot edit.
+   * Matching is exact: a differently encoded copy, such as a JSON-stringified one, does not match.
+   */
+  dedupePassage({ entryId, path, start, end }, { within }) {
+    const context = this.#session.context();
+    const passage = stringAt(blocks(context.item(entryId).content), { entryId, path }).slice(start, end);
+    demand(passage.length > 0 && passage.length === end - start, `Passage [${start}, ${end}) of ${entryId} is empty or out of range`);
+    const survivor = this.#stringAt({ entryId, path });
+    demand(survivor.split(passage).length === 2, `The passage must occur exactly once in ${entryId} ${JSON.stringify(path)}`);
+    const items = idsOf([within]).map(id => context.item(id));
+    const blocked = items.filter(item => !item.editable && item.text.includes(passage)).map(item => item.id);
+    demand(blocked.length === 0, `${blocked.join(', ')} contain the passage, but Pi's context_edit cannot change them; narrow within`);
+    const repeats = items
+      .filter(item => item.editable && this.#decisions.get(item.id) !== null)
+      .flatMap(item => stringsOf(this.#current(item.id)).map(found => ({ entryId: item.id, ...found })))
+      .filter(found => found.text.includes(passage) && !(found.entryId === entryId && samePath(found.path, path)));
+    demand(repeats.length > 0, `The passage of ${entryId} occurs nowhere else within the given entries`);
+    const label = this.#nextLabel(entryId);
+    this.#setString({ entryId, path }, survivor.replace(passage, () => `${payloadAnchor(label)}\n${passage}\n[/Payload]`));
+    for (const repeat of repeats) this.#setString(repeat, repeat.text.split(passage).join(payloadReference(label)));
+    return this;
+  }
+
+  #current(id) {
+    const [item] = this.#items([id]);
+    const decision = this.#decisions.has(id) ? this.#decisions.get(id) : { content: blocks(item.content) };
+    demand(decision !== null, `${id} is omitted; keep it before deduplicating it`);
+    return decision.content;
+  }
+
+  #stringAt(location) {
+    return stringAt(this.#current(location.entryId), location);
+  }
+
+  #setString({ entryId, path }, text) {
+    this.rewrite(entryId, content => {
+      const next = structuredClone(content);
+      path.slice(1, -1).reduce((value, key) => value[key], next)[path.at(-1)] = text;
+      return next;
+    });
+  }
+
+  /** The next free anchor label in an entry: its ID and one more than the anchors it already holds. */
+  #nextLabel(entryId) {
+    const existing = stringsOf(this.#current(entryId)).reduce((total, { text }) => total + text.split(`[Payload ${entryId}:`).length - 1, 0);
+    return `${entryId}:${existing + 1}`;
+  }
+
   /** Drop the decisions for these entries, so they stay as they are. */
   keep(...targets) {
     for (const id of idsOf(targets)) this.#decisions.delete(id);
@@ -397,11 +517,14 @@ export class Draft {
   change(marker = {}) {
     const decisions = this.decisions;
     demand(decisions.length > 0, 'The draft has no decisions');
+    const anchors = decisions
+      .filter(({ replacement }) => replacement !== null)
+      .flatMap(({ replacement }) => stringsOf(replacement.content).flatMap(({ text }) => [...text.matchAll(PAYLOAD_REFERENCE)].map(match => match[1])));
     return new Change(this.#session, manager => {
       const leafBefore = manager.getLeafId();
       for (const { targetId, replacement } of decisions) manager.appendContextEdit(targetId, replacement);
       manager.appendCustomEntry('smart-compact-context-edits', { ...marker, leafBefore, edits: decisions.length });
-    }, { userFirst: true });
+    }, { userFirst: true, anchors: [...new Set(anchors)] });
   }
 
   /** The context as it would be after these edits. */
@@ -436,22 +559,26 @@ export class Draft {
 
 /** Entries to append to a session, materialized once, so the checked entries are the written ones. */
 export class Change {
-  constructor(session, append, { userFirst = false } = {}) {
+  constructor(session, append, { userFirst = false, anchors = [] } = {}) {
     this.session = session;
     const manager = SessionManager.inMemory(session.header.cwd, undefined, [session.header, ...session.entries]);
     append(manager);
     this.entries = manager.getEntries().slice(session.entries.length);
     this.context = contextOf([...session.entries, ...this.entries]);
     this.userFirst = userFirst;
+    this.anchors = anchors;
   }
 
-  /** Raise unless every tool call pairs with a result, and, for edits of a conversation, a user message comes first. */
+  /** Raise unless every tool call pairs with a result, every payload reference finds its anchor, and, for edits of a conversation, a user message comes first. */
   check() {
     // Pi sends custom, Bash and summary messages as user messages, so judge the converted roles.
     const first = convertToLlm(this.context.messages).find(message => message.role !== 'system');
     const problems = [
       ...this.context.problems,
       ...(this.userFirst && first && first.role !== 'user' ? [`The context would start with an ${first.role} message; providers expect a user message first`] : []),
+      ...this.anchors
+        .filter(label => !this.context.items.some(item => item.text.includes(payloadAnchor(label))))
+        .map(label => `A reference points at payload ${label}, which is not in the context`),
     ];
     demand(problems.length === 0, `The changed context is invalid:\n${problems.join('\n')}`);
     return this;
