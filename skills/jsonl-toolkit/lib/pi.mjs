@@ -256,7 +256,6 @@ export class Selection {
 
   /**
    * Groups of byte-identical strings at least minLength long, each with every {entryId, path} it sits at, largest saving first.
-   * Matching is exact: a differently encoded copy, such as a JSON-stringified one, does not match.
    * Strings inside signed thinking and images are never listed. A group feeds draft.dedupe.
    */
   duplicateStrings({ minLength }) {
@@ -430,7 +429,6 @@ export class Draft {
   /**
    * Keep the first location's string as a marked payload anchor and replace each other location with a reference to it.
    * Takes a group from selection.duplicateStrings, or an array of {entryId, path}. Raises unless every string is byte-identical.
-   * Matching is exact: a differently encoded copy, such as a JSON-stringified one, does not match.
    */
   dedupe(locations) {
     const [survivor, ...repeats] = locations.locations ?? locations;
@@ -450,7 +448,6 @@ export class Draft {
    * Mark one passage of a string as a payload anchor, and replace its other occurrences in the within entries with a reference to it.
    * start and end index the string as context.item(entryId) shows it. Strings inside signed thinking and images are left alone.
    * Raises when the passage is not unique in its own string, occurs nowhere else, or sits in an entry Pi cannot edit.
-   * Matching is exact: a differently encoded copy, such as a JSON-stringified one, does not match.
    */
   dedupePassage({ entryId, path, start, end }, { within }) {
     const context = this.#session.context();

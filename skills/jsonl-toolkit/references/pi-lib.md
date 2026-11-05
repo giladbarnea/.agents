@@ -82,7 +82,7 @@ UUIDv7 session IDs start with a timestamp, so sessions created in the same minut
 1. Pi's `context_edit` can change only user, assistant, tool-result and custom-message entries. Targeting a system or Bash entry raises.
 2. `check()` raises when a tool call lacks its result, or a result lacks its call. `complete()` adds the missing side of every exchange.
 3. A draft's `check()` also raises when the context would start with a non-user message. Pi sends custom, Bash and summary messages as user messages, so those count as user. It also raises when a payload reference the draft wrote points at an anchor no longer in the context.
-4. Deduplication never changes a string inside signed thinking or an image, and raises unless the strings it links are byte-identical.
+4. Deduplication never changes a string inside signed thinking or an image, and raises unless the strings it links are byte-identical. Matching is exact: a differently encoded copy, such as a JSON-stringified one, does not match.
 5. `apply()` runs `check()` first. In place, it refuses a file that changed since `open()`, backs up to `.backup-N`, appends, then reloads and compares. With `{ to }`, it writes the original bytes plus the new entries to a new file, and never overwrites one.
 6. A running Pi keeps its context in memory and appends its next turn to the old leaf. Apply only to a stopped session, or restart Pi and resume the session before its next turn.
 
