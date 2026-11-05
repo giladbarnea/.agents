@@ -30,6 +30,10 @@ Measured on an M2 Pro, warm models, 73 docs:
 | warm daemon, typed, no rerank | ~0.15 s |
 | warm daemon, typed, rerank | 1.4–2.5 s |
 
+Write the keyword and meaning lines yourself (lex:/vec:) and run qmd's background server so the models stay loaded. That took a query from about 8s to 0.15s. Writing the lines alone gets the CLI to about 1.8s.
+
+Never pass a plain sentence to `qmd query` or `qmd vsearch`: it runs a 1.7B model that rewrites your query before searching, and that model costs most of the latency.
+
 Do not parallelize CLI calls to save time. Four parallel `qmd query` processes saved a third, not half, and the daemon serializes on one GPU model.
 
 ## Workflow
