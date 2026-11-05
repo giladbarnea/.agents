@@ -16,11 +16,11 @@ Each `qmd` CLI process loads up to three local GGUF models through node-llama-cp
 
 | Model | Job | Used by |
 |---|---|---|
-| `qmd-query-expansion-1.7B` | rewrites a bare query into `lex:`/`vec:`/`hyde:` lines | bare `qmd query "…"` **and** bare `qmd vsearch "…"` |
+| `qmd-query-expansion-1.7B` | rewrites a bare query into `lex:`/`vec:`/`hyde:` lines | bare `qmd query "…"` and every `qmd vsearch` |
 | `embeddinggemma-300M` | embeds `vec:`/`hyde:` lines | `query`, `vsearch` |
 | `Qwen3-Reranker-0.6B` | reranks candidates | `query` unless `--no-rerank` |
 
-Measured on an M2 Pro, warm models, 73 docs:
+Measured on an M2 Pro, 73 docs. CLI rows include loading the models on every call; daemon rows have them loaded:
 
 | Call | Latency |
 |---|---|
@@ -32,7 +32,7 @@ Measured on an M2 Pro, warm models, 73 docs:
 
 Write the keyword and meaning lines yourself (lex:/vec:) and, when you will run more than a couple of queries, run qmd's background server so the models stay loaded. That took a query from about 8s to 0.15s. Writing the lines alone gets the CLI to about 1.8s.
 
-Never pass a plain sentence to `qmd query` or `qmd vsearch`: it runs a 1.7B model that rewrites your query before searching, and that model costs most of the latency.
+Never pass a plain sentence to `qmd query`, and never use `qmd vsearch`: they run a 1.7B model that rewrites your query before searching, and that model costs most of the latency. `vsearch` runs it even on typed lines. For a meaning-only search, use `qmd query $'vec: …' --no-rerank`.
 
 Do not parallelize CLI calls to save time. Four parallel `qmd query` processes saved a third, not half, and the daemon serializes on one GPU model.
 
@@ -71,7 +71,7 @@ After the human is happy with the result, load the `cleanup` skill.
 
 Without the daemon, use the CLI with typed lines: `qmd query $'lex: …\nvec: …' -c <collection> -n 30 --files --no-rerank`.
 
-3. Search by meaning, not names. Write the `lex:` and `vec:` lines yourself. You know the goal and the vocabulary better than the expansion model, and skipping it is most of the speedup. Run several probes from different angles: user behavior, UI surfaces, state ownership, backend effects, docs, tests, and old plans.
+3. Search by meaning, not names. You know the goal and the vocabulary better than the expansion model. Run several probes from different angles: user behavior, UI surfaces, state ownership, backend effects, docs, tests, and old plans.
 
 - `lex:` the exact terms, aliases, symbols, and rare words you expect in the source.
 - `vec:` the idea paraphrased in source-like natural language.
