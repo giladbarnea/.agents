@@ -32,7 +32,7 @@ Measured on an M2 Pro, 73 docs. CLI rows include loading the models on every cal
 
 Write the keyword and meaning lines yourself (lex:/vec:) and, when you will run more than a couple of queries, run qmd's background server so the models stay loaded. That took a query from about 8s to 0.15s. Writing the lines alone gets the CLI to about 1.8s.
 
-Never pass a plain sentence to `qmd query`, and never use `qmd vsearch`: they run a 1.7B model that rewrites your query before searching, and that model costs most of the latency. `vsearch` runs it even on typed lines. For a meaning-only search, use `qmd query $'vec: …' --no-rerank`.
+Never pass a plain sentence to `qmd query`, and never use `qmd vsearch`: they run a 1.7B model that rewrites your query before searching, and that model costs most of the latency. `vsearch` runs it even on typed lines. For a meaning-only search, use `qmd query $'vec: …' --no-rerank`. On the 73-session benchmark, that ran in 1.8 s against 3.8 s for `vsearch`, with equal results.
 
 Do not parallelize CLI calls to save time. Four parallel `qmd query` processes saved a third, not half, and the daemon serializes on one GPU model.
 
