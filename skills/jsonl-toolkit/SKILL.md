@@ -4,7 +4,7 @@ description: Tools and workflows for inspecting large JSONL files and AI session
 last_updated: 2026-11-04
 ---
 
-> Nov 1 2026 update: `ch` is best used for skimming, searching and reading, with generic tool filters and length control, before the actual data work, to gain an understanding of the session (preparation). Try to avoid relying on it for "real work". Its export omits important information, the tool as a whole is often out of date with the data types that recent JSONLs have, and it has other issues. It does do a good job with a naive `ch ...` to read the agent and user text messages, `ch ... -t` to include all tools in the output, `ch ... -t:<SPEC>` to filter, and `ch ... --shorten=...`/`ch ... -t:s=...` to control how much you skim versus deep dive, so you avoid undesired context bombs (accidentally reading hundreds of thousands of tokens' worth of transcript in one go). Therefore, you'll need to build your own means based on the raw JSONL, `lib/pi.mjs` for Pi sessions, or both. If you're manually overcoming `lib/pi.mjs` shortcomings, surface that to your leader, because it might point to a general underlying issue with the library, which should be promoted into the library if it adheres to the library's design and intent.
+> `ch` searches and prints sessions flexibly, with filters and output size control. Read `ch --help` and `ch search --help` in full before using it. It is good for searching and reading on a shallow level, but **it can silently omit more nuanced or specialized content**: it prints or exports only some session content types, without warning, and often lags behind the data types recent JSONLs hold. Such omissions can matter to your task and give false confidence. For absolute control and precision, work programmatically on the raw JSONL, through `lib/pi.mjs` for Pi sessions. If you're manually overcoming `lib/pi.mjs` shortcomings, surface that to your leader, because it might point to a general underlying issue with the library, which should be promoted into the library if it adheres to the library's design and intent.
 
 Use this skill to inspect, search, summarize, or transform large JSONL files without loading unwieldy lines into the terminal.
 
@@ -91,8 +91,6 @@ Its functions support:
 The module runs nothing at import time. Start with `probe_schema`, `probe_type_counts`, or `probe_sample` when the provider schema is unknown.
 
 ## Work with an exported AI transcript
-
-**`ch` can silently omit content.** It can print or export only some session content types, omitting others without warning. These omissions can matter to your task and give false confidence.
 
 After you get `ch` output, spawn a forked `openai-codex/gpt-6.1-sol` subagent with `thinking=medium`. Have it check the raw JSONL and confirm that the output includes everything your task needs.
 
