@@ -154,6 +154,7 @@ plannotator guide export --guide <guide.json> --patch <diff.patch> [--out <file.
 plannotator guide export --snapshot <snapshot.json> [--out <file.html>]
 plannotator guide share --id <savedGuideId> [--public] [--ttl <7d|24h|30m|3600>] [--json]
 plannotator guide unshare <id> --token <deleteToken>
+plannotator guide import --guide <guide.json> --patch <diff.patch> [--pr <url>]
 ```
 
 Guided Reviews are AI-generated walkthroughs of a diff, produced inside the code review UI. The CLI works with saved ones:
@@ -162,6 +163,7 @@ Guided Reviews are AI-generated walkthroughs of a diff, produced inside the code
 - `export` writes one portable, self-contained HTML file (the viewer loads from guides.show). `--guide` + `--patch` exports a guide you authored yourself against a unified diff (`--patch -` reads stdin; validation is strict and names any file the guide references that the patch lacks). `--out -` writes to stdout. `--viewer-url` overrides the pinned viewer base.
 - `share` uploads the guide and prints a link. Encrypted by default: the key lives only in the URL fragment and the host stores ciphertext. `--public` stores it unencrypted so chat apps can unfurl a preview. `--ttl` sets an expiry; otherwise the link stays until `unshare`. A saved guide records its link, and a second `share --id` refuses rather than orphaning the first link's delete token.
 - `unshare <id> --token <t>` removes a link using the delete token printed at share time.
+- `import` saves a guide you authored (`--guide` + `--patch`, checked as for `export`, or `--snapshot`) so the next `plannotator review` of this repository lists it under Guides. `--pr <url>` saves it with that PR's repository and labels it with the PR. Prints the new id; it never replaces a saved guide.
 
 ## plannotator sessions
 
@@ -189,13 +191,22 @@ The Plannotator Inbox is one local window per machine where you leave the person
 - Never run `plannotator inbox` just to send: calls start a stopped Inbox in the background, and bare `plannotator inbox` opens the window for the person. `--tailscale` is the person's choice; never add it. `plannotator inbox status` only reads; never run `plannotator inbox stop` or `restart` unless the person asks.
 - When the person asks where their Inbox is, or to open it (a closed tab), run `plannotator inbox --open`: it opens the window in their browser (starting the Inbox in the background if needed), prints its address on stdout and returns at once. Tell them the address.
 
+## plannotator t3
+
+```bash
+plannotator t3 login --url <T3 MCP URL>
+plannotator t3 logout --url <T3 MCP URL>
+```
+
+If the person uses T3 Code, set it up once so their Inbox replies reach Claude threads in T3 as new turns: run `plannotator t3 --help` and follow its two steps. The person approves T3's sign-in page themselves.
+
 ## plannotator card
 
 ```bash
-plannotator card <create|move|say|link|ship|drop|list> ...
+plannotator card <create|move|say|link|ship|drop|list|initiative_delete> ...
 ```
 
-Only while the person has turned the Inbox's Board on (Settings → Capabilities); it is off by default, and then every call answers `board_off` and writes nothing, so use it only when your inbox tool lists `card` or the person asks. The Board holds one card per piece of work that outlasts a reply, in the column of where the work stands (todo, in_progress, in_review, done; backlog for what nobody asked for yet). Use the `card` action of a `plannotator_inbox` tool when you have one; this CLI is the same call from a shell. `plannotator card --help` gives the arguments, and `plannotator inbox --help` its card section while the Board is on. A card the person put in backlog is theirs to move. A title is 2–5 words naming the work ("Pi update fix"), never a sentence; where it stands goes in `say`. Move a card to in_review yourself when you hand your part over, with `you` and the Inbox thread where the person makes the call (`thread_id`), so "You: …" opens it. Ship a card when you see its PR merge (the Board may also move it to done once every PR linked with `--pr` merged).
+Only while the person has turned the Inbox's Board on (Settings → Capabilities); it is off by default, and then every call answers `board_off` and writes nothing, so use it only when your inbox tool lists `card` or the person asks. The Board holds one card per piece of work that outlasts a reply, in the column of where the work stands (todo, in_progress, in_review, done; backlog for what nobody asked for yet). Use the `card` action of a `plannotator_inbox` tool when you have one; this CLI is the same call from a shell. `plannotator card --help` gives the arguments, and `plannotator inbox --help` its card section while the Board is on. A card the person put in backlog is theirs to move. A title is 2–5 words naming the work ("Pi update fix"), never a sentence; where it stands goes in `say`. Move a card to in_review yourself when you hand your part over, with `you` and the Inbox thread where the person makes the call (`thread_id`), so "You: …" opens it. Ship a card when you see its PR merge (the Board may also move it to done once every PR linked with `--pr` merged). `--initiative <name>` (the card action's `initiative`) puts a card in an initiative. Not all cards need an initiative: put a card in one only when it is part of an extensive effort that spans several cards or PRs, and reuse an initiative that fits (list shows them) instead of making a near-duplicate. Use good judgement; don't overthink it.
 
 ## Other subcommands
 
