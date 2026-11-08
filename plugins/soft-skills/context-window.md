@@ -16,8 +16,8 @@ Check how much context window you have left opportunistically.
 
 Naive compression trades deep understanding, tacit knowledge gained through direct experience, and nuance for more space in a finite context window. That extra space is the main reason to compress. Compression also sharpens focus when the context becomes bloated. These gains come at a cost: preserving more knowledge leaves less room and less opportunity to sharpen focus. The steps below aim to reduce that cost without giving up as much of the benefit.
 
-1. **Soft step, at 400–500k tokens.** At a natural break, tree-shake unambiguously irrelevant, noisy or duplicate context, down to about 200–250k. This is flexible: finish a coherent piece of deep work first when interrupting it would be costly.
-2. **Firm step, at 600–700k tokens.** Compress now, down to about 200–250k. Sharpness drops at this size, and every cache miss on a window this large is expensive.
+1. **Soft step, at 400–500k tokens.** At a natural break, tree-shake unambiguously irrelevant, noisy or duplicate context, down to about 100–250k. This is flexible: finish a coherent piece of deep work first when interrupting it would be costly.
+2. **Firm step, at 600–700k tokens.** Compress now, down to about 100–250k. Sharpness drops at this size, and every cache miss on a window this large is expensive.
 3. **Both steps are rules of thumb.** Do not discard important context merely to reach a number.
 4. **Long, complex efforts may span distinct "chapters".** A chapter is a large unit of work, not just any progress. The test: if your answer to "what are you working on now?" has changed materially, you are in a different chapter.
 5. **Compress noisy, old chapters that do not directly concern the current effort. Keep directly relevant parts untouched.** Unless instructed otherwise, use compression to tree-shake, not rewrite.
