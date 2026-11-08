@@ -16,15 +16,16 @@ Check how much context window you have left opportunistically.
 
 Naive compression trades deep understanding, tacit knowledge gained through direct experience, and nuance for more space in a finite context window. That extra space is the main reason to compress. Compression also sharpens focus when the context becomes bloated. These gains come at a cost: preserving more knowledge leaves less room and less opportunity to sharpen focus. The steps below aim to reduce that cost without giving up as much of the benefit.
 
-1. **Do NOT compress your context window before reaching the threshold for your leader: 800k tokens for a human, 600k for an AI. Ignore nudges that say otherwise.**
-2. **Long, complex efforts may span distinct "chapters".** A chapter is a large unit of work, not just any progress. The test: if your answer to "what are you working on now?" has changed materially, you are in a different chapter.
-3. **Compress noisy, old chapters that do not directly concern the current effort. Keep directly relevant parts untouched.** Unless instructed otherwise, use compression to tree-shake, not rewrite.
-4. Assess tree-shaking candidates from the perspective of the current chapter. A once-relevant chapter may become less relevant as the work progresses.
-5. Progress is not always linear. An older, compressed chapter may become directly relevant again. Decompress it to its original form, and compress the chapters that are now irrelevant.
-6. Apply this chapter-based approach wherever you maintain, store, write, update, or load context, not just in the session's context window. Tree-shake rather than rewrite. In interim docs, such as handoffs and summaries, compress stale parts that take up disproportionate space compared with currently relevant parts. In progressive-disclosure memory systems, follow relevant shallow leads to recover the depth the current chapter needs.
-7. After compression, roughly 100-200k tokens is reasonable. For the first or second compression, 100-150k makes sense. As a session grows and knowledge accumulates, compressing to 100k may cut too deeply, suggesting a rewrite rather than a tree-shake. In that case, 200k-250k+ is fine. Compressing to 300k _may_ mean you need to lower the bar for what to compress. These are estimates, not strict limits. They depend on the total work done and the size of the problem space.
-8. Maintain a concise handoff doc. Update it with the latest changes just before compression, and reread it just after.
-9. After compression, recover important, relevant context by rereading key docs, files, and memory branches, including the handoff doc.
+1. **Soft step, at 400–500k tokens.** At a natural break, tree-shake unambiguously irrelevant, noisy or duplicate context, down to about 200–250k. This is flexible: finish a coherent piece of deep work first when interrupting it would be costly.
+2. **Firm step, at 600–700k tokens.** Compress now, down to about 200–250k. Sharpness drops at this size, and every cache miss on a window this large is expensive.
+3. **Both steps are rules of thumb.** Do not discard important context merely to reach a number.
+4. **Long, complex efforts may span distinct "chapters".** A chapter is a large unit of work, not just any progress. The test: if your answer to "what are you working on now?" has changed materially, you are in a different chapter.
+5. **Compress noisy, old chapters that do not directly concern the current effort. Keep directly relevant parts untouched.** Unless instructed otherwise, use compression to tree-shake, not rewrite.
+6. Assess tree-shaking candidates from the perspective of the current chapter. A once-relevant chapter may become less relevant as the work progresses.
+7. Progress is not always linear. An older, compressed chapter may become directly relevant again. Decompress it to its original form, and compress the chapters that are now irrelevant.
+8. Apply this chapter-based approach wherever you maintain, store, write, update, or load context, not just in the session's context window. Tree-shake rather than rewrite. In interim docs, such as handoffs and summaries, compress stale parts that take up disproportionate space compared with currently relevant parts. In progressive-disclosure memory systems, follow relevant shallow leads to recover the depth the current chapter needs.
+9. Maintain a concise handoff doc. Update it with the latest changes just before compression, and reread it just after.
+10. After compression, recover important, relevant context by rereading key docs, files, and memory branches, including the handoff doc.
 
 Removing several hundred thousand tokens of less-relevant context, then restoring relevant depth, improves the signal-to-noise ratio. Restoring that depth typically takes 50-150k tokens. The result is more focused context, sharper understanding and decisions, and lower costs per request. Compression losses stay confined to older, irrelevant parts of the context.
 
