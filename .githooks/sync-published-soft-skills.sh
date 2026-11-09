@@ -36,18 +36,18 @@ main() {
 
   cd "$published_repository"
 
-  # Mirror the personal plugin verbatim, excluding hidden files (private
-  # notes stay private). Skill and root file names are a hardcoded whitelist.
-  local skill_name
-  for skill_name in ai-to-leader ai-to-delegated handoff peer-review theory-of-mind; do
-    rsync -a --delete --exclude='.*' "$personal_plugin_directory/skills/$skill_name/" "$published_plugin_directory/skills/$skill_name/"
+  # Mirror the committed personal plugin, except the unpublished files.
+  # The publication-owned files exist only in the public copy.
+  local unpublished_files=(README.md skills/peer-review/.uncle-bob-cleaner-prompt.ignore.md)
+  local publication_owned_files=(LICENSE .claude-plugin/ .codex-plugin/)
+  local file exclusions=()
+  for file in "${unpublished_files[@]}" "${publication_owned_files[@]}"; do
+    exclusions+=(--exclude="/$file")
   done
-  rm -f "$published_plugin_directory/references/roles.md"
-  rmdir "$published_plugin_directory/references" 2>/dev/null || true
-  rsync -a "$personal_plugin_directory/roles.md" "$personal_plugin_directory/token-economic-communication.md" "$personal_plugin_directory/context-window.md" "$published_plugin_directory/"
+  rsync -a --delete "${exclusions[@]}" "$personal_plugin_directory/" "$published_plugin_directory/"
   rsync -a "$personal_plugin_directory/README.md" "$published_repository/README.md"
 
-  local file files_to_anonymize=()
+  local files_to_anonymize=()
   for file in "${anonymizable_files[@]}"; do
     if git -C "$repository_root" diff --quiet "$published_source_commit" "$source_commit" -- "$file"; then
       git restore --source=HEAD --worktree -- "$file"
