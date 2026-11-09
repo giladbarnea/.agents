@@ -136,6 +136,7 @@ git -C "$hub" show HEAD:plugins/soft-skills/skills/ai-to-delegated/briefing/fork
 ! rg -q 'Unstaged change' "$published/plugins/soft-skills/skills/ai-to-delegated/briefing/forked-context.md"
 git -C "$hub" show HEAD:plugins/soft-skills/README.md | cmp - "$published/README.md"
 cmp "$hub/plugins/soft-skills/token-economic-communication.md" "$published/plugins/soft-skills/token-economic-communication.md"
+cmp "$hub/plugins/soft-skills/context-window.md" "$published/plugins/soft-skills/context-window.md"
 changed_paths="$(git -C "$published" show --format= --name-only HEAD)"
 ! rg -q '^\.venv/' <<<"$changed_paths"
 [[ -z "$(git -C "$published" status --porcelain --untracked-files=all)" ]]

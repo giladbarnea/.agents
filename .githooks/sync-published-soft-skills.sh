@@ -44,7 +44,7 @@ main() {
   done
   rm -f "$published_plugin_directory/references/roles.md"
   rmdir "$published_plugin_directory/references" 2>/dev/null || true
-  rsync -a "$personal_plugin_directory/roles.md" "$personal_plugin_directory/token-economic-communication.md" "$published_plugin_directory/"
+  rsync -a "$personal_plugin_directory/roles.md" "$personal_plugin_directory/token-economic-communication.md" "$personal_plugin_directory/context-window.md" "$published_plugin_directory/"
   rsync -a "$personal_plugin_directory/README.md" "$published_repository/README.md"
 
   local file files_to_anonymize=()
