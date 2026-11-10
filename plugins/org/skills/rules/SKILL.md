@@ -77,46 +77,9 @@ Only the Lead owns quota. Quota comes to the Lead as a push, and the Lead never 
 1. The Lead and Owners write memo. Workers only read memo.
 2. An Owner writes what reaches the upper edge of its scope. The Lead writes only what is clearly its own.
 
-## herdr-tree: the org's record
+## herdr-tree
 
-herdr-tree records who leads each project, who owns what, and where each session runs. Read the org from it. Do not keep your own roster.
-
-### Terms
-
-1. Lead is herdr-tree's `leader` role (★). Owner is its `owner` role (▲). Workers have no role. As teammates without panes, herdr-tree mostly does not see them.
-2. A session's project is its manual assignment, else its git repository, else its directory. Each project has one Herdr workspace.
-3. A session's identity is its harness plus its full session ID. A pane address (`w69:p2`) changes when panes move. Look it up just before you use it.
-
-### Rules herdr-tree enforces
-
-1. Only Gilad makes a Lead.
-2. A project has at most one Lead. A new Lead replaces the old one only after a confirmation that shows the old one.
-3. A Lead stays Lead until Gilad replaces it, also while its pane is closed. (Being built as of Nov 10 2026.)
-4. Owners belong to their project's Lead. The project is the only link.
-5. While a project has a Lead, its Owners' needs-me does not reach Gilad. The Lead relays. Herdr still marks an Owner's pane blocked when the Owner shows a question screen. An Owner that asks Gilad directly breaks protocol.
-6. When a Lead forks into a session that takes over its work, for example for compaction, the fork asks Gilad whether it should lead. A Lead that forks tells Gilad, so he can confirm.
-
-### Reading the org
-
-1. `herdr-tree org leader list` and `herdr-tree org owner list` list Leads and Owners with their pane addresses. (Coming in Nov 2026.) Until then: `herdr-tree session list | jq '.[] | select(.role=="leader")'`.
-2. `herdr-tree session list` prints every open session: pane, harness, session ID, role, project, status, tags and annotation. Closed sessions are not listed.
-3. `herdr-tree annotation get --pane <pane>` prints Gilad's note on a session.
-4. `herdr-tree where "<what happened>"` finds a session by its content. It costs money; ask first.
-
-### Writing the org
-
-1. A Lead marks each Owner it starts, right after starting it: `herdr-tree mark owner --pane <pane>`.
-2. `herdr-tree project set <name or directory> --pane <pane>` assigns a project.
-3. `herdr-tree annotation set "<text>" --pane <pane>` leaves a note on a session.
-4. `herdr-tree mark open_concern --note "<what is pending>"` marks something pending.
-
-### Talking between sessions
-
-herdr-tree does not carry messages. Look up the address, then run `herdr agent prompt <pane> "<message>"`. A blocked target rejects it with `agent_blocked`. Retry later.
-
-### Names
-
-herdr-tree's naming rules, [~/dev/herdr-plugins/herdr-tree/docs/naming.md](https://github.com/giladbarnea/herdr-tree/blob/main/docs/naming.md), own session, pane, tab and workspace names. A Lead's session, pane and tab read `Lead`.
+[HERDR-ORG.md](HERDR-ORG.md) says how the org maps onto Herdr and herdr-tree. Read it before you look up or change who leads or owns what, or message another session.
 
 ## Communication with Gilad
 
