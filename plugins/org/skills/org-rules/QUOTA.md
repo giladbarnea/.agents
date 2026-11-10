@@ -1,5 +1,5 @@
 ---
-updated: "2026-11-10 17:00 IDT"
+updated: "2026-11-10 16:45 IST"
 description: The quota situation, its tradeoffs, and how a Lead reads it with `aiuse`
 author: usage Lead
 ---
@@ -41,11 +41,13 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
    aiuse -f json | jq '.providers[] | select(.windows.weekly) | {name, weekly: (.windows.weekly | {used_percent, elapsed_percent, burn_rate, target_rate, reset_at}), banked: .reset_value.banked_count}'
    ```
 
-3. To check Codex pacing against a fixed plan, use the pace Gilad assigned (`1x` if he gave none):
+3. To check pacing against a fixed plan, name the limit (`codex`, `claude` or `fable`; Codex if omitted) and the pace Gilad assigned (`1x` if he gave none):
 
    ```sh
-   aiuse boost 1x -f json | jq '{status, error, observation, pacing: .plans[0].pacing}'
+   aiuse boost claude 1x -f json | jq '{status, error, observation, pacing: .plans[0].pacing}'
    ```
+
+   Fable also counts against the Claude weekly limit, so an agent that runs on Fable checks both `fable` and `claude`.
 
    1. `pacing.rate_to_stay_on_plan` is the rate the remaining quota supports until the next checkpoint. Compare your spend with it.
    2. `observation.observed_rate` is the recent account-wide rate, over up to two hours. Read `window_seconds` first. A null value means the measurement is unknown, not zero.
@@ -57,8 +59,8 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
 ## Known gaps (Nov 10 2026)
 
 1. **There is no push.** A Lead must read the numbers at its own decision points. A subscription does not exist yet.
-2. **Pacing is Codex-only.** Fixed plans, `aiuse boost` and observed rate cover Codex only. `aiuse` records Claude history, but no output shows a Claude observed rate yet.
-3. **Fable limit resets are not counted.** The account holds a Fable limit reset, but `BANKED` shows 0 for Claude, because it counts only resets that clear the whole weekly limit. Claude pacing that budgets Fable resets is in progress.
+2. **Claude reset behavior is unverified.** `aiuse boost fable` budgets the Fable limit reset, assuming it keeps the weekly deadline. No real redemption has tested this yet. `BANKED` in the `aiuse` grid still shows 0 for Claude, because it counts only resets that clear the whole weekly limit.
+3. **One observation window.** The observed rate covers only the last 2 hours, so one burst distorts it. Rates over 2, 6, 12 and 24 hours are planned.
 4. **Short observations are noisy.** The providers round used% to whole numbers.
 5. **There is no attribution.** `aiuse` cannot tell which project or agent spent the quota.
 6. **Higher fixed plans can choose tiny boosts.** The 1.5× and 2× plans can pick a boost that lasts minutes, next to one that lasts days. A fix is in progress.
@@ -66,5 +68,5 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
 ## Planned (by intent)
 
 1. **A subscribable quota service.** It will push to subscribed agents only the quota events that need a decision. Then Leads stop reading on demand.
-2. **Claude pacing.** Fixed plans, boost and observed rate for the Claude weekly limit and Fable.
+2. **`aiuse pick`.** It ranks the pools by how much room each has now, as a quick hint for agents.
 3. **One set of terms.** The text, JSON and menu bar outputs will show the same data under the same names.
