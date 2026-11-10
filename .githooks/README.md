@@ -192,6 +192,10 @@ The publisher then bumps both plugin manifests and `package.json` by one patch v
 
 Edit the public README in `plugins/soft-skills/README.md`; a release overwrites the public copy. The publisher records its source commit under `.git/soft-skills-publication-pending`; `pre-commit` blocks another plugin commit until that release succeeds. Run `.githooks/publish-soft-skills.sh --retry` after fixing the cause, then push again. If validation rejects the source, run `--cancel-pending` before committing a correction; cancellation works only while the current public commit has a successful release. A partial push resumes the same version, and retry reruns a completed GitHub workflow when the release is missing. The unpublished-file list is hardcoded in `sync-published-soft-skills.sh`.
 
+## `org` publishes itself
+
+`plugins/org` is its own Git repository, ignored by the hub through `.git/info/exclude`. It has no published copy, version, hook, or workflow: a push to its `main` publishes it. `render_skills` still materializes its skills into local Pi like any other plugin skill.
+
 ## Local Pi skills are symlinks to personal content
 
 `theory-of-mind` is a standalone skill. Dependent skills load it by name, not through reference copies.
