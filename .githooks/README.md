@@ -194,7 +194,7 @@ Edit the public README in `plugins/soft-skills/README.md`; a release overwrites 
 
 ## `org` publishes itself
 
-`plugins/org` is its own Git repository, ignored by the hub through `.git/info/exclude`. It has no published copy, version, hook, or workflow: a push to its `main` publishes it. `render_skills` still materializes its skills into local Pi like any other plugin skill.
+The hub tracks `plugins/org`. When a push changes it, `pre-push` pushes `git subtree split --prefix=plugins/org` to `main` of `giladbarnea/org`, which is the whole publication: no copy, transformation, version, or workflow. The public history holds only `plugins/org` files, but it keeps each hub commit message verbatim. `render_skills` materializes its skills into local Pi like any other plugin skill.
 
 ## Local Pi skills are symlinks to personal content
 

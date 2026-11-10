@@ -6,3 +6,8 @@ if ! "$hooks_directory/publish-soft-skills.sh" --push </dev/null; then
   printf 'Publication pending, so the push stopped. Retry with %s/publish-soft-skills.sh --retry, then push again.\n' "$hooks_directory" >&2
   exit 1
 fi
+
+# --no-verify: this push runs from this repository and would re-enter this hook.
+if ! git diff --quiet '@{upstream}' HEAD -- plugins/org; then
+  git push --quiet --no-verify git@github.com:giladbarnea/org.git "$(git subtree split -q --prefix=plugins/org):refs/heads/main"
+fi
