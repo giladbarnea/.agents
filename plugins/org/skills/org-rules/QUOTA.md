@@ -44,13 +44,13 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
 3. To check pacing against a fixed plan, name the limit (`codex`, `claude` or `fable`; Codex if omitted) and the pace Gilad assigned (`1x` if he gave none):
 
    ```sh
-   aiuse boost claude 1x -f json | jq '{status, error, observation, pacing: .plans[0].pacing}'
+   aiuse boost claude 1x -f json | jq '{status, error, observations, pacing: .plans[0].pacing}'
    ```
 
    Fable also counts against the Claude weekly limit, so an agent that runs on Fable checks both `fable` and `claude`.
 
    1. `pacing.rate_to_stay_on_plan` is the rate the remaining quota supports until the next checkpoint. Compare your spend with it.
-   2. `observation.observed_rate` is the recent account-wide rate, over up to two hours. Read `window_seconds` first. A null value means the measurement is unknown, not zero.
+   2. `observations` lists the account-wide rate over the last 2, 6, 12 and 24 hours. None is preferred: pick the window that fits your question. Read `window_seconds` and `covers_full_window` first. A null rate means unknown, not zero.
    3. `pacing.checkpoints` lists the times to check again, in order. At a redemption checkpoint, ask Gilad to redeem.
    4. Reading a plan does not restart it. `aiuse boost --help` explains the full contract.
 
@@ -61,9 +61,8 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
 
 1. **There is no push.** A Lead must read the numbers at its own decision points. A subscription does not exist yet.
 2. **Claude reset behavior is unverified.** `aiuse boost fable` budgets the Fable limit reset, assuming it keeps the weekly deadline. No real redemption has tested this yet. `BANKED` in the `aiuse` grid still shows 0 for Claude, because it counts only resets that clear the whole weekly limit.
-3. **One observation window.** The observed rate covers only the last 2 hours, so one burst distorts it. Rates over 2, 6, 12 and 24 hours are planned.
-4. **Short observations are noisy.** The providers round used% to whole numbers.
-5. **There is no attribution.** `aiuse` cannot tell which project or agent spent the quota.
+3. **Short observations are noisy.** The providers round used% to whole numbers.
+4. **There is no attribution.** `aiuse` cannot tell which project or agent spent the quota.
 
 ## Planned (by intent)
 
