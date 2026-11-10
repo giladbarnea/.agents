@@ -64,7 +64,6 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
 3. **One observation window.** The observed rate covers only the last 2 hours, so one burst distorts it. Rates over 2, 6, 12 and 24 hours are planned.
 4. **Short observations are noisy.** The providers round used% to whole numbers.
 5. **There is no attribution.** `aiuse` cannot tell which project or agent spent the quota.
-6. **Higher fixed plans can choose tiny boosts.** The 1.5× and 2× plans can pick a boost that lasts minutes, next to one that lasts days. A fix is in progress.
 
 ## Planned (by intent)
 
