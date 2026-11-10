@@ -2,6 +2,8 @@
 
 Organization rulebook. Skills live under `skills/<name>/SKILL.md`, and a push to `main` publishes them.
 
+Name every skill `org-<topic>`, in both its directory and its frontmatter `name`. Pi lists skills by bare name, without the plugin, so the prefix is the only thing tying a skill to this plugin.
+
 ## Install
 
 **Claude Code**

@@ -1,3 +1,8 @@
+---
+name: org-rules
+description: "How the agents of the usage project are organized: roles (Lead, Owner, Worker), what to surface to whom, autonomy, quota, memo, and how the org maps onto Herdr. Load at the start of every session in the usage project, and before delegating, escalating, or messaging another session."
+---
+
 # Organization
 
 How the agents of the usage project are organized, and how they work with each other and with Gilad.
