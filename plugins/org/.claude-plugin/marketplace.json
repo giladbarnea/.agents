@@ -1,0 +1,16 @@
+{
+  "name": "org-rulebook",
+  "owner": {
+    "name": "Gilad Barnea",
+    "url": "https://github.com/giladbarnea"
+  },
+  "description": "Organization rulebook",
+  "plugins": [
+    {
+      "name": "org",
+      "source": "./",
+      "description": "Organization rulebook",
+      "license": "MIT"
+    }
+  ]
+}
