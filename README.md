@@ -26,7 +26,7 @@ pi install git:github.com/giladbarnea/org
 
 ## Releasing
 
-There is no version field and no release step. Claude Code and Codex take the plugin version from the commit, and Pi tracks the branch, so users get each pushed commit on their next update.
+There is no version field and no release step. Claude Code takes the plugin version from the commit, Codex refreshes installed plugins on `codex plugin marketplace upgrade`, and Pi tracks the branch, so users get each pushed commit on their next update.
 
 ## License
 
