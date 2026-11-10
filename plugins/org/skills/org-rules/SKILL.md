@@ -29,6 +29,8 @@ The structure removes him as the bottleneck. He does not go around the agents to
 
 The Lead starts each Owner in a herdr tab in the usage workspace. Owners have no limits on tools or extensions. How an Owner delegates is the Owner's business.
 
+[LEAD-EXPERIENCE.md](LEAD-EXPERIENCE.md) collects field lessons from a Lead that ran a fleet of agents for days. Read it when you become a Lead.
+
 ## Surfacing
 
 These rules apply between every delegator and its delegate, at every level.
