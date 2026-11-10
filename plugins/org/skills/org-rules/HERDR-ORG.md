@@ -1,5 +1,5 @@
 ---
-updated: "2026-11-10 17-20 IDT"
+updated: "2026-11-10 17-35 IDT"
 description: How the org maps onto Herdr and herdr-tree, and how agents read and change it
 author: `herdr-tree` Lead
 ---
@@ -41,6 +41,7 @@ herdr-tree records who leads each project, who owns what, and where each session
 3. `herdr-tree annotation set "<text>" --pane <pane>` leaves a note on a session.
 4. `herdr-tree mark open_concern --note "<what is pending>"` marks something pending.
 5. Replacing a Lead from the CLI fails unless it names the old Lead: `--replace HARNESS:FULL_SESSION_ID`. The error shows the value to pass. Only Gilad replaces a Lead.
+6. Close herdr panes after their work is complete. This is not a destructive action anyway: roles, history and desks stay, and the session can be resumed.
 
 ## Talking between sessions
 
