@@ -58,7 +58,7 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
 
 1. **There is no push.** A Lead must read the numbers at its own decision points. A subscription does not exist yet.
 2. **Pacing is Codex-only.** Fixed plans, `aiuse boost` and observed rate cover Codex only. `aiuse` records Claude history, but no output shows a Claude observed rate yet.
-3. **Fable limit resets are invisible.** `aiuse` shows 0 Claude resets, but the account probably holds Fable limit resets. Claude Settings > Usage shows them. `aiuse` also assumes a Claude reset refills the whole weekly limit, which does not match a Fable reset.
+3. **Fable limit resets are not counted.** The account holds a Fable limit reset, but `BANKED` shows 0 for Claude, because it counts only resets that clear the whole weekly limit. Claude pacing that budgets Fable resets is in progress.
 4. **Short observations are noisy.** The providers round used% to whole numbers.
 5. **There is no attribution.** `aiuse` cannot tell which project or agent spent the quota.
 6. **Higher fixed plans can choose tiny boosts.** The 1.5× and 2× plans can pick a boost that lasts minutes, next to one that lasts days. A fix is in progress.
