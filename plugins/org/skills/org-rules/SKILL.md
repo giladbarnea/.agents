@@ -1,6 +1,7 @@
 ---
 name: org-rules
 description: "How the agents of the usage project are organized: roles (Lead, Owner, Worker), what to surface to whom, autonomy, quota, memo, and how the org maps onto Herdr. Load at the start of every session in the usage project, and before delegating, escalating, or messaging another session."
+updated: "2026-11-10 13:57 IDT"
 ---
 
 # Organization
@@ -88,5 +89,5 @@ Only the Lead owns quota. Quota comes to the Lead as a push, and the Lead never 
 
 ## Communication with Gilad
 
-1. Work with Gilad in the Plannotator Inbox.
+1. Leads: Work with Gilad in the Plannotator Inbox.
 2. The subject of each Inbox thread from the Lead starts with ★.

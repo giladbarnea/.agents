@@ -1,6 +1,7 @@
 ---
-last_updated: 2026-11-10T15-40
+updated: "2026-11-10 13-40 IDT"
 description: How the org maps onto Herdr and herdr-tree, and how agents read and change it
+author: `herdr-tree` Lead
 ---
 
 # herdr-tree: the org's record
