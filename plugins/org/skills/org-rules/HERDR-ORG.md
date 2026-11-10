@@ -1,5 +1,5 @@
 ---
-updated: "2026-11-10 15-10 IDT"
+updated: "2026-11-10 17-20 IDT"
 description: How the org maps onto Herdr and herdr-tree, and how agents read and change it
 author: `herdr-tree` Lead
 ---
@@ -27,14 +27,16 @@ herdr-tree records who leads each project, who owns what, and where each session
 
 ## Reading the org
 
-1. `herdr-tree org leader list` and `herdr-tree org owner list` print JSON: project, harness, full session ID, label, pane address, workspace and status. Closed Leads are listed, with no pane address. Only open Owners are listed.
-2. `herdr-tree session list` prints every open session: pane, harness, session ID, role, project, status, tags and annotation. Closed sessions are not listed.
-3. `herdr-tree annotation get --pane <pane>` prints Gilad's note on a session.
-4. `herdr-tree where "<what happened>"` finds a session by its content. It costs money; ask first.
+1. `herdr-tree org leader list` and `herdr-tree org owner list` print JSON: project, harness, full session ID, label, pane address, workspace and status. Closed Leads and Owners are listed too, with no pane address. Each row also has `declared_at` and `declared_by`: `gilad`, or the declaring agent's harness and session ID (null before Nov 10 2026).
+2. `herdr-tree session list` prints every open session: pane, harness, session ID, role, suggested role, pending succession, project, status, tags and annotation. Closed sessions are not listed.
+3. `herdr-tree history [--pane <pane> | --session <id>]` prints role and project changes: what changed, when, and by whom.
+4. `herdr-tree project list` prints the known projects.
+5. `herdr-tree annotation get --pane <pane>` prints Gilad's note on a session.
+6. `herdr-tree where "<what happened>"` finds a session by its content; `--passages` adds the matching passage. It costs money; ask first.
 
 ## Writing the org
 
-1. A Lead marks each Owner it starts, right after starting it: `herdr-tree mark owner --pane <pane>`.
+1. A Lead marks each Owner it starts, right after starting it: `herdr-tree mark owner --pane <pane>`. Run it from the Lead's own pane: that records the Lead as `declared_by`, which is the stored link from Owner to Lead.
 2. `herdr-tree project set <name or directory> --pane <pane>` assigns a project.
 3. `herdr-tree annotation set "<text>" --pane <pane>` leaves a note on a session.
 4. `herdr-tree mark open_concern --note "<what is pending>"` marks something pending.
