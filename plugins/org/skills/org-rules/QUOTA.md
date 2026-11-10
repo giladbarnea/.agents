@@ -54,7 +54,8 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
    3. `pacing.checkpoints` lists the times to check again, in order. At a redemption checkpoint, ask Gilad to redeem.
    4. Reading a plan does not restart it. `aiuse boost --help` explains the full contract.
 
-4. To ask about `aiuse` or quota, message the usage Lead.
+4. To pick a pool quickly, run `aiuse pick` (or `-f json`). It ranks Claude, Fable and Codex by the rate each can still support, best first, and marks which are usable. It is a lazy hint. Check the pool's own plan before heavy work.
+5. To ask about `aiuse` or quota, message the usage Lead.
 
 ## Known gaps (Nov 10 2026)
 
@@ -68,5 +69,4 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
 ## Planned (by intent)
 
 1. **A subscribable quota service.** It will push to subscribed agents only the quota events that need a decision. Then Leads stop reading on demand.
-2. **`aiuse pick`.** It ranks the pools by how much room each has now, as a quick hint for agents.
-3. **One set of terms.** The text, JSON and menu bar outputs will show the same data under the same names.
+2. **One set of terms.** The text, JSON and menu bar outputs will show the same data under the same names.
