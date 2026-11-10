@@ -1,0 +1,15 @@
+{
+  "name": "org",
+  "owner": {
+    "name": "Gilad Barnea",
+    "url": "https://github.com/giladbarnea"
+  },
+  "description": "Gilad's org skills.",
+  "plugins": [
+    {
+      "name": "org",
+      "source": "./",
+      "description": "Gilad's org skills."
+    }
+  ]
+}
