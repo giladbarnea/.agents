@@ -35,6 +35,7 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
    2. `BURN` is used divided by elapsed. Above 1×, you spend faster than the week allows.
    3. `TARGET RATE` is the rate that uses exactly the remaining quota by `RESET IN`. Spend below it and quota is lost. Spend above it and quota runs out early.
    4. `BANKED` is the number of unexpired banked resets. `RESET NOW` is what one redemption now gains, in days of allowance.
+   5. `STAY ON PLAN` is the rate the fixed 1× plan supports until its next checkpoint. `OBSERVED 2H` is the account-wide rate over the last 2 hours. When observed is above stay-on-plan, slow down or move work to another pool.
 2. To get the same data as JSON:
 
    ```sh
