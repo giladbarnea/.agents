@@ -1,6 +1,6 @@
 ---
 description: Hub ownership model and current instruction and skill materialization behavior
-last_updated: 2026-10-21T15-53
+last_updated: 2026-11-10T13-30
 ---
 # Hub materialization
 
@@ -119,9 +119,9 @@ No interactive terminal
 
 ## Hooks render instructions and materialize skills
 
-`pre-commit` first blocks staged plugin changes if the public repository has local edits, unpublished commits, or a pending release. It then renders instruction files, generates runtime skills, links shared skills, materializes local Pi plugin skills, and inspects broken links. It never writes to the public repository.
+`pre-commit` first blocks staged `soft-skills` changes if the public repository has local edits, unpublished commits, or a pending release. It then renders instruction files, generates runtime skills, links shared skills, materializes local Pi plugin skills, and inspects broken links. It never writes to the public repository.
 
-`pre-commit` also stages the local `AGENTS.md` and generated runtime `SKILL.md` files. `pre-push` publishes plugin changes before the push sends them. `post-merge` renders local instructions and skills. The submodule update in `post-merge` is commented out.
+`pre-commit` also stages the local `AGENTS.md` and generated runtime `SKILL.md` files. `pre-push` publishes `soft-skills` and `org` changes before the push sends them. `post-merge` renders local instructions and skills. The submodule update in `post-merge` is commented out.
 
 Rendering does not require existing consumer links.
 When a consumer-relative import is absent, the loader falls back to the canonical hub source.
@@ -192,7 +192,7 @@ The publisher then bumps both plugin manifests and `package.json` by one patch v
 
 Edit the public README in `plugins/soft-skills/README.md`; a release overwrites the public copy. The publisher records its source commit under `.git/soft-skills-publication-pending`; `pre-commit` blocks another plugin commit until that release succeeds. Run `.githooks/publish-soft-skills.sh --retry` after fixing the cause, then push again. If validation rejects the source, run `--cancel-pending` before committing a correction; cancellation works only while the current public commit has a successful release. A partial push resumes the same version, and retry reruns a completed GitHub workflow when the release is missing. The unpublished-file list is hardcoded in `sync-published-soft-skills.sh`.
 
-## `org` publishes itself
+## `org` publishes through a subtree split
 
 The hub tracks `plugins/org`. When a push changes it, `pre-push` pushes `git subtree split --prefix=plugins/org` to `main` of `giladbarnea/org`, which is the whole publication: no copy, transformation, version, or workflow. The public history holds only `plugins/org` files, but it keeps each hub commit message verbatim. `render_skills` materializes its skills into local Pi like any other plugin skill.
 
@@ -240,7 +240,7 @@ A non-interactive run reports each link and leaves it unchanged.
 An instruction-rendering, runtime-generation, structure-validation, or symlink-creation failure stops the hook before broken-link cleanup.
 A concrete destination refusal does not stop the hook.
 Cleanup's result does not control the final hook exit status.
-A dirty or pending public repository blocks a staged plugin change before rendering. A publication failure stops the push and reports a pending release.
+A dirty or pending public repository blocks a staged `soft-skills` change before rendering. A `soft-skills` publication failure stops the push and reports a pending release. A failed `org` push stops the hub push without pending state; push again.
 
 ---
 
