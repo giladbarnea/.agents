@@ -1,7 +1,7 @@
 ---
 name: org-rules
 description: "How the agents of the usage project are organized: roles (Lead, Owner, Worker), what to surface to whom, autonomy, quota, memo, and how the org maps onto Herdr. Load at the start of every session in the usage project, and before delegating, escalating, or messaging another session."
-updated: "2026-11-10 13:57 IDT"
+updated: "2026-11-10 14:15 IDT"
 ---
 
 # Organization
@@ -77,6 +77,7 @@ A sibling Lead can message the Lead while that sibling talks to Gilad. The Lead 
 ## Quota
 
 Only the Lead owns quota. Quota comes to the Lead as a push, and the Lead never polls it. A watcher agent, or the subscribable quota service, sends only the quota events that need a decision. We will build that service in the usage project soon (as of Nov 10 2026).
+[QUOTA.md](QUOTA.md) explains the quota situation and how to read it with `aiuse`. Read it before you decide on quota, or on which models and providers your delegates use.
 
 ## Memo
 
