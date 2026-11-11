@@ -1,5 +1,5 @@
 ---
-updated: "2026-11-10 16:45 IST"
+updated: "2026-11-11 14:25 IST"
 description: The quota situation, its tradeoffs, and how a Lead reads it with `aiuse`
 author: usage Lead
 ---
@@ -22,7 +22,7 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
 
 1. Quota that is left at the weekly reset is lost. Quota that runs out early stops every agent on that provider until the reset. The goal is to arrive at the reset with little quota left.
 2. Two pools give room to move. When one provider is ahead of its pace, move work to the other. The `ai-to-delegated` skill's budget-balancing guidance covers this.
-3. Fable's limit is the tightest. Use Fable for bounded tasks that need the most intelligence, and do not use it for long missions.
+3. Fable spends both its own allowance and the shared Claude allowance. Either can stop it. If other models have spent more than 50% of shared Claude, shared Claude runs out before Fable reaches 100%, without a reset.
 4. Claude also grants **banked resets**. A full reset clears the weekly limit and Fable together. A Fable limit reset gives back only the Fable part of the weekly usage. `BANKED` counts each limit's resets. Only Gilad redeems them.
 5. Codex sometimes grants **banked resets**. A redeemed reset refills the week. The new 7-day window starts at the first model request after the redemption, not at the click. A reset is worth more when it is redeemed close to 100% used: its value is used% minus elapsed% at redemption. `aiuse` never redeems. Only Gilad redeems, so a redemption is a "needs the delegator first" item.
 
@@ -58,12 +58,12 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
 4. To pick a pool quickly, run `aiuse pick` (or `-f json`). It ranks Claude, Fable and Codex by the rate each can still support, best first, and marks which are usable. It is a lazy hint. Check the pool's own plan before heavy work.
 5. To ask about `aiuse` or quota, message the usage Lead.
 
-## Known gaps (Nov 10 2026)
+## Known gaps (Nov 11 2026)
 
 1. **There is no push.** A Lead must read the numbers at its own decision points. A subscription does not exist yet.
-2. **Claude reset behavior is unverified.** The plans assume a Claude reset keeps the weekly reset day. No real redemption has tested this yet.
+2. **Full Claude reset timing is unverified.** A recorded Fable-only redemption on Nov 11 cleared Fable, returned shared weekly allowance and kept both deadlines. The full weekly reset has not been redeemed; its fixed-deadline behavior remains an assumption.
 3. **Short observations are noisy.** The providers round used% to whole numbers.
-4. **There is no attribution.** `aiuse` cannot tell which project or agent spent the quota.
+4. **Fable's score ignores the shared bottleneck.** `aiuse pick` uses Fable's own target rate. Its actual usable room is the smaller of its own remaining allowance and twice the shared remainder, measured in Fable percentage points. The joint strategy still needs design.
 
 ## Planned (by intent)
 
