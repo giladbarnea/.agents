@@ -16,8 +16,8 @@ Output structure:
 Early-returns if Addy's upstream file has not changed since the pinned commit.
 """
 import json
-import os
 import re
+import subprocess
 import urllib.request
 from pathlib import Path
 
@@ -62,14 +62,8 @@ def fetch(url: str) -> str:
 
 
 def github_api_fetch(path: str) -> object:
-    url = f"https://api.github.com/{path.lstrip('/')}"
-    headers = {'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'TLDRScraper-create'}
-    token = os.environ.get('GITHUB_API_TOKEN')
-    if token:
-        headers['Authorization'] = f'token {token}'
-    request = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(request) as response:
-        return json.loads(response.read().decode('utf-8'))
+    """Query the GitHub API through gh, so requests use the authenticated rate limit."""
+    return json.loads(subprocess.run(['gh', 'api', path], capture_output=True, text=True, check=True).stdout)
 
 
 def fetch_latest_upstream_commit() -> str:
