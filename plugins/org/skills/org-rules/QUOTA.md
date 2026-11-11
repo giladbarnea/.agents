@@ -58,7 +58,8 @@ The tool is `quota` (renamed from `aiuse` on Nov 11). Non-interactive callers (l
    4. Reading a plan does not restart it. `quota boost --help` explains the full contract.
 
 4. To pick a pool quickly, run `quota pick` (or `-f json`). It ranks Claude, Fable and Codex by the rate each can still support, best first, and marks which are usable. It is a lazy hint. Check the pool's own plan before heavy work.
-5. To ask about `quota` or quota, message the usage Lead.
+5. To subscribe to the quota service, load its Pi extension (`pi -e ~/dev/usage/extensions/pi/quota-service.ts`), declare your appetite with `quota_appetite`, and work as if quota were infinite. It tells you when your grant changes. See `~/dev/usage/docs/quota-service.md`.
+6. To ask about `quota`, or to report that a grant or spend number is way off, message the usage Lead.
 
 ## Known gaps (Nov 11 2026)
 
