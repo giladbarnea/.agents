@@ -63,12 +63,11 @@ The tool is `quota` (renamed from `aiuse` on Nov 11). Non-interactive callers (l
 
 ## Known gaps (Nov 11 2026)
 
-1. **There is no push.** A Lead must read the numbers at its own decision points. A subscription does not exist yet.
+1. **The quota service v1 is new (Nov 11).** Its per-agent costs are rough first estimates, tuned from Leads' corrections. Codex's dollar-to-quota conversion does not match yet. An idle subscriber hears about changes only at its next run.
 2. **Full Claude reset timing is unverified.** A recorded Fable-only redemption on Nov 11 cleared Fable, returned shared weekly allowance and kept both deadlines. The full weekly reset has not been redeemed; its fixed-deadline behavior remains an assumption.
 3. **Short observations are noisy.** The providers round used% to whole numbers.
 4. **Claude and Fable are planned separately.** `quota pick` caps Fable by the shared room (twice Claude's rate). The fixed plans still treat them as separate budgets. A joint planner is not built yet.
 
 ## Planned (by intent)
 
-1. **A subscribable quota service.** It will push to subscribed agents only the quota events that need a decision. Then Leads stop reading on demand.
-2. **One set of terms.** The text, JSON and menu bar outputs will show the same data under the same names.
+1. **One set of terms.** The text, JSON and menu bar outputs will show the same data under the same names.
