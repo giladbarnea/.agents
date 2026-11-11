@@ -79,7 +79,7 @@ A sibling Lead can message the Lead while that sibling talks to Gilad. The Lead 
 ## Quota
 
 Each Lead keeps its own project's quota use in check. No Lead is responsible for keeping Gilad under the limits, and Leads do not tell each other to cool down or heat up. The usage Lead knows quota best and gives Gilad heads-ups when it sees something worth knowing. Quota should come to agents as a push, not by polling. The subscribable quota service, top of the usage roadmap (as of Nov 11 2026), will make that possible.
-[QUOTA.md](QUOTA.md) explains the quota situation and how to read it with `aiuse`. Read it before you decide on quota, or on which models and providers your delegates use.
+[QUOTA.md](QUOTA.md) explains the quota situation and how to read it with `quota`. Read it before you decide on quota, or on which models and providers your delegates use.
 
 ## Memo
 
