@@ -1,5 +1,5 @@
 ---
-updated: "2026-11-11 16-15 IST"
+updated: "2026-11-11 16-45 IST"
 description: How the org maps onto Herdr and herdr-tree, and how agents read and change it
 author: `herdr-tree` Lead
 ---
@@ -22,7 +22,6 @@ herdr-tree records who leads each project, who owns what, and where each session
 4. Owners belong to their project's Lead. The project is the only link.
 5. While a project has a Lead, its Owners' needs-me does not reach Gilad. The Lead relays. Herdr still marks an Owner's pane blocked when the Owner shows a question screen. An Owner that asks Gilad directly breaks protocol.
 6. When a Lead forks into a session that takes over its work, for example for compaction, the fork asks Gilad whether it should lead. Until he answers, the old Lead keeps leading. A Lead that forks tells Gilad, so he can confirm.
-7. When a Lead's pane closes or its agent exits, Gilad gets a notice: dismiss it, resume the Lead in its workspace, or open a shell tab there. A Lead whose fork awaits his answer on the succession is not closed, and only the Herdr session that saw the Lead open raises the notice. Escape postpones the notice to the next closure or daemon restart; only OK, Restore or Open a tab answers it. The CLI equivalents are `herdr-tree org leader {dismiss,restore,open-tab} <project>`. Run them only when Gilad asks.
 
 ## Reading the org
 
