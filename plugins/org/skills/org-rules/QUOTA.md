@@ -63,7 +63,7 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
 1. **There is no push.** A Lead must read the numbers at its own decision points. A subscription does not exist yet.
 2. **Full Claude reset timing is unverified.** A recorded Fable-only redemption on Nov 11 cleared Fable, returned shared weekly allowance and kept both deadlines. The full weekly reset has not been redeemed; its fixed-deadline behavior remains an assumption.
 3. **Short observations are noisy.** The providers round used% to whole numbers.
-4. **Fable's score ignores the shared bottleneck.** `aiuse pick` uses Fable's own target rate. Its actual usable room is the smaller of its own remaining allowance and twice the shared remainder, measured in Fable percentage points. The joint strategy still needs design.
+4. **Claude and Fable are planned separately.** `aiuse pick` caps Fable by the shared room (twice Claude's rate). The fixed plans still treat them as separate budgets. A joint planner is not built yet.
 
 ## Planned (by intent)
 
