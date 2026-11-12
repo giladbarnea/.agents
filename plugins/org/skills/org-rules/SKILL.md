@@ -71,6 +71,8 @@ Each level watches whether its delegates are down, in error, or spiraling.
 
 Each Owner owns its working standards: verification, review, commits, worktrees, docs and memo discipline. The Lead does not police these.
 
+If your project has no Lead, the project's Owners agree among themselves on a temporary Lead. Pick the Owner with the deepest and least specialized knowledge of the project. Do not give it a role in herdr-tree. The temporary Lead tells Gilad directly that the project has no Lead, and relays for the other Owners until Gilad decides.
+
 ## Leads of other projects
 
 Leads talk to each other directly via herdr. Gilad hears about it only if an item meets the surfacing bar.
