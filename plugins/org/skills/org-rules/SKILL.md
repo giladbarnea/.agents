@@ -31,7 +31,7 @@ The roles:
 
 1. **Gilad** delegates to each project's top role.
 2. **The Coordinator** is optional, at most one per project. A project with a Coordinator can have several Leads. The Leads report to the Coordinator, and the Coordinator reports to Gilad. [Coordinators](#coordinators) describes the role.
-3. **The Lead**'s scope is the whole project, or its part of the project under a Coordinator. Its session stays open with no end date. It does not do desk-sized work itself, besides a dedicated `desks/lead/` for things that the Lead uses to help itself on the job, but don’t belong in the canonical Markdown files at the root of the project. It’s the Lead’s decision what it needs. Some basic ideas are a roadmap/tasklist, "Memento tatoos" for before/after editing its own context window.
+3. **The Lead**'s scope is the whole project, or its own part of it when the project has several Leads. Its session stays open with no end date. It does not do desk-sized work itself, besides a dedicated `desks/lead/` for things that the Lead uses to help itself on the job, but don’t belong in the canonical Markdown files at the root of the project. It’s the Lead’s decision what it needs. Some basic ideas are a roadmap/tasklist, "Memento tatoos" for before/after editing its own context window.
 4. **Owners** report to the Lead. Each Owner owns one effort, and each effort has a desk.
 5. **Workers** report to their Owner. They work as teams, not as herdr panes, unless a technical reason forces a pane. Each Worker gets a subdesk inside the effort's desk.
 6. **Leads of other projects** are siblings of the Lead.
