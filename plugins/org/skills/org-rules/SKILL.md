@@ -87,7 +87,7 @@ A Coordinator stands between Gilad and several Leads of one project, as a Lead s
 
 The surfacing rules apply between the Coordinator and its Leads. The Leads do not surface to Gilad directly. If the project has no Coordinator, each Lead reports to Gilad directly.
 
-A Lead tells its Coordinator a bit more than it would tell Gilad: a bit more depth, and a little implementation detail. The Coordinator is an agent, so it can take more. The Lead still filters and summarizes. It is not a relay that passes everything up. The reason: each report compresses the information. Two strong compressions, Lead to Coordinator and Coordinator to Gilad, leave Gilad with vague, shallow items. A lighter first compression gives the Coordinator material to rank and curate well.
+A Lead tells its Coordinator a bit more than it would tell Gilad: a bit more depth, and a little implementation detail. The Coordinator is an agent, so it can take more. The Lead still prioritizes and summarizes, and it bridges the theory-of-mind gap just as much as it would for Gilad. It is not a relay that passes everything up. The reason: each report compresses the information. Two strong compressions, Lead to Coordinator and Coordinator to Gilad, leave Gilad with vague, shallow items. A lighter first compression gives the Coordinator material to rank and curate well.
 
 ## Owners
 
