@@ -15,7 +15,7 @@ Search using Perplexity AI through OpenRouter first.
 ./scripts/perplexity_search.py "query" --model sonar-pro-search
 ```
 
-The script first uses `OPENROUTER_API_KEY` or `~/.openrouter-api-key`.
+The script first uses `OPENROUTER_API_KEY` or `~/.openrouter-gilad-barnea-api-key`.
 
 If OpenRouter fails, it uses `PERPLEXITY_API_KEY` or `~/.perplexity-api-key` with the Perplexity API.
 

@@ -12,7 +12,7 @@ from pathlib import Path
 import diskcache
 import requests
 
-OPENROUTER_API_KEY_PATH = Path.home() / ".openrouter-api-key"
+OPENROUTER_API_KEY_PATH = Path.home() / ".openrouter-gilad-barnea-api-key"
 PERPLEXITY_API_KEY_PATH = Path.home() / ".perplexity-api-key"
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") or (
     OPENROUTER_API_KEY_PATH.read_text().strip()

@@ -31,8 +31,8 @@ import time
 import requests
 import websocket
 
-PORT = 9222
-STATE = os.path.join(tempfile.gettempdir(), "poalim-target.json")  # cache, not repo state
+PORT = int(os.environ.get("POALIM_CDP_PORT", "9222"))  # 9333: background headless Chrome that cannot take focus
+STATE = os.path.join(tempfile.gettempdir(), f"poalim-target-{PORT}.json")  # cache, not repo state
 LOGIN_URL = "https://login.bankhapoalim.co.il/ng-portals/auth/he/?reqName=getLogonPage"
 BW_ENTRY = "bankhapoalim.co.il"
 
