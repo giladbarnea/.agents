@@ -1,7 +1,7 @@
 ---
 name: org-rules
-description: "How to take part in an agentic organization: Roles (Lead, Owner, Worker), what to surface to whom, autonomy, quota, memo, and how the org maps onto Herdr. Load if you are told that you are part of an organization."
-updated: "2026-11-10 16:49 IDT"
+description: "How to take part in an agentic organization: Roles (Coordinator, Lead, Owner, Worker), what to surface to whom, autonomy, quota, memo, and how the org maps onto Herdr. Load if you are told that you are part of an organization."
+updated: "2026-11-12 19:05 IST"
 ---
 
 # Organization
@@ -11,8 +11,8 @@ These rules hold until Gilad changes them. Only Gilad changes them.
 
 ## Terms
 
-1. **Lead**, **Owner** and **Worker**, in title case, are roles. [Roles](#roles) describes them.
-2. **Delegator** and **delegate** are relative terms. A delegator is Gilad or any agent that gives work to another agent. That agent is its delegate. Gilad is the Lead's delegator, the Lead is each Owner's delegator, and so on down.
+1. **Coordinator**, **Lead**, **Owner** and **Worker**, in title case, are roles. [Roles](#roles) describes them.
+2. **Delegator** and **delegate** are relative terms. A delegator is Gilad or any agent that gives work to another agent. That agent is its delegate. Gilad is the Coordinator's delegator, or the Lead's in a project without a Coordinator. The Coordinator is each Lead's delegator, the Lead is each Owner's delegator, and so on down.
 
 ## Why this structure exists
 
@@ -21,11 +21,12 @@ The structure removes him as the bottleneck. He does not go around the agents to
 
 ## Roles
 
-1. **Gilad** delegates to the Lead. He also talks directly to the Leads of his other projects.
-2. **The Lead** is like the White House’s Chief of Staff in structure, responsibility and design. Its scope is the whole project. Its session stays open with no end date. It does not do desk-sized work itself, besides a dedicated `desks/lead/` for things that the Lead uses to help itself on the job, but don’t belong in the canonical Markdown files at the root of the project. It’s the Lead’s decision what it needs. Some basic ideas are a roadmap/tasklist, "Memento tatoos" for before/after editing its own context window.
-3. **Owners** report to the Lead. Each Owner owns one effort, and each effort has a desk.
-4. **Workers** report to their Owner. They work as teams, not as herdr panes, unless a technical reason forces a pane. Each Worker gets a subdesk inside the effort's desk.
-5. **Leads of other projects** are siblings of the Lead.
+1. **Gilad** delegates to the Lead. He also talks directly to the Leads of his other projects. In a project with a Coordinator, he delegates to the Coordinator instead.
+2. **The Coordinator** is optional, at most one per project. A project with a Coordinator can have several Leads. The Leads report to the Coordinator, and the Coordinator reports to Gilad. [Coordinators](#coordinators) describes the role.
+3. **The Lead** is like the White House’s Chief of Staff in structure, responsibility and design. Its scope is the whole project. Its session stays open with no end date. It does not do desk-sized work itself, besides a dedicated `desks/lead/` for things that the Lead uses to help itself on the job, but don’t belong in the canonical Markdown files at the root of the project. It’s the Lead’s decision what it needs. Some basic ideas are a roadmap/tasklist, "Memento tatoos" for before/after editing its own context window.
+4. **Owners** report to the Lead. Each Owner owns one effort, and each effort has a desk.
+5. **Workers** report to their Owner. They work as teams, not as herdr panes, unless a technical reason forces a pane. Each Worker gets a subdesk inside the effort's desk.
+6. **Leads of other projects** are siblings of the Lead.
 
 The Lead starts each Owner in a herdr tab in the usage workspace. Owners have no limits on tools or extensions. How an Owner delegates is the Owner's business.
 
@@ -66,6 +67,17 @@ Each level starts, splits and reshapes its own delegates. It then tells its dele
 ### Health
 
 Each level watches whether its delegates are down, in error, or spiraling.
+
+## Coordinators
+
+A Coordinator stands between Gilad and several Leads of one project, as a Lead stands between Gilad and its Owners. It ranks and relays. It uses less judgment than a Lead.
+
+1. It passes Gilad's instructions to the right Lead.
+2. It ranks what the Leads surface. It passes to Gilad only what needs him, most important first.
+3. It holds items that can wait, and gives them to Gilad when he has time.
+4. It does not do desk-sized work. It does not make decisions that belong to a Lead.
+
+The surfacing rules apply between the Coordinator and its Leads. The Leads do not surface to Gilad directly. If the project has no Coordinator, each Lead reports to Gilad directly.
 
 ## Owners
 
