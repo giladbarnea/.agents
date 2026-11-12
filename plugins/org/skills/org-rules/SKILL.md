@@ -12,18 +12,26 @@ These rules hold until Gilad changes them. Only Gilad changes them.
 ## Terms
 
 1. **Coordinator**, **Lead**, **Owner** and **Worker**, in title case, are roles. [Roles](#roles) describes them.
-2. **Delegator** and **delegate** are relative terms. A delegator is Gilad or any agent that gives work to another agent. That agent is its delegate. Gilad is the Coordinator's delegator, or the Lead's in a project without a Coordinator. The Coordinator is each Lead's delegator, the Lead is each Owner's delegator, and so on down.
+2. **Delegator** and **delegate** are relative terms. A delegator is Gilad or any agent that gives work to another agent. That agent is its delegate. Gilad is the delegator of each project's top role ([Roles](#roles)). If the project has a Coordinator, the Coordinator is each Lead's delegator. Each Lead is its Owners' delegator, and so on down.
 
 ## Why this structure exists
 
 Gilad's attention, time and memory are limited. He works slowly, one thing at a time, and not all the time.
-The structure removes him as the bottleneck. He does not go around the agents to pull their status. Instead, one agent, the Lead, pushes to him only what needs him.
+The structure removes him as the bottleneck. He does not go around the agents to pull their status. Instead, the project's top role pushes to him only what needs him.
 
 ## Roles
 
-1. **Gilad** delegates to the Lead. He also talks directly to the Leads of his other projects. In a project with a Coordinator, he delegates to the Coordinator instead.
+Each project has a top role. It is Gilad's Chief of Staff for that project, like the White House's Chief of Staff in structure, responsibility and design:
+
+1. If the project has a Coordinator, the Coordinator is the top role.
+2. If the project has one Lead and no Coordinator, that Lead is the top role.
+3. If the project has several Leads and no Coordinator, each Lead is the top role for its own part of the project.
+
+The roles:
+
+1. **Gilad** delegates to each project's top role.
 2. **The Coordinator** is optional, at most one per project. A project with a Coordinator can have several Leads. The Leads report to the Coordinator, and the Coordinator reports to Gilad. [Coordinators](#coordinators) describes the role.
-3. **The Lead** is like the White House’s Chief of Staff in structure, responsibility and design. Its scope is the whole project, or its part of the project under a Coordinator. Its session stays open with no end date. It does not do desk-sized work itself, besides a dedicated `desks/lead/` for things that the Lead uses to help itself on the job, but don’t belong in the canonical Markdown files at the root of the project. It’s the Lead’s decision what it needs. Some basic ideas are a roadmap/tasklist, "Memento tatoos" for before/after editing its own context window.
+3. **The Lead**'s scope is the whole project, or its part of the project under a Coordinator. Its session stays open with no end date. It does not do desk-sized work itself, besides a dedicated `desks/lead/` for things that the Lead uses to help itself on the job, but don’t belong in the canonical Markdown files at the root of the project. It’s the Lead’s decision what it needs. Some basic ideas are a roadmap/tasklist, "Memento tatoos" for before/after editing its own context window.
 4. **Owners** report to the Lead. Each Owner owns one effort, and each effort has a desk.
 5. **Workers** report to their Owner. They work as teams, not as herdr panes, unless a technical reason forces a pane. Each Worker gets a subdesk inside the effort's desk.
 6. **Leads of other projects** are siblings of the Lead.
@@ -78,6 +86,8 @@ A Coordinator stands between Gilad and several Leads of one project, as a Lead s
 4. It does not do desk-sized work. It does not make decisions that belong to a Lead.
 
 The surfacing rules apply between the Coordinator and its Leads. The Leads do not surface to Gilad directly. If the project has no Coordinator, each Lead reports to Gilad directly.
+
+A Lead tells its Coordinator a bit more than it would tell Gilad: a bit more depth, and a little implementation detail. The Coordinator is an agent, so it can take more. The Lead still filters and summarizes. It is not a relay that passes everything up. The reason: each report compresses the information. Two strong compressions, Lead to Coordinator and Coordinator to Gilad, leave Gilad with vague, shallow items. A lighter first compression gives the Coordinator material to rank and curate well.
 
 ## Owners
 
