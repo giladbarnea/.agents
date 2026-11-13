@@ -1,5 +1,5 @@
 ---
-updated: "2026-11-11 14:25 IST"
+updated: "2026-11-13 12:45 IST"
 description: The quota situation, its tradeoffs, and how a Lead reads it with `quota`
 author: usage Lead
 ---
@@ -28,46 +28,38 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
 
 ## Read the numbers
 
-The tool is `quota` (renamed from `aiuse` on Nov 11). Non-interactive callers (launchd, cron, scripts) must call `~/.local/bin/quota`: without it on PATH, macOS runs its own `/usr/bin/quota`.
+The tool is `quota`. Non-interactive callers (launchd, cron, scripts) must call `~/.local/bin/quota`: without it on PATH, macOS runs its own `/usr/bin/quota`.
 
 `quota` keeps a five-minute shared cache, so a read within five minutes costs no request. Extra Claude requests can cause a rate limit (HTTP 429) of several minutes. Do not call `quota` in a loop.
 
+**One metric, two forms.** The pace to steer by is the **target rate**: the rate that uses exactly the remaining quota by the next checkpoint. Spend below it and quota is lost; above it and quota runs out early. It comes in two forms, named everywhere:
+
+- `target_rate_without_resets`: ignores banked resets.
+- `target_rate_with_resets`: counts the banked resets that its schedule redeems.
+
+Which one to steer by is Gilad's call. If he hasn't said, ask. Both already include the Claude–Fable dependency: Fable's rates count its room in the shared Claude week, so a Lead can mix models without its own adjustments.
+
 1. To get a quick overview, run `quota`. Each column is one limit:
-   1. `USED` is the used share, and `ELAPSED` is the elapsed share of the window.
-   2. `BURN` is used divided by elapsed. Above 1×, you spend faster than the week allows.
-   3. `TARGET RATE` is the rate that uses exactly the remaining quota by `RESET IN`. Spend below it and quota is lost. Spend above it and quota runs out early.
-   4. `BANKED` is the number of unexpired banked resets. `RESET NOW` is what one redemption now gains, in days of allowance.
-   5. `STAY ON PLAN` is the rate the fixed 1× plan supports until its next checkpoint. `OBSERVED 2H` is the account-wide rate over the last 2 hours. When observed is above stay-on-plan, slow down or move work to another pool.
-2. To get the same data as JSON:
+   1. `USED` is the used share, and `ELAPSED` is the elapsed share of the window. `BURN` is used divided by elapsed.
+   2. `OBSERVED 2H` is the account-wide rate over the last 2 hours.
+   3. `TARGET RATE`, as two rows: `WITHOUT RESETS` and `WITH RESETS`. When observed is above the target rate you steer by, slow down or move work to another pool.
+   4. `BANKED` counts unexpired banked resets and the soonest expiry. `RESET NOW` is what one redemption now gains, in days of 1× work; `IF EMPTY NOW` is what it would gain if the pool were empty.
+2. To get the same data as JSON (schema 6):
 
    ```sh
-   quota -f json | jq '.providers[] | select(.windows.weekly) | {name, weekly: (.windows.weekly | {used_percent, elapsed_percent, burn_rate, target_rate, reset_at}), banked: .reset_value.banked_count}'
+   quota -f json | jq '.providers[] | {name, target_rate_without_resets, target_rate_with_resets}'
    ```
 
-3. To check pacing against a fixed plan, name the limit (`codex`, `claude` or `fable`; Codex if omitted) and the pace Gilad assigned (`1x` if he gave none):
+   1. Each rate is `{status, error, rate, range {low, high}, until, limited_by}`. The number is `.rate`. `status` is `ok`, `awaiting_first_use`, `redemption_due` (rate 0 until a due reset is redeemed: ask Gilad), `unfunded` or `unavailable` (rate null). `error.message` explains every status but `ok`. A null rate never falls back to the other form.
+   2. `target_rate_with_resets` adds `checkpoints[]` (times to check again; at a redemption, ask Gilad), `resets_counted[]` (empty when it counts none) and `since`.
+   3. `limited_by` (`fable` or `claude_weekly`) says which meter binds a Fable rate.
+   4. `.observations` lists the account-wide rate over the last 2, 6, 12 and 24 hours. None is preferred. Read `window_seconds` and `covers_full_window` first. A null rate means unknown, not zero.
+3. What-ifs (faster or slower paces, previews of redeeming) live in `quota simulate` (`--help`). They are for Gilad and the usage Lead when setting policy, not a Lead's daily steering.
+4. To subscribe to the quota service, load its Pi extension (`pi -e ~/dev/usage/extensions/pi/quota-service.ts`), declare your appetite with `quota_appetite`, and work as if quota were infinite. It tells you when your grant changes. See `~/dev/usage/docs/quota-service.md`. While its numbers mature, the target rate you steer by wins over a grant.
+5. To ask about `quota`, or to report that a grant or spend number is way off, message the usage Lead.
 
-   ```sh
-   quota boost claude 1x -f json | jq '{status, error, observations, pacing: .plans[0].pacing}'
-   ```
+## Known gaps (Nov 13 2026)
 
-   Fable also counts against the Claude weekly limit, so an agent that runs on Fable checks both `fable` and `claude`.
-
-   1. `pacing.rate_to_stay_on_plan` is the rate the remaining quota supports until the next checkpoint. Compare your spend with it.
-   2. `observations` lists the account-wide rate over the last 2, 6, 12 and 24 hours. None is preferred: pick the window that fits your question. Read `window_seconds` and `covers_full_window` first. A null rate means unknown, not zero.
-   3. `pacing.checkpoints` lists the times to check again, in order. At a redemption checkpoint, ask Gilad to redeem.
-   4. Reading a plan does not restart it. `quota boost --help` explains the full contract.
-
-4. To pick a pool quickly, run `quota pick` (or `-f json`). It ranks Claude, Fable and Codex by the rate each can still support, best first, and marks which are usable. It is a lazy hint. Check the pool's own plan before heavy work.
-5. To subscribe to the quota service, load its Pi extension (`pi -e ~/dev/usage/extensions/pi/quota-service.ts`), declare your appetite with `quota_appetite`, and work as if quota were infinite. It tells you when your grant changes. See `~/dev/usage/docs/quota-service.md`.
-6. To ask about `quota`, or to report that a grant or spend number is way off, message the usage Lead.
-
-## Known gaps (Nov 11 2026)
-
-1. **The quota service v1 is new (Nov 11).** Its per-agent costs are rough first estimates, tuned from Leads' corrections. Codex's dollar-to-quota conversion does not match yet. An idle subscriber hears about changes only at its next run.
-2. **Full Claude reset timing is unverified.** A recorded Fable-only redemption on Nov 11 cleared Fable, returned shared weekly allowance and kept both deadlines. The full weekly reset has not been redeemed; its fixed-deadline behavior remains an assumption.
-3. **Short observations are noisy.** The providers round used% to whole numbers.
-4. **Claude and Fable are planned separately.** `quota pick` caps Fable by the shared room (twice Claude's rate). The fixed plans still treat them as separate budgets. A joint planner is not built yet.
-
-## Planned (by intent)
-
-1. **One set of terms.** The text, JSON and menu bar outputs will show the same data under the same names.
+1. **The quota service's prices are being re-measured.** Two independent passes found Opus under-priced by about a third (an agent unit is about $13/hour of Opus, not $20). The fix awaits Gilad.
+2. **Full Claude reset timing is assumed**, not observed: Gilad's rule is that every Anthropic reset keeps the weekly deadline.
+3. **Short observations are noisy.** The providers round used% to whole numbers; ranges show it.
