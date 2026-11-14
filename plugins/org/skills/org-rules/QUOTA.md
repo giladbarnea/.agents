@@ -1,5 +1,5 @@
 ---
-updated: "2026-11-13 12:45 IST"
+updated: "2026-11-14 19:05 IST"
 description: The quota situation, its tradeoffs, and how a Lead reads it with `quota`
 author: usage Lead
 ---
@@ -23,8 +23,7 @@ A rate of **1×** means one weekly allowance spread evenly over one week.
 1. Quota that is left at the weekly reset is lost. Quota that runs out early stops every agent on that provider until the reset. The goal is to arrive at the reset with little quota left.
 2. Two pools give room to move. When one provider is ahead of its pace, move work to the other. The `ai-to-delegated` skill's budget-balancing guidance covers this.
 3. Fable spends both its own allowance and the shared Claude allowance. Either can stop it. If other models have spent more than 50% of shared Claude, shared Claude runs out before Fable reaches 100%, without a reset.
-4. Claude also grants **banked resets**. A full reset clears the weekly limit and Fable together. A Fable limit reset gives back only the Fable part of the weekly usage. `BANKED` counts each limit's resets. Only Gilad redeems them.
-5. Codex sometimes grants **banked resets**. A redeemed reset refills the week. The new 7-day window starts at the first model request after the redemption, not at the click. A reset is worth more when it is redeemed close to 100% used: its value is used% minus elapsed% at redemption. `quota` never redeems. Only Gilad redeems, so a redemption is a "needs the delegator first" item.
+4. Both providers sometimes grant **banked resets**. See [Banked resets](#banked-resets).
 
 ## Read the numbers
 
@@ -50,13 +49,32 @@ Which one to steer by is Gilad's call. If he hasn't said, ask. Both already incl
    quota -f json | jq '.providers[] | {name, target_rate_without_resets, target_rate_with_resets}'
    ```
 
-   1. Each rate is `{status, error, rate, range {low, high}, until, limited_by}`. The number is `.rate`. `status` is `ok`, `awaiting_first_use`, `redemption_due` (rate 0 until a due reset is redeemed: ask Gilad), `unfunded` or `unavailable` (rate null). `error.message` explains every status but `ok`. A null rate never falls back to the other form.
+   1. Each rate is `{status, error, rate, range {low, high}, until, limited_by}`. The number is `.rate`. `status` is `ok`, `awaiting_first_use`, `redemption_due` (rate 0 until a due reset is redeemed: see Banked resets), `unfunded` or `unavailable` (rate null). `error.message` explains every status but `ok`. A null rate never falls back to the other form.
    2. `target_rate_with_resets` adds `checkpoints[]` (times to check again; at a redemption, ask Gilad), `resets_counted[]` (empty when it counts none) and `since`.
    3. `limited_by` (`fable` or `claude_weekly`) says which meter binds a Fable rate.
    4. `.observations` lists the account-wide rate over the last 2, 6, 12 and 24 hours. None is preferred. Read `window_seconds` and `covers_full_window` first. A null rate means unknown, not zero.
 3. What-ifs (faster or slower paces, previews of redeeming) live in `quota simulate` (`--help`). They are for Gilad and the usage Lead when setting policy, not a Lead's daily steering.
 4. To subscribe to the quota service, load its Pi extension (`pi -e ~/dev/usage/extensions/pi/quota-service.ts`), declare your appetite with `quota_appetite`, and work as if quota were infinite. It tells you when your grant changes. See `~/dev/usage/docs/quota-service.md`. While its numbers mature, the target rate you steer by wins over a grant.
 5. To ask about `quota`, or to report that a grant or spend number is way off, message the usage Lead.
+
+## Banked resets
+
+A banked reset refills a meter on demand. There are three kinds:
+
+1. **Codex reset:** refills Codex and starts a new 7-day week at the first request after redemption. The free refill that was coming moves out with it.
+2. **Anthropic full reset:** sets the Claude week and Fable to 0% used. The weekly deadline stays.
+3. **Anthropic Fable-only reset:** sets Fable to 0% used, and gives half of Fable's used points back to the Claude week. The weekly deadline stays.
+
+**The trade-off.** Redeeming overwrites whatever is still unused, so a reset is worth the most at the moment its meter runs out (100% used), and less the later in the week that happens. Using one early buys pace now at the price of less work overall. A full reset redeemed while only Fable has run out also throws away the Claude week's unused room, which a Fable-only reset keeps. A Codex reset can be worth less than nothing, because it also postpones the free refill. Whether to pay for pace now or wait is Gilad's call at the time.
+
+**Read it:** `quota resets` (or `quota -f json | jq '.resets, .reset_kinds'`) lists each banked reset with its value now, what it throws away, its value on each day its meter could run out this week, its value in a fresh week, and a forecast at the measured paces. It states a conclusion only when one option wins regardless of priorities. Otherwise it gives the numbers, and the choice is Gilad's. `quota simulate reset` shows the same values for any stated quota state.
+
+**Who redeems.** Redeem only:
+
+1. when Gilad has told you to, naming resets that are banked now, not hypothetical ones; or
+2. after you surface the option with its trade-off, and Gilad confirms explicitly.
+
+Surface it in his terms, for example: "Using `<reset>` now lets us keep this pace and gains X days of work. Slowing down and using it when the meter runs out would gain Y." Raise it when you see a need or an opportunity: the work wants more than the target rate allows, a meter is about to run out early in a week, or a reset is near expiry.
 
 ## Known gaps (Nov 13 2026)
 
