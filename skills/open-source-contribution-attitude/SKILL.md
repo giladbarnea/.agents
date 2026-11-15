@@ -11,7 +11,7 @@ I start as a grateful user with a concrete problem, not as someone correcting th
 
 Then I show working code, a recording, and tests. That makes the proposal concrete and reduces the maintainer’s work to assess it. **But my investment does not become a claim on their time or their roadmap.** I open the issue and a ready PR together, so the maintainer has one thing to act on: approve, reject, comment, or review.
 
-I also put the experience first and keep implementation details available but secondary. When the maintainer raises a concern, I explain the tradeoff, offer options, and leave the decision with them.
+I also put the experience first and keep implementation details available but secondary. When the maintainer raises a concern, I explain the tradeoff, offer options, and leave the decision with them. For behavior-only issue reports, read [File a behavioral issue](references/file-behavioral-issue.md).
 
 How I write it:
 
