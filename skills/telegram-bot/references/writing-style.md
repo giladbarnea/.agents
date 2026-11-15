@@ -1,7 +1,5 @@
 ---
-name: telegram-writing-style
-description: Gilad's presentation preferences for Telegram messages, cards and forms, with descriptive notes on formatting and interaction components tried. Read when composing or reviewing Telegram communication for him.
-last_updated: 2026-11-15T09-53
+last_updated: 2026-11-15T10-05
 ---
 
 # Telegram writing style
