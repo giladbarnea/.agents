@@ -1,7 +1,7 @@
 ---
 name: telegram-writing-style
 description: Gilad's presentation preferences for Telegram messages, cards and forms, with descriptive notes on formatting and interaction components tried. Read when composing or reviewing Telegram communication for him.
-last_updated: 2026-11-14T19-27
+last_updated: 2026-11-15T09-53
 ---
 
 # Telegram writing style
@@ -13,6 +13,7 @@ Gilad liked the rich formatting in the phone trial. The problems were density, h
 - **At most three table columns.** Four were cramped on the phone. Headers and cells still need room to read naturally.
 - **No highlighted-background text**, regardless of color or brightness. A dark or black highlight is not an alternative.
 - **Shorter cards, split generously into individual messages.** A quiet conversation does not mean packing everything into the fewest possible bubbles.
+- **One claim or one cohesive block of information per message.** Separate messages let Gilad reply to one part of a response instead of all of it at once.
 
 ## Components observed in the trial
 
