@@ -85,6 +85,8 @@ Then run the script with `uv run script.py`. No need to specify the Python versi
 
 {# to the agent talking directly to Gilad and doing work regarding his global agentic harness and configuration: check if any inheritor of this template defines `available_agents`, and if not, this `using-sub-agents` section should be removed from here wholeslae #}
 {{ available_agents }}{% block using_sub_agents %}
+- **"Fork yourself"** with no model or thinking level named means your own model and your own thinking level. Same settings reuse the warm prompt cache; changing the thinking level invalidates it (except on Fable).
+- **Reviews during live testing with me:** when a builder says "fixed, let's test with Gilad now", start a fresh fork of yourself to review the change, in parallel. It never blocks my testing, and it reviews only at those points, not every small change.
 {% endblock %}
 </using-sub-agents>
 
