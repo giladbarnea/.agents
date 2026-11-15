@@ -1,5 +1,5 @@
 ---
-updated: "2026-11-12 19-30 IST"
+updated: "2026-11-15 14-55 IST"
 description: How the org maps onto Herdr and herdr-tree, and how agents read and change it
 author: `herdr-tree` Lead
 ---
@@ -18,10 +18,11 @@ herdr-tree records who leads each project, who owns what, and where each session
 
 1. A project has at most one Coordinator. With exactly one Lead and no Coordinator, another Lead needs explicit intent: `--replace HARNESS:FULL_SESSION_ID` replaces that incumbent; `--add` keeps it. The popup offers Replace / Cancel / Add another Lead. With several Leads already, or a Coordinator, marking another Lead adds silently.
 2. Leads and Coordinators lose their roles when their last known pane closes/exits, their agent is released, or their tab/workspace closes. Normal unset effects apply: attention reaches Gilad again, inks change, and history records `by: "herdr-tree"` with the causal `reason`. Server stop/crash, client detach and a missing pane in a poll never unset. Another known host keeps the same session reachable. Startup does not sweep existing closed declarations. Clearing, demoting or moving a Coordinator keeps every Lead and generates no announcement or new attention; only the lint reports missing coordination.
-3. Moving a Lead preserves its declaration and leaves its peers behind. `project set` and `project clear` accept the same `--replace` / `--add` choice at the destination. Named replacement is checked again under the store lock before saving.
-4. An Owner reports to the Lead in the same project that declared it, or a predecessor inherited through a named replacement, without rewriting `declared_by`. `--add` transfers no Owners. With one Lead and no Coordinator, the project alone determines its Owners; otherwise unmatched identities are null.
-5. Owners' needs-me does not reach Gilad while their project has a Lead. With a Coordinator, Leads' needs-me is dropped too, not rolled up. Without one, Leads surface their own needs-me. Native Herdr blocked notifications are unchanged.
-6. A migrating fork in another pane never inherits a project role or asks for it; its reachable parent keeps the declared role and the fork is an automatic detour. Pi `/new`, `/resume` or an in-place `/fork` to a different session unsets the previous project role and grants the replacement none. Fresh process startup, extension reload and same-ID resume release nothing, including after Herdr restarts.
+3. Every automatic release is recoverable when Herdr identifies that exact harness/session ID in any pane, including after a quit, close or Pi switch. The original project, declaration and Owner links return; history records `by: "herdr-tree"`, `reason: "agent_resumed"`. No expiry. Only an explicit role/project edit on that session or giving its empty seat away revokes recovery: a new first Lead with neither a Lead nor a Coordinator present, or a new Coordinator. Existing peers and additional Lead grants do not take its seat; later closes do not cancel recovery.
+4. Moving a Lead preserves its declaration and leaves its peers behind. `project set` and `project clear` accept the same `--replace` / `--add` choice at the destination. Named replacement is checked again under the store lock before saving.
+5. An Owner reports to the Lead in the same project that declared it, or a predecessor inherited through a named replacement, without rewriting `declared_by`. `--add` transfers no Owners. With one Lead and no Coordinator, the project alone determines its Owners; otherwise unmatched identities are null.
+6. Owners' needs-me does not reach Gilad while their project has a Lead. With a Coordinator, Leads' needs-me is dropped too, not rolled up. Without one, Leads surface their own needs-me. Native Herdr blocked notifications are unchanged.
+7. A migrating fork in another pane never inherits a project role or asks for it; its reachable parent keeps the declared role and the fork is an automatic detour. Pi `/new`, `/resume` or an in-place `/fork` to a different session unsets the previous project role and grants the replacement none. Fresh process startup, extension reload and same-ID resume release nothing, including after Herdr restarts.
 
 ## Reading the org
 
@@ -39,7 +40,7 @@ herdr-tree records who leads each project, who owns what, and where each session
 3. `herdr-tree annotation set "<text>" --pane <pane>` leaves a note on a session.
 4. `herdr-tree mark open_concern --note "<what is pending>"` marks something pending.
 5. Use `herdr-tree mark coordinator` to appoint a Coordinator, `clear` to unset it, and `mark leader` to appoint a Lead. Choose `--replace HARNESS:FULL_SESSION_ID` or `--add` for the one-Lead conflict; the flags are mutually exclusive. Re-marking an existing Lead is idempotent.
-6. Only Gilad manually makes, replaces or ends a Coordinator or Lead. The event-driven unreachable-role clears in rule 2 are the automatic exception. The CLI does not enforce who makes manual changes; it records the actor in history. Do not change these roles unless Gilad asks.
+6. Only Gilad manually makes, replaces or ends a Coordinator or Lead. The event-driven releases and same-session recovery in rules 2–3 are the automatic exceptions. The CLI does not enforce who makes manual changes; it records the actor in history. Do not change these roles unless Gilad asks.
 7. Close herdr panes after their work is complete. This is not a destructive action anyway: roles, history and desks stay, and the session can be resumed.
 
 ## Talking between sessions
