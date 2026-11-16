@@ -69,7 +69,7 @@ The confirmation step times out after a few minutes and the wizard drops back to
 
 1. Run `transfer`, and check the form.
 2. Fork yourself, keeping your context, to a quicker mid-tier model at medium thinking: a Claude forks to Sonnet, a GPT forks to Terra (`openai-codex/gpt-6.1-terra`). The fork has one task: run `send`, ask the user for the code on the channel you are talking to them on, type the code, confirm, and report the `אסמכתא` or the bank's exact error.
-3. If that channel reaches only you and not the fork (for example a Telegram bot bound to your session), pass the user's code to the fork at once in an interrupting message.
+3. The Plannotator Inbox delivers a reply to the session that wrote the message, so a fork that asks in the Inbox thread gets the code itself (verified 26-11-16). A Telegram bot bound to your session delivers plain messages only to you; on that channel, pass the code to the fork at once in an interrupting message.
 4. Allow one code attempt only. Repeated wrong codes lock the account. Type the code with real input. On 26-11-13 a JavaScript click on `המשך` failed, while a real click works.
 
 Verified on 26-11-16: a Sonnet medium fork paid on the first code.
