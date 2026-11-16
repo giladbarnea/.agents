@@ -63,6 +63,17 @@ poalim.py send      # separate command, run only on explicit approval
 
 The confirmation step times out after a few minutes and the wizard drops back to step 1. If `send` reports it is not on the confirmation step, run `transfer` again and then `send` promptly.
 
+### The SMS code: hand off to a fast fork
+
+`send` opens a "חיזוק הזדהות" dialog with five boxes, `תו 1` to `תו 5`. The SMS code expires after about 10 seconds. A large model at high thinking is too slow for the round trip.
+
+1. Run `transfer`, and check the form.
+2. Fork yourself, keeping your context, to a quicker mid-tier model at medium thinking, for example Sonnet. The fork has one task: run `send`, ask the user for the code on the channel you are talking to them on, type the code, confirm, and report the `אסמכתא` or the bank's exact error.
+3. If that channel reaches only you and not the fork (for example a Telegram bot bound to your session), pass the user's code to the fork at once in an interrupting message.
+4. Allow one code attempt only. Repeated wrong codes lock the account. Type the code with real input. On 26-11-13 a JavaScript click on `המשך` failed, while a real click works.
+
+Verified on 26-11-16: a Sonnet medium fork paid on the first code.
+
 ### Narrow Route
 
 Follow this by hand only if the script fails.
