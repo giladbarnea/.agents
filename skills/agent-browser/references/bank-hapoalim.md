@@ -68,8 +68,8 @@ The confirmation step times out after a few minutes and the wizard drops back to
 `send` opens a "חיזוק הזדהות" dialog with five boxes, `תו 1` to `תו 5`. The SMS code expires after about 10 seconds. A large model at high thinking is too slow for the round trip.
 
 1. Run `transfer`, and check the form.
-2. Fork yourself, keeping your context, to a quicker mid-tier model at medium thinking: a Claude forks to Sonnet, a GPT forks to Terra (`openai-codex/gpt-6.1-terra`). The fork has one task: run `send`, ask the user for the code on the channel you are talking to them on, type the code, confirm, and report the `אסמכתא` or the bank's exact error.
-3. The Plannotator Inbox delivers a reply to the session that wrote the message, so a fork that asks in the Inbox thread gets the code itself (verified 26-11-16). A Telegram bot bound to your session delivers plain messages only to you; on that channel, pass the code to the fork at once in an interrupting message.
+2. Fork yourself, keeping your context, to a quicker mid-tier model at medium thinking: a Claude forks to Sonnet, a GPT forks to Terra (`openai-codex/gpt-6.1-terra`). The fork has one task: run `send`, ask the user for the code on whatever channel is active at the moment of the fork (the direct chat, the Plannotator Inbox or Telegram), type the code, confirm, and report the `אסמכתא` or the bank's exact error.
+3. Direct chat: give the fork a visible pane (for example `showOnHerdrPane`), and tell the user to type the code there. The Plannotator Inbox delivers a reply to the session that wrote the message, so a fork that asks in the Inbox thread gets the code itself (verified 26-11-16). A Telegram bot bound to your session delivers plain messages only to you; on that channel, pass the code to the fork at once in an interrupting message.
 4. Allow one code attempt only. Repeated wrong codes lock the account. Type the code with real input. On 26-11-13 a JavaScript click on `המשך` failed, while a real click works.
 
 Verified on 26-11-16: a Sonnet medium fork paid on the first code.
