@@ -1,3 +1,4 @@
 .papercuts.jsonl
 
 .worktrees/
+*bw-session-key*
