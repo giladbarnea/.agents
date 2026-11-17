@@ -65,13 +65,16 @@ Most Leads do not need the quota service. They need one habit:
 2. When one pool's target rate is clearly lower than the other's, move work to the pool with more room. Switch your own model, your delegates' models, or both, to the model with equal performance on the other provider.
 3. Keep Fable for work that needs it. Codex has no equal for it.
 
-Models with equal performance (Gilad, Nov 2026):
+Models with about the same performance, by thinking level (ai-scores Lead, Nov 17, from Artificial Analysis benchmarks; general and coding tests weighted most). These are overlapping bands, not exact equals:
 
-| Anthropic | OpenAI (Codex) |
-|---|---|
-| Opus 5.5 high | GPT-6 Astra high |
-| Opus 5.5 medium | GPT-6.1 Sol xhigh or max |
-| Fable 5.2 | none: keep on Anthropic |
+| Opus 5.5 | GPT-6.1 Sol | GPT-6 Astra | Fable 5.2 |
+|---|---|---|---|
+| medium | high (medium to high) | medium | below Fable low |
+| high | xhigh to max | high to xhigh | low to medium |
+| xhigh | no equal (max is lower) | max | medium to high |
+| max | no equal | max is nearest | high |
+
+Fable xhigh and max have no equal on Codex. Fable low matches Sol and Astra at max on coding, but knows more and makes up less. The bands come from benchmarks, so they are not proven for long coordination, judgment in conversation, medical reasoning or following instructions.
 
 A model switch rereads the whole context once on the new provider. So switch at a natural break, or choose the model when you start a delegate.
 
