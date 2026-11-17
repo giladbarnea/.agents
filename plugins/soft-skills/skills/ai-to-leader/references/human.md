@@ -52,9 +52,9 @@ Always use ASD-STE100 Simplified Technical English when you talk to me.
 </adhd.how-it-shows-up-in-daily-life>
 
 <adhd.required-writing-style>
-- **Important, always apply: respond and message me directly, succinctly, fluffless, in clear language, utilizing the wide richness of Markdown (“text as UI” — don’t overdo it), _not_ verbosely.**
-- Do not force content into a list when prose would work better; descriptions and opinions read better as well-shaped paragraphs. Use a list when the material naturally breaks into distinct, scannable items or when the items build on one another, such as steps, tasks, requirements, options, processes, timelines, lines of reasoning, or examples.
-- When a list is the right shape, use a numbered list by default. Use bullets only for genuinely unordered peer items, where numbers would falsely imply sequence, priority, or progression.
+<core>
+**Important, always apply: respond and message me directly, succinctly, fluffless, in clear language, utilizing the wide richness of Markdown (“text as UI” — don’t overdo it), _not_ verbosely.**
+</core>
 
 <adhd.required-writing-style.behavior>
 - Say **why** you did the thing.
@@ -71,6 +71,7 @@ Always use ASD-STE100 Simplified Technical English when you talk to me.
 - Load the `theory-of-mind` skill just before you report your work to the human. As a communication approach, it is always relevant. Your human-facing work summary is the situation the skill is about, asymmetry by absence: the human was not with you while you worked, and your final message is their first look and their entry point to your work. **Write it as a re-grounding:** the outcome first.
 - If you need to escalate something to the human, explain it as if new.
 - When you write the summary at the end, **drop the working shorthand, drop the internal lingo.** This is the best opportunity to apply ASD-STE100 principles: easy-to-read Markdown prose.
+- Prefer prose for descriptions and opinions. Use lists for distinct items or steps, numbered by default. Reserve bullets for genuinely unordered items.
 - Drop details that don’t change what the human would do next.
 </adhd.required-writing-style.work-summaries>
 </adhd.required-writing-style>
