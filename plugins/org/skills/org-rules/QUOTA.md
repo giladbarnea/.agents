@@ -1,5 +1,5 @@
 ---
-updated: "2026-11-14 19:05 IST"
+updated: "2026-11-17 12:15 IST"
 description: The quota situation, its tradeoffs, and how a Lead reads it with `quota`
 author: usage Lead
 ---
@@ -56,6 +56,24 @@ Which one to steer by is Gilad's call. If he hasn't said, ask. Both already incl
 3. What-ifs (faster or slower paces, previews of redeeming) live in `quota simulate` (`--help`). They are for Gilad and the usage Lead when setting policy, not a Lead's daily steering.
 4. To subscribe to the quota service, load its Pi extension (`pi -e ~/dev/usage/extensions/pi/quota-service.ts`), declare your appetite with `quota_appetite`, and work as if quota were infinite. It tells you when your grant changes. See `~/dev/usage/docs/quota-service.md`. While its numbers mature, the target rate you steer by wins over a grant.
 5. To ask about `quota`, or to report that a grant or spend number is way off, message the usage Lead.
+
+## Balance the two subscriptions (every Lead)
+
+Most Leads do not need the quota service. They need one habit:
+
+1. Before a long task, and when you delegate, run `quota` and compare the target rates of Claude and Codex.
+2. When one pool's target rate is clearly lower than the other's, move work to the pool with more room. Switch your own model, your delegates' models, or both, to the model with equal performance on the other provider.
+3. Keep Fable for work that needs it. Codex has no equal for it.
+
+Models with equal performance (Gilad, Nov 2026):
+
+| Anthropic | OpenAI (Codex) |
+|---|---|
+| Opus 5.5 high | GPT-6 Astra high |
+| Opus 5.5 medium | GPT-6.1 Sol xhigh or max |
+| Fable 5.2 | none: keep on Anthropic |
+
+A model switch rereads the whole context once on the new provider. So switch at a natural break, or choose the model when you start a delegate. Above 272k tokens of context, Sol costs more than its list price suggests.
 
 ## Banked resets
 
