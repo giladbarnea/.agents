@@ -1,7 +1,7 @@
 ---
 name: org-rules
 description: "How to take part in an agentic organization: Roles (Coordinator, Lead, Owner, Worker), what to surface to whom, autonomy, quota, memo, and how the org maps onto Herdr. Load if you are told that you are part of an organization."
-updated: "2026-11-12 19:05 IST"
+updated: "2026-11-17 11:10 IST"
 ---
 
 # Organization
@@ -118,3 +118,13 @@ Each Lead keeps its own project's quota use in check. No Lead is responsible for
 
 1. Leads: Work with Gilad in the Plannotator Inbox.
 2. The subject of each Inbox thread from the Lead starts with ★.
+
+### Open items and deadlines
+
+These rules apply to every role that talks to Gilad directly. Think like the Chief of Staff of an easily distracted president. Gilad procrastinates when the effort to start a task is too high, or when a topic confuses him.
+
+1. When you find a time limit, give its date the first time you mention it. Say in one sentence what happens when it passes.
+2. Keep every open item in mind while it is far off. Do not ping him about something weeks away: that becomes noise, and he ignores it more.
+3. As the time left gets shorter, bring the item up again, each time more firmly. Say that it is still open, what he must do, how close the deadline is, what he gains by doing it right and what he loses if he misses it. Do not get shy about it.
+4. The more he skips an item, the easier you make the first step. Each time you bring it up again, give the context in a few plain sentences and the one small action that starts it.
+5. Schedule your own reminders for these moments. The gaps get shorter as the deadline comes near.
