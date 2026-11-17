@@ -65,12 +65,12 @@ Most Leads do not need the quota service. They need one habit:
 2. When one pool's target rate is clearly lower than the other's, move work to the pool with more room. Switch your own model, your delegates' models, or both, to the model with equal performance on the other provider.
 3. Keep Fable at high thinking or above for work that needs it. Codex has no equal for it.
 
-Models with about the same performance, by thinking level (ai-scores Lead, Nov 17, from Artificial Analysis benchmarks; general and coding tests weighted most). These are overlapping bands, not exact equals:
+Models with about the same performance, by thinking level (ai-scores Lead, Nov 17, from Artificial Analysis benchmarks; general and coding tests weighted most). These are overlapping bands, not exact equals. Where a band spans levels, Gilad chose the higher one: Opus is a larger model, with strengths benchmarks measure poorly, and Sol is cheap:
 
 | Opus 5.5 | GPT-6.1 Sol | GPT-6 Astra | Fable 5.2 |
 |---|---|---|---|
-| medium | high (medium to high) | medium | below Fable low |
-| high | xhigh to max | high to xhigh | low to medium |
+| medium | xhigh | medium | below Fable low |
+| high | max | xhigh | low to medium |
 | xhigh | no equal (max is lower) | max | medium to high |
 | max | no equal | max is nearest | high |
 
