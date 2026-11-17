@@ -22,7 +22,11 @@ SKILL_PROVIDERS=(
 # ---[ Output styling ]---
 # Three tiers: dim gray = structure and routine detail; green ✓ = one milestone
 # summary per phase; yellow/red/bold = the few things that need attention.
-[[ -t 2 ]] && source "$HOME/dev/land/term.zsh"
+if [[ -o interactive && -t 2 ]]; then
+  source "$HOME/dev/land/term.zsh"
+else
+  unset CbrBlk C0 Cb Cb0 Cgrn Cylw Cred CbrGrn CbrBlu
+fi
 
 section() { printf "\n${CbrBlk}──[ ${C0}${Cb}%s${Cb0}${CbrBlk} ]────────────────────────────${C0}\n" "$1" >&2; }
 ok()      { printf "${Cgrn}✓${C0} %b\n" "$*" >&2; }

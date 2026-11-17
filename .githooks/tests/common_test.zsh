@@ -6,7 +6,24 @@ trap 'rm -rf "$temporary_directory"' EXIT
 export HOME="$temporary_directory/home"
 mkdir -p "$HOME"
 
+export CbrBlk='\033[90m' C0='\033[0m' Cb='\033[1m' Cb0='\033[22m'
+export Cgrn='\033[32m' Cylw='\033[33m' Cred='\033[31m'
+export CbrGrn='\033[92m' CbrBlu='\033[94m'
 source "${0:A:h:h}/common.sh"
+
+color_report="$(
+  {
+    section "plain output"
+    ok "success"
+    dim "detail"
+    warn "warning"
+    err "failure"
+  } 2>&1
+)"
+[[ "$color_report" != *$'\e['* ]] || {
+  printf 'Noninteractive hook output contains inherited ANSI styling: %q\n' "$color_report" >&2
+  exit 1
+}
 
 REPOSITORY_ROOT="$temporary_directory/repository"
 GITHOOKS_DIRECTORY="$REPOSITORY_ROOT/.githooks"
