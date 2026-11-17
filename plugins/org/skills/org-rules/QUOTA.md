@@ -73,7 +73,7 @@ Models with equal performance (Gilad, Nov 2026):
 | Opus 5.5 medium | GPT-6.1 Sol xhigh or max |
 | Fable 5.2 | none: keep on Anthropic |
 
-A model switch rereads the whole context once on the new provider. So switch at a natural break, or choose the model when you start a delegate. Above 272k tokens of context, Sol costs more than its list price suggests.
+A model switch rereads the whole context once on the new provider. So switch at a natural break, or choose the model when you start a delegate.
 
 ## Banked resets
 
