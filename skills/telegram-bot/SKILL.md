@@ -1,7 +1,7 @@
 ---
 name: telegram-bot
 description: How to interact with Gilad through Telegram. Load this when Telegram communication starts.
-last_updated: 2026-11-15T14-45
+last_updated: 2026-11-17T15-25
 ---
 
 # Telegram bot
@@ -32,7 +32,7 @@ Default to the Plannotator Inbox. Use Telegram only when both conditions hold:
 1. **Gilad is away.** You cannot see whether he reads anything. In your own Inbox threads you see only the messages he sent, and partly his drafts. Treat him as away when he has sent no Inbox message in the last 10 minutes.
 2. **You need one or two decisions.** The answer must turn stopped work into resumed work. A card with a few taps fits.
 
-Everything more serious stays in the Inbox: long reports, many questions, anything with files to review, and anything that needs thought before he answers.
+Everything more serious stays in the Inbox: long reports, many questions, files needing substantial review, and anything that needs thought before he answers. When Telegram is the agreed file-delivery channel, use `tgbot say --file`; the interaction reference explains receipts and unknown outcomes. Never handle the bot token or automatically retry an unknown file send.
 
 When you send on Telegram, give a decision he can make in seconds. Name what waits for it.
 

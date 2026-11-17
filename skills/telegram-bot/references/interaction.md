@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-11-15T14-45
+last_updated: 2026-11-17T15-25
 sources: ~/dev/telegram-bot (README.md, docs/DESIGN.md, docs/LESSONS.md, src/), live use with Gilad on 2026-11-14 and 2026-11-15
 ---
 
@@ -25,6 +25,7 @@ $B say "$(cat <<'EOF'
 **rich** markdown
 EOF
 )" [--silent]                       # a message, no reply expected
+$B say --file report.pdf ["plain caption"] [--silent] # upload a local file as a document
 $B ask card.yaml                    # a question card
 $B revise card.yaml                 # same id: new body or options, repainted in place
 $B close <card-id> "optional note"  # collapse the card to "Closed by the agent"
@@ -35,8 +36,20 @@ $B check "why"                      # end-to-end test: a message to Gilad, a wak
 
 - The text is sent as given. Use a heredoc or `$'…'` for multi-line text: a plain `"…\n…"` in bash sends a literal backslash-n.
 - `say` and `ask` bodies are rich Markdown (`sendRichMessage`), not `parse_mode` text. Follow the table, highlight and length rules in the writing style.
-- Each command waits up to 15 s for the daemon's verdict. It exits non-zero with the logged error when the request failed, or when nobody picked it up. A request nobody picked up waits and runs when the daemon starts. After a timeout, run `status` before you ask again.
+- Text/card commands wait up to 15 s for the daemon's verdict. It exits non-zero with the logged error when the request failed, or when nobody picked it up. A request nobody picked up waits and runs when the daemon starts. After a timeout, run `status` before you ask again.
 - A failed `ask` leaves no card behind. Fix the spec and ask again.
+
+### Send a file without touching the token
+
+Use `tgbot --bot <botname> say --file <local-path> ["plain caption"] [--silent]`. The daemon uploads one document; the caption is plain text, not rich Markdown. The local file must contain 1–50,000,000 bytes and the caption at most 1024 UTF-16 units. See the tool's README for the full contract.
+
+File sends print a JSON receipt with `request_id`, `outcome`, `message_id` and `error`. Exit 0 / `accepted` means Telegram returned a Message ID, **not that Gilad saw it**. Exit 1 / `refused` means local validation/cancellation or explicit API refusal. Exit 2 / `unknown` means the file might have arrived: a timeout, 5xx or empty response is not proof of failure.
+
+**Do not automatically retry an unknown send or bypass the daemon with raw-token calls.** Run `tgbot --bot <botname> status` and find the matching `document_sends` request ID. A CLI deadline can resolve later to accepted; an interrupted attempt stays unknown across restart. If still unknown, reconcile with Gilad before deliberately creating another send. The tool never retries file sends, including rate-limit refusals.
+
+The file command waits up to 65 s; an unclaimed request is cancelled at that deadline. It snapshots the file before queuing, and removes its upload copy after terminal processing; captions and receipts remain on disk. An older running daemon needs a restart after the tool upgrade. This command does not add file sending to a project's separate, custom gateway.
+
+Inbox remains the default for substantial review material. Use file sending when Telegram is the agreed delivery channel, rather than treating support for files as a change in channel policy.
 
 ## Card format (`ask`, `revise`)
 
