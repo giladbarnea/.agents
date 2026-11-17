@@ -63,7 +63,7 @@ Most Leads do not need the quota service. They need one habit:
 
 1. Before a long task, and when you delegate, run `quota` and compare the target rates of Claude and Codex.
 2. When one pool's target rate is clearly lower than the other's, move work to the pool with more room. Switch your own model, your delegates' models, or both, to the model with equal performance on the other provider.
-3. Keep Fable for work that needs it. Codex has no equal for it.
+3. Keep Fable at high thinking or above for work that needs it. Codex has no equal for it.
 
 Models with about the same performance, by thinking level (ai-scores Lead, Nov 17, from Artificial Analysis benchmarks; general and coding tests weighted most). These are overlapping bands, not exact equals:
 
