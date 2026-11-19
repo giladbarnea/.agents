@@ -22,7 +22,7 @@ send-session-command.sh TARGET --prompt COMMAND
 
 Use `--timeout SECONDS` to override either default. The deadline covers preflight, idle wait, submission and verification. An agent mid-work can take 5–10 minutes to settle. A running Pi turn cannot wait for its own session to settle. Use a separate idle caller in that case.
 
-**Exit `0` means verified success. Exit `1` means refusal, error or timeout.** Output goes to stderr, with the requested and observed settings on failure. Values that could not be checked are `unknown`. After a timeout, inspect the session before retrying. Pi may have applied the command.
+**Exit `0` means verified success. Exit `1` means refusal, error or timeout.** Invalid arguments print usage and the specific error to stderr before any Herdr call. After submission, failures report the requested and observed settings on stderr. Values that could not be checked are `unknown`. After a timeout, inspect the session before retrying. Pi may have applied the command.
 
 - `reload-session.sh` checks for a fresh Pi reload confirmation.
 - `set-model.sh` uses `/model PROVIDER/MODEL` and checks the exact native selection. Pi may change the thinking level when changing models. Use `set-thinking.sh` if you need a specific level. If Pi opens a picker instead of switching, the script leaves it open and does not select a row.

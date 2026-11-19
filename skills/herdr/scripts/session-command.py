@@ -13,7 +13,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TextIO, cast
+from typing import Literal, Never, TextIO, cast
 
 Action = Literal["send", "reload", "model", "thinking"]
 READY = ("idle", "done")
@@ -30,8 +30,22 @@ class Parser(argparse.ArgumentParser):
     def print_help(self, file: TextIO | None = None) -> None:
         super().print_help(file or sys.stderr)
 
-    def error(self, message: str) -> None:
-        raise Refused(message)
+    def error(self, message: str) -> Never:
+        self.print_usage(sys.stderr)
+        self.exit(1, f"{self.prog}: error: {message}; nothing sent\n")
+
+
+class StoreOnce(argparse.Action):
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: str | float | list[str],
+        option_string: str | None = None,
+    ) -> None:
+        if getattr(namespace, self.dest) is not None:
+            parser.error(f"{option_string} may only be specified once")
+        setattr(namespace, self.dest, self.const if self.nargs == 0 else values)
 
 
 def positive_seconds(value: str) -> float:
@@ -61,25 +75,26 @@ def parse(action: Action, arguments: list[str]) -> Command:
     parser = Parser(prog=f"{script}.sh", allow_abbrev=False)
     parser.add_argument("target", help="self, full Pi session UUID, or Herdr pane address")
     wait = parser.add_mutually_exclusive_group()
-    wait.add_argument("--wait-for-idle", dest="wait", action="store_true", default=True)
-    wait.add_argument("--no-wait-for-idle", dest="wait", action="store_false")
-    parser.add_argument("--timeout", type=positive_seconds, metavar="SECONDS")
+    wait.add_argument("--wait-for-idle", dest="wait", action=StoreOnce, nargs=0, const=True)
+    wait.add_argument("--no-wait-for-idle", dest="wait", action=StoreOnce, nargs=0, const=False)
+    parser.add_argument("--timeout", action=StoreOnce, type=positive_seconds, metavar="SECONDS")
     if action == "send":
-        parser.add_argument("--prompt", required=True)
+        parser.add_argument("--prompt", action=StoreOnce, required=True)
     if action == "model":
-        parser.add_argument("--model", required=True, metavar="PROVIDER/MODEL")
+        parser.add_argument("--model", action=StoreOnce, required=True, metavar="PROVIDER/MODEL")
     if action == "thinking":
-        parser.add_argument("--level", required=True, choices=("off", "minimal", "low", "medium", "high", "xhigh", "max"))
+        parser.add_argument("--level", action=StoreOnce, required=True, choices=("off", "minimal", "low", "medium", "high", "xhigh", "max"))
     options = parser.parse_args(arguments)
     expected = getattr(options, "model", getattr(options, "level", ""))
     if action == "model" and not re.fullmatch(r"[\w.-]+/[\w.:-]+", expected, flags=re.ASCII):
-        raise Refused("--model requires an exact PROVIDER/MODEL")
+        parser.error("--model requires an exact PROVIDER/MODEL")
     prompt = {"reload": "/reload", "model": f"/model {expected}", "thinking": f"/thinking {expected}",
               "send": getattr(options, "prompt", "")}[action]
     if not prompt.strip() or prompt.startswith("-") or any(ord(character) < 32 or 127 <= ord(character) < 160 for character in prompt):
-        raise Refused("prompt must be nonempty, single-line text without a leading dash or control characters")
-    return Command(action, options.target, prompt, expected, options.wait,
-                   options.timeout if options.timeout is not None else (300 if options.wait else 30))
+        parser.error("prompt must be nonempty, single-line text without a leading dash or control characters")
+    wait_for_idle = options.wait is not False
+    return Command(action, options.target, prompt, expected, wait_for_idle,
+                   options.timeout if options.timeout is not None else (300 if wait_for_idle else 30))
 
 
 @dataclass(frozen=True)
