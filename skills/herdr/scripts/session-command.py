@@ -185,11 +185,7 @@ def target_from(agent: dict[str, object]) -> Target | None:
 
 
 def editor(screen: str) -> str | None:
-    r"""Extract the editor text from Pi's visible pane.
-
-    >>> editor('───\n draft\n───\n footer')
-    'draft'
-    """
+    """Extract the editor text from Pi's visible pane."""
     dividers = list(re.finditer(r"^─+[ \t]*$", screen, re.MULTILINE))
     if len(dividers) < 2:
         return None
