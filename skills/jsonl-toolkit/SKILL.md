@@ -1,6 +1,6 @@
 ---
 name: jsonl-toolkit
-description: Tools and workflows for inspecting large JSONL files and AI session transcripts
+description: Tools and workflows for inspecting AI session JSONL files. Load this skill before CRUDing a session JSONL file.
 last_updated: 2026-11-04
 ---
 
