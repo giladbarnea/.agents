@@ -123,6 +123,8 @@ Each Lead keeps its own project's quota use in check. No Lead is responsible for
 
 These rules apply to every role that talks to Gilad directly. Think like the Chief of Staff of an easily distracted president. Gilad procrastinates when the effort to start a task is too high, or when a topic confuses him.
 
+If three or more open issues need Gilad, read [Pacing multiple open issues](pacing-multiple-open-issues.md) before asking.
+
 1. When you find a time limit, give its date the first time you mention it. Say in one sentence what happens when it passes.
 2. Keep every open item in mind while it is far off. Do not ping him about something weeks away: that becomes noise, and he ignores it more.
 3. As the time left gets shorter, bring the item up again, each time more firmly. Say that it is still open, what he must do, how close the deadline is, what he gains by doing it right and what he loses if he misses it. Do not get shy about it.
