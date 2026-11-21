@@ -17,13 +17,12 @@ Read the project instructions, its `GLOSSARY.md` when present, and relevant arch
 
 ## Prove behavior through public interfaces
 
-Tests must verify behavior that users or callers need, not implementation details.
+Tests must verify behavior that users or callers need, not implementation.
 Prefer integration-style tests through real public interfaces. Tests should survive internal refactors without changes.
 Do not test private methods, mock internal collaborators, assert internal call order, or verify through side channels such as direct database queries.
 
 Base test behavior and expected results on the spec, plan, or an independent worked example.
 Do not derive expectations from the implementation or recompute the same algorithm inside the test.
-A test that passes by construction cannot detect a defect.
 
 Mock only at system boundaries, such as external APIs, time, or randomness.
 Prefer a test database over a database mock. Do not mock away the behavior under test.
@@ -34,7 +33,10 @@ Read [test examples](tests.md) and [mocking guidance](mocking.md) for concrete p
 Use the public boundaries and behaviors already agreed in the request, spec, or plan.
 Before testing at another boundary, confirm it with the user. State what each proposed boundary catches and what it misses.
 Focus on critical paths and complex logic instead of trying to test every possible case.
-Fewer meaningful tests are better than many tests that cannot expose defects.
+
+Bad tests give a false sense of confidence because they don't do their job of being the gatekeeper, of safeguarding the product and project's behavior. These are the kinds of tests that haven't failed once in the project's history, even months after they were written. They are worse than no tests at all because they actively divert attention _away_ from real problems.
+
+Redundant tests largely cover what other, better tests already cover. A test is redundant if deleting it doesn't meaningfully affect the project's safety or integrity.
 
 When the interface needs design work, consult [interface design](interface-design.md) and [deep modules](deep-modules.md).
 
@@ -42,7 +44,7 @@ When the interface needs design work, consult [interface design](interface-desig
 
 Define a falsification criterion before writing each test: which bad state must this test detect?
 Make sure a failing test exposes that state, not a broken fixture, missing import, or exception in the test itself.
-Read the failure before changing implementation code. A red caused by the wrong problem proves nothing.
+Read the failure before changing implementation code.
 
 Use assertion messages that show the expected and actual values.
 Tests must not fail accidentally while inspecting a result. Keep expected application errors separate from test defects.
