@@ -13,7 +13,7 @@ set-thinking.sh TARGET --level LEVEL
 send-session-command.sh TARGET --prompt COMMAND
 ```
 
-**`TARGET` is required.** Use `self` to resolve `$PI_SESSION_ID`, a full Pi session UUID, or a Herdr pane address such as `wBF:p1D`. Run inside Herdr. The scripts require one open, file-backed Pi in the foreground. They refuse drafts, blocked panes and ambiguous targets. Do not type into the target while a script runs. The preflight and submission are separate Herdr calls.
+**`TARGET` is required.** Use `self` to resolve `$PI_SESSION_ID`, a full Pi session UUID, or a Herdr pane address such as `wBF:p1D`. Run inside Herdr. The scripts require one open, file-backed Pi leading the pane's foreground process group; its children (extension helpers, teammates) are fine. They refuse drafts, blocked panes and ambiguous targets. Do not type into the target while a script runs. The preflight and submission are separate Herdr calls.
 
 | Flag | Default timeout | If the target is working |
 |---|---:|---|

@@ -165,11 +165,17 @@ class Herdr:
         return agent
 
     def foreground(self, target: Target) -> int:
+        """Return the Pi process leading the pane's foreground group.
+
+        The group also holds Pi's children: transient tools that extensions spawn (git, herdr, python),
+        and pi-simple-team teammates, whose stdin is a socket, so only the leader reads the terminal.
+        """
         info = cast(dict[str, object], self.response("pane", "process-info", "--pane", target.pane)["process_info"])
+        leader = info["foreground_process_group_id"]
         processes = cast(list[dict[str, object]], info["foreground_processes"])
-        if len(processes) != 1 or Path(str(processes[0]["argv0"])).name != "pi":
-            raise Refused("cannot verify a unique foreground Pi process")
-        return int(cast(int, processes[0]["pid"]))
+        if not any(process["pid"] == leader and Path(str(process["argv0"])).name == "pi" for process in processes):
+            raise Refused("cannot verify a Pi process leading the foreground group")
+        return int(cast(int, leader))
 
     def screen(self, target: Target) -> str:
         return self.call("agent", "read", target.pane, "--source", "visible")
