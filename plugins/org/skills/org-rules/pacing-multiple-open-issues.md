@@ -8,5 +8,5 @@ When three or more open issues exist, use progressive disclosure to reduce the e
 
 1. Review the open questions. Close any that are already answered or no longer relevant.
 2. Rank the rest by importance × urgency × ease of answering now.
-3. Ask only the first question. Give at most a short hint of what follows, without asking it yet.
+3. Ask only the first question. Do give a sense of what follows and where we are in the sequence, without asking the rest yet.
 4. Ask the next question only after the user answers the current one.
