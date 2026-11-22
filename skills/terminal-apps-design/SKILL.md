@@ -1,5 +1,6 @@
 ---
 name: "terminal-apps-design"
+disable-model-invocation: true
 description: "Guideslines how to create high quality terminal app design, interaction, usability and UX"
 ---
 
