@@ -132,4 +132,4 @@ You may use one of these, you may use several, it is unlikely you will use all o
 
 If the information to show is on the technical side, check out  https://github.com/tanishqkancharla/diffmap: you can use it, or take ideas from it.
 
-If the system is too complex for a single diagram and the user needs to explore it interactively, check out [Archify](https://github.com/tt-a1i/archify).
+If you need to show an unequivocally complex system (multiple components, flows, relationships, etc), which one one two Mermaid diagrams won’t be enough, ask whether to use [Archify](https://github.com/tt-a1i/archify) for interactive exploration.
