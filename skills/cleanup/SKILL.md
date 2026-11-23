@@ -22,6 +22,10 @@ Cleanup has three goals:
 6. **Temporary areas:** temp folders, including `/tmp` and `$TMPDIR`, scratchpads, run folders.
 7. **Environments and tool caches.**
 
+## Where load comes from
+
+Cleanup removes symptoms. Look for the cause too, in how the work runs. Not a recipe, just a taste: cases we've seen that hogged resources include fresh installs on every test run, agent sessions started in huge or busy folders, several parallel processes indexing the same folder until it got out of control, and extensions that redo uncached work on every screen redraw in long sessions.
+
 ## Method
 
 1. Run the loose-ends checks and report them.
