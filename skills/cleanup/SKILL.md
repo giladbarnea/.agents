@@ -10,7 +10,7 @@ Cleanup has three goals:
 2. **Disk space.** Reclaim every byte that is stale, superseded or rebuildable.
 3. **Idle cost.** Nothing that is no longer needed keeps using CPU, memory or file activity.
 
-**Span: everywhere your work left a footprint on this machine's resources, inside or outside the project.** Include leftovers from earlier sessions and teams, shared temp folders, and global caches your tools filled. Exclude protected items and anything a live session still needs.
+**Span: everywhere you worked that left a footprint on this machine's resources, inside or outside the project.** Include leftovers from earlier sessions and teams, shared temp folders, and global caches your tools filled. Exclude protected items and anything a live session still needs.
 
 ## Domains
 
@@ -24,12 +24,12 @@ Cleanup has three goals:
 
 ## Where load comes from
 
-Cleanup removes symptoms. Look for the cause too, in how the work runs. Not a recipe, just a taste: cases we've seen that hogged resources include fresh installs on every test run, agent sessions started in huge or busy folders, several parallel processes indexing the same folder until it got out of control, and extensions that redo uncached work on every screen redraw in long sessions.
+Not a recipe, just a taste. A few cases we've seen that caused resource hogs: fresh installs on every test run, agent sessions started in huge or busy folders, several parallel processes that kept indexing the same folder until it got out of control, and extensions that redid uncached work on every screen redraw in long sessions.
 
-## Method
+## Recommended method
 
 1. Run the loose-ends checks and report them.
-2. Measure every candidate: bytes for files, and CPU, memory and file activity for processes, sampled over time. Rank by cost.
-3. For each candidate, check what references it and what it rebuilds from. Shared or cloned files can make a measured size overstate the gain.
+2. Measure everything: disk size, and CPU, memory, file activity, network and GPU for processes, sampled over time. Rank by cost.
+3. For each candidate, check what references it and what it rebuilds from.
 4. Present one table: item, cost, rebuilds from, references, risk, default action. Get one approval.
 5. Delete or stop, then report what was actually freed.
