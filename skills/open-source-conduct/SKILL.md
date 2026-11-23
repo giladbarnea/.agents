@@ -32,6 +32,7 @@ The attitude is: **“I care about this, I did the work, and I would like to con
 The following are real cases, after Gilad tuned them to completion, to show the desired tone and style. Each file in [examples/](examples/) shows the first draft and the final one.
 
 - [Pi: one non-caching extension component freezes long sessions](examples/2026-11-23-pi-non-caching-component-freezes-session.md)
+- [Kendex: past 256 user messages, every frame rebuilds every message](examples/2026-11-23-kendex-user-message-cache-cpu.md)
 - Real example: https://github.com/juicesharp/rpiv-mono/issues/150
 
 For creating and maintaining forks, read [the fork guide](references/fork.md).
