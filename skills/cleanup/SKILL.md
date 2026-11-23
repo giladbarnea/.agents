@@ -29,7 +29,7 @@ Not a recipe, just a taste. A few cases we've seen that caused resource hogs: fr
 ## Recommended method
 
 1. Run the loose-ends checks and report them.
-2. Measure everything: disk size, and CPU, memory, file activity, network and GPU for processes, sampled over time. Rank by cost.
+2. Measure everything: disk size, and CPU, memory, file activity, network activity, open ports and sockets, and GPU for processes, sampled over time. Rank by cost.
 3. For each candidate, check what references it and what it rebuilds from.
 4. Present one table: item, cost, rebuilds from, references, risk, default action. Get one approval.
 5. Delete or stop, then report what was actually freed.
