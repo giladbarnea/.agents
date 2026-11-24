@@ -8,7 +8,7 @@
 Drives the user's real Chrome over CDP :9222 and reuses one bank tab across
 invocations (target id cached next to this script).
 
-    ./poalim.py login              # log in using the Bitwarden entry
+    ./poalim.py login              # log in using the Keychain item bankhapoalim.co.il
     ./poalim.py accounts           # list accounts, print their API accountIds
     ./poalim.py switch משפחה       # switch the portal to a named account
     ./poalim.py get "/ServerServices/current-account/transactions?..."
@@ -34,7 +34,7 @@ import websocket
 PORT = int(os.environ.get("POALIM_CDP_PORT", "9222"))  # 9333: background headless Chrome that cannot take focus
 STATE = os.path.join(tempfile.gettempdir(), f"poalim-target-{PORT}.json")  # cache, not repo state
 LOGIN_URL = "https://login.bankhapoalim.co.il/ng-portals/auth/he/?reqName=getLogonPage"
-BW_ENTRY = "bankhapoalim.co.il"
+KEYCHAIN_SERVICE = "bankhapoalim.co.il"  # generic password: account = username, password = password
 
 
 class Tab:
@@ -175,24 +175,16 @@ def attach(create_url: str | None = None) -> Tab:
     return Tab(target_id)
 
 
-def bitwarden_credentials() -> tuple[str, str]:
-    """Read the bank login from Bitwarden.
-
-    Uses `bw get username/password`, not `bw get item | jq`: item JSON can carry
-    raw control characters in notes and breaks jq, which silently yields empty
-    credentials and burns a login attempt.
-    """
-    env = dict(os.environ)
-    if "BW_SESSION" not in env:
-        raise SystemExit("BW_SESSION is not set; unlock Bitwarden first")
-
-    def bw(field: str) -> str:
-        out = subprocess.run(["bw", "get", field, BW_ENTRY], capture_output=True, text=True, env=env)
-        if out.returncode != 0:
-            raise SystemExit(f"bw get {field} failed: {out.stderr.strip()[:200]}")
-        return out.stdout.strip()
-
-    return bw("username"), bw("password")
+def keychain_credentials() -> tuple[str, str]:
+    """Read the bank login from the macOS login Keychain. Exits if the item is missing or empty, before any login attempt."""
+    attributes = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE],
+                                capture_output=True, text=True)
+    password = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"],
+                              capture_output=True, text=True).stdout.rstrip("\n")
+    username = re.search(r'"acct"<blob>="([^"]*)"', attributes.stdout)
+    if attributes.returncode != 0 or not username or not username.group(1) or not password:
+        raise SystemExit(f"Keychain item {KEYCHAIN_SERVICE} is missing or incomplete; nothing was typed into the bank")
+    return username.group(1), password
 
 
 ACCOUNT_BUTTON = ("[...document.querySelectorAll('button')]"
@@ -220,7 +212,7 @@ def command_login(_args) -> None:
         raise SystemExit("login form did not render")
     time.sleep(1)
 
-    username, password = bitwarden_credentials()
+    username, password = keychain_credentials()
     tab.click("document.querySelector('#userCode')")
     time.sleep(0.3)
     tab.evaluate("document.querySelector('#userCode').value = ''")
@@ -425,7 +417,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("login", help="log in with the Bitwarden credentials").set_defaults(func=command_login)
+    sub.add_parser("login", help="log in with the Keychain credentials").set_defaults(func=command_login)
     sub.add_parser("accounts", help="list accounts and their API accountIds").set_defaults(func=command_accounts)
 
     switch = sub.add_parser("switch", help="switch the portal to a named account")

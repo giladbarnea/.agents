@@ -1,22 +1,21 @@
 ---
 description: Bank Hapoalim - log in, read account data, and transfer money to known beneficiaries.
-last_updated: 2026-09-10
+last_updated: 2026-11-24
 ---
 
 # Bank Hapoalim
 
-Precondition: a real Chrome process is exposed on CDP `:9222` and **may** already be logged in to Bank Hapoalim. If it is not, Gilad has to give you a way to log in: Bitwarden, a file he writes, or he logs in himself.
+Precondition: a real Chrome process is exposed on CDP `:9222` and **may** already be logged in to Bank Hapoalim. If it is not, `scripts/poalim.py login` logs in by itself with the macOS Keychain item `bankhapoalim.co.il`.
 
 Use `scripts/poalim.py` for all of it. It drives the user's real Chrome on CDP `:9222` and reuses one bank tab across invocations.
 
 ## 1. Log in
 
 ```bash
-export BW_SESSION=...                    # the user supplies this
 scripts/poalim.py login                  # no-op if a session is already live
 ```
 
-Read the credentials with `bw get username <entry>` and `bw get password <entry>`. **Never `bw get item <entry> | jq`**: the item JSON can carry raw control characters, jq then fails, and the empty credentials that follow burn a real failed login attempt against the bank.
+The credentials are a generic password in the login Keychain: service `bankhapoalim.co.il`, account = the bank username, password = the bank password. The `security` CLI created it, so `security find-generic-password` reads it without a prompt. No Bitwarden and no human are needed (since 2026-11-24). If the bank password changes, update the item from Bitwarden once: `security add-generic-password -U -s bankhapoalim.co.il -a <username> -w <password>`, never echoing the values. `login` exits before typing anything if the item is missing or empty, so a broken item never burns a failed login attempt.
 
 Form hooks on `login.bankhapoalim.co.il/ng-portals/auth/he/`: `input#userCode`, `input#password`, and a `button[type=submit]` whose text is `כניסה`. Success is `location.href` containing `/ng-portals/rb/`. If it does not arrive, print the page text before retrying - the bank shows the reason there, and repeated blind attempts lock the account.
 
