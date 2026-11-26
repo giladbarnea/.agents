@@ -12,11 +12,9 @@ The toolkit also supports AI session collections, exported transcripts, native P
 
 > **Grow [`lib/pi.mjs`](references/pi-lib.md); shrink everything else.** Every other script, pipeline and tool doc in this toolkit should eventually be eliminated. Help that happen: keep a light finger on the trigger, and remove an old resource or cut its scope whenever you safely can. Never extend one. When one fails or falls short, build what you need into the library, under its [design approach](references/pi-lib.md#design-approach).
 
-Load [`smart-compact/SKILL.md`](smart-compact/SKILL.md) only when the task is session compaction.
+Load the [`smart-compact`](smart-compact/SKILL.md) subskill if your leader told you so explicitly.
 
 File papercuts about this toolkit in its own log: pass the absolute path `file: /Users/giladbarnea/.agents/skills/jsonl-toolkit/.papercuts.jsonl` to the papercuts tool. Without it, the tool writes to the git root of your working directory, which is usually a temporary directory.
-
-During compaction, detect referenced files that changed or moved. Ask the user before refreshing historical file calls or payloads. See [approval-gated file refresh](smart-compact/references/conservative-pareto-compaction.md#refresh-historical-file-snapshots-only-with-approval).
 
 ## Identify the file format
 

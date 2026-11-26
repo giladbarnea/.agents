@@ -13,6 +13,8 @@ Smart-compaction removes redundant information while keeping contentful messages
 
 For conservative or Pareto compaction, read [Conservative Pareto compaction](references/conservative-pareto-compaction.md) before applying the rules below. Its remove / summarize / keep bar takes precedence over the rules below, including thinking selection, broad file-payload replacement, tool removal and deterministic preprocessing.
 
+During compaction, detect referenced files that changed or moved. Ask the user before refreshing historical file calls or payloads. See [approval-gated file refresh](references/conservative-pareto-compaction.md#refresh-historical-file-snapshots-only-with-approval).
+
 ## Keep thinking with the work it explains
 
 During compaction, treat thinking according to its associated messages and tools:
@@ -62,6 +64,8 @@ These messages can have either the user or assistant role.
 Drop local user commands that only adjust the harness. Keep commands that supply semantic instructions or trigger relevant context gathering.
 
 ## Replace structured file operations with references
+
+In a Pi session, `fileReference(operation, path, id)` and `skeleton({ name, command, purpose, outcome, meaning })` from [`lib/pi.mjs`](../references/pi-lib.md) write this skill's notation with escaped attributes.
 
 Keep only the operation, path, and stable tool identity for file CRUD tools.
 

@@ -50,7 +50,7 @@ Gilad decided on 2026-11-01 that this library is where the toolkit's capability 
 ## Use it
 
 ```js
-import { open, skeleton } from '/Users/giladbarnea/.pi/agent/skills/jsonl-toolkit/lib/pi.mjs';
+import { open } from '/Users/giladbarnea/.pi/agent/skills/jsonl-toolkit/lib/pi.mjs';
 
 const session = open('01a18383-2386');              // a path, or a unique session-ID prefix
 const context = session.context();                   // what the model receives now
@@ -58,7 +58,7 @@ console.log(context.outline());                      // one line per entry: ID, 
 const draft = session.edit()
   .omit(context.custom('pi-time-sense'))
   .omit(context.between('c73b1603', '2a3102af').editable().except('851591e9'))
-  .replace('777c6690', skeleton({ name: 'codemode', command: 'pytest', purpose: 'Validate', outcome: '152 passed' }))
+  .replace('777c6690', '[pytest: 152 passed]')
   .rewrite('4d4d6c84', content => content.filter(block => block.type !== 'thinking'));
 console.log(draft.report());                          // entries and estimated tokens, before and after
 console.log(draft.context().render({ clip: 300 }));   // the preview; nothing is written yet
@@ -75,7 +75,7 @@ UUIDv7 session IDs start with a timestamp, so sessions created in the same minut
 4. **Each item** has `id`, `role`, `label`, `customType`, `timestamp`, `content`, `messages`, `entry`, `model`, `tokens`, `editable`, `edited`, `toolCalls`, `answers` and `text`.
 5. **`Draft` collects decisions.** `omit`, `replace`, `rewrite` and `keep` take IDs, items, selections, or arrays of them. The last decision for an entry wins. `dedupe(group or locations)` keeps the first string and replaces the others with a reference to it. `dedupePassage({ entryId, path, start, end }, { within })` does the same for a passage inside larger strings; tool results that combine several outputs rarely repeat as whole strings, so this is the common case there. `decisions` and `save(path)` export them, and `session.edit(decisions)` restores them. `context()`, `check()`, `report()` and `apply({ to, marker })` act on them.
 6. **`Change` holds the entries to append.** It materializes them once, so the checked entries are the written entries. It has `context`, `check()` and `apply({ to })`.
-7. **Notation:** `skeleton({ name, command, purpose, outcome, meaning })` and `fileReference(operation, path, id)` format smart-compact's notation with escaped attributes. Deduplication marks the kept copy `[Payload <entry>:<n>] … [/Payload]` and writes `[Exact duplicate of payload <entry>:<n>.]` in its place elsewhere.
+7. **Notation:** `skeleton(…)` and `fileReference(…)` format smart-compact's notation; that subskill documents them. Deduplication marks the kept copy `[Payload <entry>:<n>] … [/Payload]` and writes `[Exact duplicate of payload <entry>:<n>.]` in its place elsewhere.
 
 ## The library enforces these rules
 
