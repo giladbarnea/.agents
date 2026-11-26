@@ -1,6 +1,6 @@
 ---
 name: web-search
-description: Web search via Perplexity, Google results (Serper, SerpAPI) and Exa
+description: Web search via Perplexity, Google results (Serper, SerpAPI), Exa, and X/Twitter and Grok
 argument-hint: query
 ---
 
@@ -57,6 +57,10 @@ curl -s -X POST https://api.exa.ai/search \
 Pitfalls:
 - Exa returned unrelated entities and excerpt numbers that were slightly wrong. Verify every fact on the source page.
 - If the key fails, use the web UI at exa.ai.
+
+## X/Twitter and Grok
+
+For X posts and Grok, use the logged-in browser as described in the `agent-browser` skill's `references/x-twitter.md`.
 
 ## Tip: use all three
 
