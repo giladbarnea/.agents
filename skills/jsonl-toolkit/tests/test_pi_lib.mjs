@@ -212,12 +212,12 @@ test('duplicateStrings groups exact repeats wherever they sit, but never inside 
   assert.deepEqual(context.duplicateStrings({ minLength: DOCUMENT.length + 1 }), []);
 });
 
-test('dedupe keeps the first copy as a marked anchor and points every repeat at it', t => {
+test('dedupe keeps the last copy as a marked anchor and points every earlier repeat at it', t => {
   const session = open(fixture(t, { entries: DUPLICATES }).path);
   const [group] = session.context().duplicateStrings({ minLength: 1000 });
   const preview = session.edit().dedupe(group).check().context();
-  assert.equal(preview.item('write').content[1].arguments.content, `[Payload write:1]\n${DOCUMENT}\n[/Payload]`);
-  assert.deepEqual(preview.item('readResult').content, [{ type: 'text', text: '[Exact duplicate of payload write:1.]' }]);
+  assert.equal(preview.item('readResult').content[0].text, `[Payload readResult:1]\n${DOCUMENT}\n[/Payload]`, 'The later read must survive in full');
+  assert.equal(preview.item('write').content[1].arguments.content, '[Exact duplicate of payload readResult:1.]', 'The earlier write must point at the later read');
   assert.deepEqual(preview.item('write').content[0], { type: 'thinking', thinking: DOCUMENT, thinkingSignature: 'signed' }, 'Signed thinking must stay byte for byte');
   assert.throws(() => session.edit().dedupe([group.locations[0], { entryId: 'answer', path: ['content', 0, 'text'] }]), /not byte-identical/);
   assert.throws(() => session.edit().dedupe([{ entryId: 'write', path: ['content', 0, 'thinking'] }, group.locations[1]]), /thinking block/);

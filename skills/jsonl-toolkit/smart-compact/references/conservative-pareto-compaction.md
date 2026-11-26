@@ -7,7 +7,7 @@ last_updated: 2026-11-04
 
 Apply the same bar to messages, tool payloads and readable reasoning:
 
-1. **Remove** only what is unquestionably noise or repetition. For repeated content, keep one full version and link to it as described below.
+1. **Remove** only what is unquestionably noise or repetition. For repeated content, keep the last full version and link to it as described below.
 2. **Summarize or tree-shake** only passages with an unquestionably very poor signal-to-noise ratio. Reduce the noise while keeping the signal intact: do not dilute unique assumptions, qualifications, disagreements or corrections.
 3. **Keep as-is** everything else, including borderline cases. Size alone is not a reason to cut, and there is no token-reduction target.
 
@@ -35,7 +35,7 @@ Repeated content does not make two events identical. The same input can trigger 
 
 Replace repeated passages with short semantic placeholders, not silent deletion. Name what stayed the same. Identify the surviving full version through a stable message or tool identity and a section or line range.
 
-> Unchanged §2: same as the earlier Write of `docs/design.md` (call `abc`). The full text remains there.
+> Unchanged §2: same as the later Read of `docs/design.md` (call `abc`). The full text remains there.
 
 In a Pi session, the library finds and links byte-identical repeats for you: see `duplicateStrings`, `dedupe` and `dedupePassage` in [its parts](../../references/pi-lib.md#the-parts).
 

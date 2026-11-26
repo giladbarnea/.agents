@@ -427,11 +427,13 @@ export class Draft {
   }
 
   /**
-   * Keep the first location's string as a marked payload anchor and replace each other location with a reference to it.
-   * Takes a group from selection.duplicateStrings, or an array of {entryId, path}. Raises unless every string is byte-identical.
+   * Keep the last location's string as a marked payload anchor and replace each earlier location with a reference to it.
+   * Takes a group from selection.duplicateStrings, or an array of {entryId, path} in context order. Raises unless every string is byte-identical.
    */
   dedupe(locations) {
-    const [survivor, ...repeats] = locations.locations ?? locations;
+    const ordered = locations.locations ?? locations;
+    const survivor = ordered.at(-1);
+    const repeats = ordered.slice(0, -1);
     demand(repeats.length > 0, 'dedupe needs a surviving location and at least one repeat');
     demand(new Set([survivor, ...repeats].map(location => JSON.stringify(location))).size === repeats.length + 1, 'dedupe got the same location twice');
     const text = this.#stringAt(survivor);
@@ -446,6 +448,7 @@ export class Draft {
 
   /**
    * Mark one passage of a string as a payload anchor, and replace its other occurrences in the within entries with a reference to it.
+   * Pass the passage's last occurrence, so the full copy is the most recent one.
    * start and end index the string as context.item(entryId) shows it. Strings inside signed thinking and images are left alone.
    * Raises when the passage is not unique in its own string, occurs nowhere else, or sits in an entry Pi cannot edit.
    */
