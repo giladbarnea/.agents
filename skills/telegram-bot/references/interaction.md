@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-11-17T15-25
+last_updated: 2026-11-27T01-10
 sources: ~/dev/telegram-bot (README.md, docs/DESIGN.md, docs/LESSONS.md, src/), live use with Gilad on 2026-11-14 and 2026-11-15
 ---
 
@@ -61,7 +61,7 @@ body: |                 # rich Markdown; the first line is the card's title
   ## Title
   | A | B |             # at most 3 table columns
 fields:                 # at most 4 single, 4 multi, 1 date
-  - {id: pick, kind: single, label: Which?, options: [{id: a, label: A}, {id: b, label: B}]}
+  - {id: pick, kind: single, label: Which?, options: [{id: a, label: A}, {id: b, label: B, wakeupAgent: false}]}   # wakeupAgent: default true
   - {id: extras, kind: multi, label: Include, options: [{id: x, label: X}]}
   - {id: day, kind: date, label: Which day?}
   - {id: note, kind: note, label: Anything else?}   # Gilad replies to the card with text, a photo or a voice note
@@ -73,6 +73,7 @@ relations: {answers: [other-id]}   # printed on the card only; no behavior
 - `silent` sends without a notification sound. Use it for non-urgent cards.
 - `relations` (`blocked_by`, `supersedes`, `answers`) are text on the card only. Do not rely on them.
 - `revise` works only on an open card. It drops armed picks that no longer exist. A finished card's id may be reused; an open card's may not.
+- `wakeupAgent: false` on an option: Gilad's pick of it is committed and shown on the answered card, but left out of your batch. If nothing else on Send is for you, you are not woken. Must be a YAML boolean (`false`, not `"false"`); `ask` and `revise` refuse anything else. Use it for options whose answer needs no agent action. Such a card still turns `answered` in `status` with no batch: do not wait on it. The flag hides picks from batches only: while armed, a pick still shows in `status` and in the Outbox text Gilad can reply to.
 - Examples: `~/dev/telegram-bot/examples/cards/`.
 - Per the writing style, keep cards short. Split rather than stack: several small cards, one claim each.
 
@@ -83,7 +84,7 @@ Wakes are `herdr agent prompt` messages that start with a bracketed tag, such as
 | Gilad does | What happens |
 |---|---|
 | Taps a choice, picks a date, adds a note to a card, reacts to a card | Armed as a draft. Nobody wakes. The Outbox message lists what is armed. |
-| Presses **Send** (the pinned Outbox) | One batch file per card owner. One wake per owner: `[Telegram batch] Gilad pressed Send. Read <path>`. Answered cards repaint as "✓ Answered" with his picks. |
+| Presses **Send** (the pinned Outbox) | One batch file per card owner. One wake per owner: `[Telegram batch] Gilad pressed Send. Read <path>`. Answered cards repaint as "✓ Answered" with his picks. Picks of options marked `wakeupAgent: false` are left out of the batch; an owner with nothing left gets no batch and no wake. |
 | Sends a plain message, a photo, a voice note, a file, a forward, or replies to something that is not an open card | The Lead wakes at once, even while answers are armed. |
 | Reacts to a `say` message | The Lead wakes at once with that message's text. |
 | Edits a message the gateway delivered | Routed like the original and marked `[Telegram edit] … 'old' -> 'new'`. An armed, unsent note just takes the new text. An edit owed to a card owner waits for Send while answers are armed. |
