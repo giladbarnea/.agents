@@ -14,12 +14,13 @@ Cleanup has three goals:
 
 ## Domains
 
-1. **Git:** worktrees, unpushed branches, stashes, the object store.
+1. **Git:** dirty current tree, worktrees in progress or abandoned, unpushed branches, stashes, the object store.
 2. **Live state:** processes, locks, terminal panes, agents and forks. Include live but idle ones: agent sessions and teammates, file watchers and indexers, browser instances, dev servers. Ask whether each is still needed and what it costs while idle.
-3. **Documents:** promote desk or temp content that belongs in the project. Consolidate or delete its periphery. Fix pointers to stale entries.
+3. **Documents:** promote desk or temp content that deserves a more canonical home up the project's directory tree. Consolidate the work docs where meaningful, otherwise delete. Fix pointers to stale entries. Low-key package what you've written while work was in-progress to make historical investigations in the future easier. A cleaned-up desk should have a much lower total line count than before.
+3. **Documents:** Move desk content that deserves a more canonical home higher up the project's directory tree. Consolidate meaningful information in work docs; otherwise, delete them. Fix pointers to stale entries. Delete throwaway or one-off content and files you've written. Organize what you've written during the work to make future historical investigations easier. A cleaned-up desk should have a much lower total line count than before.
 4. **Build outputs and caches:** compiled artifacts, packaged builds, and the caches of compilers, bundlers and engines.
 5. **Containers and VMs:** containers, images, volumes, and the VM running them.
-6. **Temporary areas:** temp folders, including `/tmp` and `$TMPDIR`, scratchpads, run folders.
+6. **Temporary areas:** temp folders, including `/tmp`, `/var/`* and `$TMPDIR`, scratchpads, run folders.
 7. **Environments and tool caches.**
 
 ## Where load comes from
