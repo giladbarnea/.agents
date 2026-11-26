@@ -1,6 +1,6 @@
 ---
 name: cleanup
-description: "Close out work: leave no loose system-resource ends and reclaim disk space. Work means any footprint on this machine's resources: more than negligible file-system changes, spun-up processes, and so on. Load and apply after each finished work milestone, even a partial one. Also load when the user wants system resources back, or when declining system resources affect your work."
+description: "Close out work: leave no loose system-resource ends and reclaim disk space. Work means any footprint on this machine's resources: more than negligible file-system changes, spun-up processes, and so on. Load and apply after you are done with a task of any size. Apply after milestones in larger tasks. Also load when the user wants system resources back, or when declining system resources affect your work."
 last_updated: 2026-11-23
 ---
 # Cleanup
