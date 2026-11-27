@@ -6,6 +6,7 @@ adis_origin:
   url: https://github.com/addyosmani/agent-skills/blob/main/skills/code-simplification/SKILL.md
   release: 0.5.0
   commit: f1f6fbf3981076da73455bf3b754f5864208a93d
+disable-model-invocation: true
 ---
 
 # Code Simplification
