@@ -79,21 +79,19 @@ A model switch rereads the whole context once on the new provider. So switch at 
 
 ## Choose the model by the task
 
-Gilad's two tiers, as of Nov 26:
+Gilad's two tiers, as of Nov 2026:
 
 **Excellent models:** Astra high or xhigh, Opus high to xhigh, Fable medium to xhigh. Use one when the task:
 
-1. needs you to hold a wide, complex web of factors, or has delicate details where one mistake makes a large part of the result wrong (the usage algorithm Owner's mission has both);
-2. needs judgment and taste in ambiguous cases, where deep understanding turns a coin flip into the right decision;
-3. needs an especially large amount of information, where connections between far-apart facts help;
+1. needs you to hold a wide, complex web of factors, or has delicate details where one mistake makes a large part of the result wrong;
+2. needs judgment and taste in ambiguous cases, where deep understanding and high intelligence turn a coin flip into the right decision;
+3. needs an especially large amount of information, where connecting non-trivial, far-apart dots helps;
 4. is the plan for a large task, which needs both breadth and depth of quality;
 5. is the review of important work that a good model did.
 
 They cost a little more (Opus high costs about the same as Opus medium), reasonably more, or much more (Fable xhigh, the extreme).
 
-**Good models:** more cost-effective, and they do a great job. Use them when none of the above applies: Opus high, or Sol xhigh or max, for harder or more important tasks; otherwise Opus medium or Sol high.
-
-Example: a new plain output mode and a flag for `quota` (Nov 27) is a task for Opus medium or high, or Sol xhigh, not Astra.
+**Good models:** more cost-effective, and they do a great job. Use them when none of the above applies: Opus high, or Sol xhigh or max, for harder or more important tasks; otherwise Opus medium or Sol high. Lean Opus high or Sol xhigh.
 
 ## Banked resets
 
