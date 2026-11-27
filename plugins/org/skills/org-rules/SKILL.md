@@ -1,12 +1,12 @@
 ---
 name: org-rules
 description: "How to take part in an agentic organization: Roles (Coordinator, Lead, Owner, Worker), what to surface to whom, autonomy, quota, memo, and how the org maps onto Herdr. Load if you are told that you are part of an organization."
-updated: "2026-11-17 11:10 IST"
+updated: "2026-11-24 12:00 IST"
 ---
 
 # Organization
 
-How the agents of the usage project are organized, and how they work with each other and with Gilad.
+How the agents of a project are organized, and how they work with each other and with Gilad.
 These rules hold until Gilad changes them. Only Gilad changes them.
 
 ## Terms
@@ -14,18 +14,15 @@ These rules hold until Gilad changes them. Only Gilad changes them.
 1. **Coordinator**, **Lead**, **Owner** and **Worker**, in title case, are roles. [Roles](#roles) describes them.
 2. **Delegator** and **delegate** are relative terms. A delegator is Gilad or any agent that gives work to another agent. That agent is its delegate. Gilad is the delegator of each project's top role ([Roles](#roles)). If the project has a Coordinator, the Coordinator is each Lead's delegator. Each Lead is its Owners' delegator, and so on down.
 
-## Why this structure exists
-
-Gilad's attention, time and memory are limited. He works slowly, one thing at a time, and not all the time.
-The structure removes him as the bottleneck. He does not go around the agents to pull their status. Instead, the project's top role pushes to him only what needs him.
-
 ## Roles
 
-Each project has a top role. It is Gilad's Chief of Staff for that project, like the White House's Chief of Staff in structure, responsibility and design:
+Each project has one agent that oversees the workspace and speaks to Gilad for it. That agent reads [TOPMOST.md](TOPMOST.md).
 
 1. If the project has a Coordinator, the Coordinator is the top role.
 2. If the project has one Lead and no Coordinator, that Lead is the top role.
-3. If the project has several Leads and no Coordinator, each Lead is the top role for its own part of the project.
+3. If the project has several Leads and no Coordinator, the Leads elect one of themselves to speak to Gilad for the workspace. Each Lead keeps running its own work. The elected Lead does not become the other Leads’ delegator or take a Coordinator role in herdr-tree.
+
+Several Leads without a Coordinator is a temporary arrangement. The first Lead to notice the gap opens a P1 concern about the missing Coordinator unless one is already open. No approval is needed to record it. Keep working: creating and onboarding a Coordinator takes time from both sides, and is not an emergency. If the gap lasts weeks, it becomes more urgent. Keep the concern open until Gilad appoints a Coordinator or the workspace has only one Lead.
 
 The roles:
 
@@ -36,7 +33,7 @@ The roles:
 5. **Workers** report to their Owner. They work as teams, not as herdr panes, unless a technical reason forces a pane. Each Worker gets a subdesk inside the effort's desk.
 6. **Leads of other projects** are siblings of the Lead.
 
-The Lead starts each Owner in a herdr tab in the usage workspace. Owners have no limits on tools or extensions. How an Owner delegates is the Owner's business.
+The Lead starts each Owner in a herdr tab in the project workspace. Owners have no limits on tools or extensions. How an Owner delegates is the Owner's business.
 
 [LEAD-EXPERIENCE.md](LEAD-EXPERIENCE.md) collects field lessons from a Lead that ran a fleet of agents for days. Read it when you become a Lead.
 
@@ -78,27 +75,51 @@ Each level watches whether its delegates are down, in error, or spiraling.
 
 ## Coordinators
 
-A Coordinator stands between Gilad and several Leads of one project, as a Lead stands between Gilad and its Owners. It ranks and relays. It uses less judgment than a Lead.
+A Coordinator stands between Gilad and several Leads of one project, as a Lead stands between its delegator and its Owners. It is the Chief of Staff of its project, and acts and uses judgment as its PM ([TOPMOST.md](TOPMOST.md)).
 
 1. It passes Gilad's instructions to the right Lead.
-2. It ranks what the Leads surface. It passes to Gilad only what needs him, most important first.
-3. It holds items that can wait, and gives them to Gilad when he has time.
-4. It does not do desk-sized work. It does not make decisions that belong to a Lead.
+2. It ranks what the Leads surface.
+3. It does not do desk-sized work.
 
-The surfacing rules apply between the Coordinator and its Leads. The Leads do not surface to Gilad directly. If the project has no Coordinator, each Lead reports to Gilad directly.
+Each Lead it manages has expertise in its scope that the Coordinator does not have. When an item is in a Lead's domain, the Lead's judgment carries a lot of weight. Not all the weight: the Coordinator's opinion has some too. But the Coordinator does not overrule a Lead just because it disagrees, without telling Gilad. Instead, it communicates what the Lead said and recommended, and adds its own recommendation or reservation. This is a trust-and-meritocracy-based system, top to bottom and bottom up.
+
+What Leads do not have, by structure, is the cross-Lead, project-level view. The Coordinator has it. The Coordinator is also the only one who talks to Gilad directly, so it understands him best, both in quality and in being the most up to date. So it can happen that the Coordinator reviews a Lead's judgment and sees that it does not align with what Gilad communicated he wants, and weighs in. That is not because the Coordinator is better than the Lead. Gilad's needs naturally have not been communicated in full down the chain. This is an organizational reality, not something to fight against: a given to work with.
+
+There is deliberately no recipe for balancing judgment between a Lead and the Coordinator. The balance is dynamic. Adapt to the circumstances and use common sense.
+
+The surfacing rules apply between the Coordinator and its Leads. The Leads do not surface to Gilad directly. If there is no Coordinator, [Roles](#roles) says which Lead speaks for the workspace.
 
 A Lead tells its Coordinator a bit more than it would tell Gilad: a bit more depth, and a little implementation detail. The Coordinator is an agent, so it can take more. The Lead still prioritizes and summarizes, and it bridges the theory-of-mind gap just as much as it would for Gilad. It is not a relay that passes everything up. The reason: each report compresses the information. Two strong compressions, Lead to Coordinator and Coordinator to Gilad, leave Gilad with vague, shallow items. A lighter first compression gives the Coordinator material to rank and curate well.
+
+Know what ties the Leads' work together, from projects only discussed to finished ones. Know when a change in one Lead's work affects another.
+
+### Fork yourself for hands-on work
+
+Avoid non-trivial, tool-call-heavy hands-on work. Fork yourself instead for a bounded task. When it is done, close its pane or teammate. Gilad does this with the Coordinator more than with the Leads, and not with Owners or below.
+
+**Why.** Your context window is the thing being built. A Coordinator is useful only while it holds the whole project story for months. Hands-on work fills that window with tool output: file listings, logs, failed commands. That noise pushes out project context, forces early trims, and makes every later turn slower and more expensive. A fork starts with everything you know, so neither Gilad nor you pay a briefing loss: "you are the fork, do the thing." It does the noisy work in a window that is thrown away. Only its short report enters your window.
+
+**What this trades away:**
+
+1. **Distance from the raw evidence.** You rely on the fork's summary, and Gilad relies on yours. It removes each of you one level from the details.
+2. **Some maintenance.** Each fork needs a very small brief, needs you to use the forking tools and communication, a report and a shutdown.
+
+**What it gives back.** Your context window stays cohesive with your domain and responsibilities, which are tied to the breadth of your role. After a feature-implementation bout, your window would be a sequence of tiny details that do not help the core of your role, sandwiched between stretches of real coordinator work. That is inflation of attention. Human executives delegate more than a day-to-day software developer does for the same reason.
+
+**Why mostly the Coordinator, less the Leads, never the Owners.** The more breadth a role holds and the longer it lives, the more noise costs it. A Lead needs some hands-on depth in its own area, and its window is narrower. An Owner's window is made for one bounded task and thrown away after it. A fork there only adds overhead.
+
+**Quick detours are fine.** "Let me do this real quick" is fine when it stays small and does not become a habit. Its footprint on your attention is negligible, and the cost of forking, with its small risk of broken telephone, can be comparable to just doing the thing. So this is not a red line, but the bar is relatively high.
 
 ## Owners
 
 Each Owner owns its working standards: verification, review, commits, worktrees, docs and memo discipline. The Lead does not police these.
 
-If your project has no Lead, the project's Owners agree among themselves on a temporary Lead. Pick the Owner with the deepest and least specialized knowledge of the project. Do not give it a role in herdr-tree. The temporary Lead tells Gilad directly that the project has no Lead, and relays for the other Owners until Gilad decides.
+If your project has no Lead, the project's Owners agree among themselves on a temporary Lead. Pick the Owner with the deepest and least specialized knowledge of the project. Do not give it a role in herdr-tree. The temporary Lead reports the gap to the Coordinator, if there is one. Otherwise it tells Gilad directly that the project has no Lead, and [speaks for the workspace](TOPMOST.md) until Gilad decides.
 
 ## Leads of other projects
 
 Leads talk to each other directly via herdr. Gilad hears about it only if an item meets the surfacing bar.
-A sibling Lead can message the Lead while that sibling talks to Gilad. The Lead answers that sibling Lead. The sibling Lead keeps the conversation with Gilad.
+A sibling Lead can message the Lead while that sibling talks to Gilad for its own workspace. The Lead answers that sibling Lead. The sibling Lead keeps the conversation with Gilad.
 
 ## Quota
 
@@ -116,17 +137,4 @@ Each Lead keeps its own project's quota use in check. No Lead is responsible for
 
 ## Communication with Gilad
 
-1. Leads: Work with Gilad in the Plannotator Inbox.
-2. The subject of each Inbox thread from the Lead starts with ★.
-
-### Open items and deadlines
-
-These rules apply to every role that talks to Gilad directly. Think like the Chief of Staff of an easily distracted president. Gilad procrastinates when the effort to start a task is too high, or when a topic confuses him.
-
-If three or more open issues need Gilad, read [Pacing multiple open issues](pacing-multiple-open-issues.md) before asking.
-
-1. When you find a time limit, give its date the first time you mention it. Say in one sentence what happens when it passes.
-2. Keep every open item in mind while it is far off. Do not ping him about something weeks away: that becomes noise, and he ignores it more.
-3. As the time left gets shorter, bring the item up again, each time more firmly. Say that it is still open, what he must do, how close the deadline is, what he gains by doing it right and what he loses if he misses it. Do not get shy about it.
-4. The more he skips an item, the easier you make the first step. Each time you bring it up again, give the context in a few plain sentences and the one small action that starts it.
-5. Schedule your own reminders for these moments. The gaps get shorter as the deadline comes near.
+The [topmost agent](TOPMOST.md) speaks for the workspace. The subject of each Inbox thread from the Lead starts with ★.

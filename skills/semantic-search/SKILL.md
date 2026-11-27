@@ -1,6 +1,7 @@
 ---
 name: semantic-search
 description: Lightweight semantic search to query any arbitrary directory tree. Returns a list of files ranked by relevance. Go-to approach to scout questions like ‘Where is everything to do with X?’ as well as Q&A over your docs such as ‘What was the most pressing issue for the client in May?’ Use when you need to know which files to read before a deep dive in. Typically used in the earlier stages of a session when gathering full context.
+disable-model-invocation: true
 ---
 ## Semantic Search 
 

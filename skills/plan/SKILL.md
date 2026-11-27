@@ -1,6 +1,7 @@
 ---
 name: "plan"
 description: "Planning best practices. Load when planning a multi-phase, heavyweight deliverable. Unfit for small-medium sized efforts."
+disable-model-invocation: true
 ---
 
 # Planning Best Practices

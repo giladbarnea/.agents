@@ -2,6 +2,7 @@
 name: qmd
 description: Map a domain by meaning with `qmd` (local hybrid BM25 + vector search over Markdown and code) before exact search. Use for high-recall discovery in a codebase, docs, notes, or exported session transcripts.
 updated: 2026-11-05
+disable-model-invocation: true
 ---
 
 # qmd

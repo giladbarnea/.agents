@@ -1,5 +1,5 @@
 ---
-updated: "2026-11-10 15:25 IDT"
+updated: "2026-11-23 10:48 IST"
 description: Field lessons from leading a multi-agent project for days, generalized for any Lead
 author: remotes-automation Lead
 ---
@@ -29,7 +29,7 @@ The remotes-automation Lead supervised a tree of agents for many days and dozens
 1. Give each delegate one clear job, and keep it there. In remotes-automation, the main fixer selects and prioritizes work. The controller funds and runs it. Neither does the other's job, and the Lead does neither.
 2. Standing authority is real. A delegate once held three approved publications for a second human go-ahead. Correct over-holding as firmly as over-reaching.
 3. Challenge a convenient claim with fresh evidence. A main agent once reported "no backlog". One challenge found about 15 eligible items, and it withdrew the claim.
-4. A human answer establishes only what it answers. An answer to a design question is not approval to implement, fund, or publish.
+4. For the scope of a human approval, see [When Gilad needs to act or has answered](TOPMOST.md#when-gilad-needs-to-act-or-has-answered).
 
 ## 4. Preserve identity and history
 
@@ -57,14 +57,14 @@ The remotes-automation Lead supervised a tree of agents for many days and dozens
 2. Before you edit, write new firsthand knowledge to your own handoff file. After the edit, reload your instructions and skills.
 3. Use a cheap usage check for routine checks. A full outline costs tens of thousands of tokens. Use it only just before an edit.
 4. Keep a handoff file that a cold reader can resume from. Remove false and stale claims before you add new ones.
-5. Pi auto-compacts a session that reaches its compaction threshold (by default, 64k tokens below the window size). After compaction, the entry IDs from an earlier outline no longer exist, so edits that use them are refused. The same context can also measure much larger after a model switch. On November 10, 551k under Sol measured 918k under Opus, and both the Lead and its new fork auto-compacted. Check usage after a model switch, and edit before you reach the threshold.
+5. Pi auto-compacts a session that reaches its compaction threshold (by default, 64k tokens below the window size). After compaction, the entry IDs from an earlier outline no longer exist, so edits that use them are refused. Providers count the same context differently: Anthropic counts about 1.5 to 2 times what OpenAI counts. On November 10, 551k under Sol measured about 910k under Opus. On November 26, 557k under Sol measured 992k under Opus. Both times the session auto-compacted right after its first request on the new provider, because Pi does not measure the new count before that request. Predict the new size before you switch providers: double the OpenAI usage. If the result is near the threshold, edit first, while still on the old provider.
 
 ## 7. Verify the harness, not just the agents
 
 1. A session reload stops its teams and its scheduled reminders, often silently. After any reload, check which delegates are live and rearm your reminders. It may not always be possible to know whether you or other sessions have been reloaded. It is Gilad's long-term responsibility to make sure that a silent reload without a resume does not happen.
 2. Saved settings are not effective settings. Check the model and thinking level that a resumed agent actually runs.
 3. Installed, global, and local copies of a tool can differ. Read the copy that actually runs.
-4. When a credential expires, stop all retries and probes at once. Ask Gilad for one specific action, then continue the same work after he does it.
+4. When a credential expires, surface it to your delegator. The [topmost agent](TOPMOST.md) asks Gilad for the action. Independently, try to find a sensible alternative way to keep work going. Don’t get yourself retry-blocked or put on cooldown. If you cannot keep working, clearly tell your delegator that you’re blocked and wait for them to unblock you.
 5. Keep clock reminders as plain timestamps in batches of a few hours. The last one says to rearm. They are clock glances, not quota polls or progress reports.
 
 ## 8. Report the truth, including the partial truth
@@ -78,8 +78,7 @@ The remotes-automation Lead supervised a tree of agents for many days and dozens
 
 1. Write short, complete sentences with normal spacing. Agents drift into telegraphic shorthand with each other. Gilad noticed it, and it hurt both directions.
 2. Use one name for one thing, for the whole project history.
-3. When Gilad states a rule or a decision, persist it in its owner document before the next unit of work. Then tell him where it went.
-4. Respect quiet hours for anything that reaches a person or the public.
+3. If quiet hours were established explicitly, respect them for anything that reaches a person or the public.
 
 ## 10. How one Lead ran a dynamic fleet for days in a half-built system
 
@@ -107,13 +106,13 @@ Gilad
 ### What kept it productive
 
 1. **Every unit of work has a numbered run folder.** It holds the assignment, the reviews, the decisions, and a final receipt such as PUSH-READY or PUBLISHED. Any agent, including a fresh one after a crash, can pick up from the folder.
-2. **Every coordinator keeps a handoff file that a cold reader can resume from.** The Lead, the controller, and each main keep one, and update it after each event that matters. Session reloads, context edits, and model switches stopped being disasters because of these files.
+2. **Every coordinator keeps a [handoff file](#6-survive-your-own-context-window).** The Lead, the controller, and each main keep one, and update it after each event that matters. <!--Lead is a real entity in this skill’s world. Controller and Main are unique solutions created only in one project (remotes-automation) for needs only that project has had, because it's unique in its DNA. I'm not saying that only Lead should maintain a handoff; i'm saying we should pin point exactly why, in the remotes-automation project, it's a good idea that lead, controller and each main maintain a handoff and not necessarily other roles -- what's their shared property? -- and put the generalized version of this here in this line instead. --> Session reloads, context edits, and model switches stopped being disasters because of these files.
 3. **Finished work can wait without blocking new work.** At night, candidates were built, reviewed, and held privately with the exact tree recorded. In the morning they were published in the right order, each verified against its recorded tree. Work that depends on an unpublished parent records that dependency and waits for it.
-4. **Human answers travel unchanged to the same owner.** A question to Gilad records which session asked it. His answer goes back through the controller, word for word, to that session. Nobody paraphrases it and nobody starts a new agent to take it.
-5. **Questions to Gilad do not stop the fleet.** A blocked item waits in the Inbox, and the main fixer moves the fleet to independent work. Only a true external dependency, such as an expired login, pauses everything.
-6. **The Lead watches the clock, not the agents.** Timestamp reminders every 30 minutes, armed in batches, give the Lead a moment to check health and quota. Between them, agents report milestones and blockers themselves. Nobody polls in a loop.
-7. **Quota is steered both ways from live readings.** When rates rise, the fleet adds useful work. When they fall, it removes pairs or moves work to the other provider. When one provider ran out, the fleet moved work to the other provider and kept going.
-8. **Rules live in one place.** Each policy has one owner document, and everything else links to it. When Gilad changed a rule, the Lead updated that document before the next unit of work, and told the controller where to read it.
+4. **[Human answers travel unchanged to the same owner.](#4-preserve-identity-and-history)** A question to Gilad records which session asked it. His answer goes back through the controller, word for word, to that session.
+5. **[Questions to Gilad do not stop the fleet.](TOPMOST.md#how-you-work)** A blocked item waits in the Inbox, and the main fixer moves the fleet to independent work. Only a true external dependency, such as an expired login, pauses everything.
+6. **[The Lead watches the clock, not the agents.](#7-verify-the-harness-not-just-the-agents)** Timestamp reminders every 30 minutes, armed in batches, give the Lead a moment to check health and quota. Between them, agents report milestones and blockers themselves. Nobody polls in a loop.
+7. **[Quota is steered both ways from live readings.](#5-spend-quota-as-a-two-way-control)** When one provider ran out, the fleet moved work to the other provider and kept going.
+8. **[Rules live in one place.](TOPMOST.md#when-gilad-needs-to-act-or-has-answered)** When Gilad changed a rule, the Lead updated that document before the next unit of work, and told the controller where to read it.
 
 ### What it survived
 

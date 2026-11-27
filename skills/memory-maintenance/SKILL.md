@@ -2,6 +2,7 @@
 name: memory-maintenance
 description: Maintain project documentation as compact, truthful institutional memory. Only for memory-maintaining projects. Needs user approval.
 last_updated: 2026-08-11 14:52
+disable-model-invocation: true
 ---
 
 # Project memory is a maintained model of reality
