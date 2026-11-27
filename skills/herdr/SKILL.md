@@ -9,6 +9,6 @@ herdr is like tmux that understand CLI AI agents. Run `herdr --skill` for a good
 
 Remember to eventually close unneeded or no longer relevant herdr panes you have opened.
 
-For safe reloads, model changes, or thinking changes in an open Pi session, use [Pi session commands](references/pi-session-commands.md). The scripts require an explicit target and check the result.
+For safe reloads, model changes, or thinking changes in an open Pi session, use [Pi session commands](references/pi-session-commands.md). Use `self` from a running turn to schedule the command for when Pi goes idle, then read the result from the log in the receipt.
 
 Note: You'll see that `herdr` advises against managing it when not in herdr. Technically, it works all the same, so it's actually fine.

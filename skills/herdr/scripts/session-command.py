@@ -8,9 +8,12 @@ import json
 import math
 import os
 import re
+import shlex
 import subprocess
 import sys
+import tempfile
 import time
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, Never, TextIO, cast
@@ -109,21 +112,42 @@ class Settings:
     model: str = "unknown"
     thinking: str = "unknown"
 
-    def observe(self, record: dict[str, str]) -> None:
-        if record["type"] == "model_change":
-            self.model = f"{record['provider']}/{record['modelId']}"
-        if record["type"] == "thinking_level_change":
-            self.thinking = record["thinkingLevel"]
+    def observe(self, record: dict[str, object]) -> None:
+        """Track settings in the order Pi writes them.
+
+        >>> settings = Settings()
+        >>> settings.observe({"type": "model_change", "provider": "openai-codex", "modelId": "gpt-6.2-sol"})
+        >>> settings.observe({"type": "message", "message": {"role": "assistant", "provider": "anthropic", "model": "claude-opus-5-5"}})
+        >>> settings.observe({"type": "thinking_level_change", "thinkingLevel": "xhigh"})
+        >>> print(settings)
+        model=anthropic/claude-opus-5-5 thinking=xhigh
+        >>> settings.observe({"type": "model_change", "provider": "openai-codex", "modelId": "gpt-6.2-sol"})
+        >>> print(settings)
+        model=openai-codex/gpt-6.2-sol thinking=xhigh
+        """
+        match record:
+            case (
+                {"type": "model_change", "provider": str(provider), "modelId": str(model)}
+                | {"type": "message", "message": {"role": "assistant", "provider": str(provider), "model": str(model)}}
+            ):
+                self.model = f"{provider}/{model}"
+            case {"type": "thinking_level_change", "thinkingLevel": str(level)}:
+                self.thinking = level
 
     def __str__(self) -> str:
         return f"model={self.model} thinking={self.thinking}"
 
 
-def settings_from(file: Path, start: int = 0) -> list[dict[str, str]]:
+def settings_from(file: Path, start: int = 0) -> Iterator[dict[str, object]]:
     with file.open("rb") as stream:
         stream.seek(start)
-        return [json.loads(line) for line in stream if line.endswith(b"\n") and line.startswith(
-            (b'{"type":"model_change"', b'{"type":"thinking_level_change"'))]
+        yield from (
+            json.loads(line) for line in stream
+            if line.endswith(b"\n") and (
+                line.startswith((b'{"type":"model_change"', b'{"type":"thinking_level_change"'))
+                or (line.startswith(b'{"type":"message"') and b'"role":"assistant"' in line)
+            )
+        )
 
 
 class Herdr:
@@ -213,7 +237,7 @@ def editor(screen: str) -> str | None:
     return screen[dividers[-2].end():dividers[-1].start()].strip()
 
 
-def observe(settings: Settings, records: list[dict[str, str]]) -> None:
+def observe(settings: Settings, records: Iterable[dict[str, object]]) -> None:
     for record in records:
         settings.observe(record)
 
@@ -227,7 +251,7 @@ def verify(herdr: Herdr, target: Target, command: Command, before: str, start: i
         agent = herdr.agent(target)
         if herdr.foreground(target) != pid:
             raise Refused("the foreground Pi process changed after submission")
-        records = settings_from(target.path, start)
+        records = list(settings_from(target.path, start))
         observe(settings, records)
         raw = herdr.screen(target)
         screen = " ".join(raw.split())
@@ -254,6 +278,24 @@ def verify(herdr: Herdr, target: Target, command: Command, before: str, start: i
         time.sleep(min(0.15, herdr.remaining()))
 
 
+def schedule(command: Command, target: Target, timeout: float) -> None:
+    options = {"reload": [], "model": ["--model", command.expected],
+               "thinking": ["--level", command.expected], "send": ["--prompt", command.prompt]}
+    arguments = [sys.executable, __file__, command.action, target.session,
+                 "--timeout", str(timeout), *options[command.action]]
+    environment = os.environ.copy()
+    del environment["PI_SESSION_ID"]
+    with tempfile.NamedTemporaryFile(prefix="herdr-pi-", suffix=".log", delete=False) as log:
+        try:
+            subprocess.Popen(arguments, env=environment, start_new_session=True,
+                             stdin=subprocess.DEVNULL, stdout=log, stderr=log)
+        except OSError:
+            Path(log.name).unlink()
+            raise
+    print(f"Scheduled {command.label} for {target.pane} ({target.session}) after Pi goes idle. "
+          f"Read result: cat {shlex.quote(log.name)}", file=sys.stderr)
+
+
 def main(arguments: list[str]) -> int:
     command: Command | None = None
     target: Target | None = None
@@ -265,6 +307,9 @@ def main(arguments: list[str]) -> int:
             raise Refused("run inside a Herdr pane (HERDR_ENV=1)")
         herdr = Herdr(command.timeout)
         target = herdr.resolve(command.target)
+        if command.target == "self" and command.wait and herdr.agent(target)["agent_status"] == "working":
+            schedule(command, target, herdr.remaining())
+            return 0
         initial_size = target.path.stat().st_size
         observe(settings, settings_from(target.path))
         agent = herdr.wait_ready(target, command.wait)
