@@ -38,7 +38,10 @@ The tool is `quota`. Non-interactive callers (launchd, cron, scripts) must call 
 
 Which one to steer by is Gilad's call. If he hasn't said, ask through the [topmost agent](TOPMOST.md), as with reset decisions below. Both already include the Claude–Fable dependency: Fable's rates count its room in the shared Claude week, so a Lead can mix models without its own adjustments.
 
-1. To get the pragmatic minimum, run `quota`. It prints one plain line per window: the target rate without resets and when the window resets. It leaves out resets and Gemini on purpose: no protocol for them exists yet.
+1. To get the pragmatic minimum, run `quota`. It prints one plain line per window. It leaves out resets and Gemini on purpose: no protocol for them exists yet.
+   1. `target_rate` is the pace, in multiples of 1x, that uses exactly the quota left by the time the window resets, ignoring banked resets. 1x spends one week's allowance per week.
+   2. `observed_2h` is the account-wide pace over the last 2 hours. `n/a` means unknown, not zero.
+   3. When `observed_2h` is above `target_rate`, slow down or move work to another pool.
 2. To get the full data as JSON (schema 6):
 
    ```sh
