@@ -1,6 +1,6 @@
 ---
 name: explainer-video
-description: Make a narrated explainer video that explains a design, system, session, document or flow. Use when asked for an explainer video, an animated explanation, a Papertalk video, or "a video like the Bend one".
+description: Make a narrated explainer video that explains a design, system, session, document or flow. Use when asked for an explainer video.
 ---
 
 # Explainer videos
