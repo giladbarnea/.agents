@@ -1,5 +1,5 @@
 ---
-updated: "2026-11-17 12:15 IST"
+updated: "2026-11-23 10:48 IST"
 description: The quota situation, its tradeoffs, and how a Lead reads it with `quota`
 author: usage Lead
 ---
@@ -36,14 +36,15 @@ The tool is `quota`. Non-interactive callers (launchd, cron, scripts) must call 
 - `target_rate_without_resets`: ignores banked resets.
 - `target_rate_with_resets`: counts the banked resets that its schedule redeems.
 
-Which one to steer by is Gilad's call. If he hasn't said, ask. Both already include the Claude–Fable dependency: Fable's rates count its room in the shared Claude week, so a Lead can mix models without its own adjustments.
+Which one to steer by is Gilad's call. If he hasn't said, ask through the [topmost agent](TOPMOST.md), as with reset decisions below. Both already include the Claude–Fable dependency: Fable's rates count its room in the shared Claude week, so a Lead can mix models without its own adjustments.
 
-1. To get a quick overview, run `quota`. Each column is one limit:
+1. To get the pragmatic minimum, run `quota`. It prints one plain line per window: the target rate without resets and when the window resets. It leaves out resets and Gemini on purpose: no protocol for them exists yet.
+2. To get the full board, run `quota -p` (`--pretty`). Each row is one window:
    1. `USED` is the used share, and `ELAPSED` is the elapsed share of the window. `BURN` is used divided by elapsed.
    2. `OBSERVED 2H` is the account-wide rate over the last 2 hours.
-   3. `TARGET RATE`, as two rows: `WITHOUT RESETS` and `WITH RESETS`. When observed is above the target rate you steer by, slow down or move work to another pool.
+   3. The target rates, as two columns: `TARGET −RESETS` (without resets) and `TARGET +RESETS` (with resets). When observed is above the target rate you steer by, slow down or move work to another pool.
    4. `BANKED` counts unexpired banked resets and the soonest expiry. `RESET NOW` is what one redemption now gains, in days of 1× work; `IF EMPTY NOW` is what it would gain if the pool were empty.
-2. To get the same data as JSON (schema 6):
+3. To get the same data as JSON (schema 6):
 
    ```sh
    quota -f json | jq '.providers[] | {name, target_rate_without_resets, target_rate_with_resets}'
@@ -53,9 +54,9 @@ Which one to steer by is Gilad's call. If he hasn't said, ask. Both already incl
    2. `target_rate_with_resets` adds `checkpoints[]` (times to check again; at a redemption, ask Gilad), `resets_counted[]` (empty when it counts none) and `since`.
    3. `limited_by` (`fable` or `claude_weekly`) says which meter binds a Fable rate.
    4. `.observations` lists the account-wide rate over the last 2, 6, 12 and 24 hours. None is preferred. Read `window_seconds` and `covers_full_window` first. A null rate means unknown, not zero.
-3. What-ifs (faster or slower paces, previews of redeeming) live in `quota simulate` (`--help`). They are for Gilad and the usage Lead when setting policy, not a Lead's daily steering.
-4. To subscribe to the quota service, load its Pi extension (`pi -e ~/dev/usage/extensions/pi/quota-service.ts`), declare your appetite with `quota_appetite`, and work as if quota were infinite. It tells you when your grant changes. See `~/dev/usage/docs/quota-service.md`. While its numbers mature, the target rate you steer by wins over a grant.
-5. To ask about `quota`, or to report that a grant or spend number is way off, message the usage Lead.
+4. What-ifs (faster or slower paces, previews of redeeming) live in `quota simulate` (`--help`). They are for Gilad and the usage Lead when setting policy, not a Lead's daily steering.
+5. To subscribe to the quota service, load its Pi extension (`pi -e ~/dev/usage/extensions/pi/quota-service.ts`), declare your appetite with `quota_appetite`, and work as if quota were infinite. It tells you when your grant changes. See `~/dev/usage/docs/quota-service.md`. While its numbers mature, the target rate you steer by wins over a grant.
+6. To ask about `quota`, or to report that a grant or spend number is way off, message the usage Lead.
 
 ## Balance the two subscriptions (every Lead)
 
